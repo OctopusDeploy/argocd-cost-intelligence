@@ -14,7 +14,7 @@ import (
 	dynamicfake "k8s.io/client-go/dynamic/fake"
 	k8stesting "k8s.io/client-go/testing"
 
-	"github.com/ppapapetrou76/argocd-cost-intelligence/pkg/models"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
 )
 
 // application is an Argo CD Application as the API returns it, with status.resources entries of

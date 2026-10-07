@@ -19,7 +19,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/ppapapetrou76/argocd-cost-intelligence/pkg/models"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
 )
 
 var (

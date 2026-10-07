@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/ppapapetrou76/argocd-cost-intelligence/pkg/models"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
 )
 
 const (

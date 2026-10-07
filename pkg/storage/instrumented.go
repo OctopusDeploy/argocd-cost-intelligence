@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/ppapapetrou76/argocd-cost-intelligence/pkg/models"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
 )
 
 // Observer is told about every storage operation: its name, its error (nil on success, and for a

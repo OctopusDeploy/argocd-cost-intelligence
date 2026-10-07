@@ -19,7 +19,7 @@ The first public release. There's nothing to upgrade from.
 - Rightsizing from Vertical Pod Autoscaler recommendations (including those Goldilocks creates), priced with OpenCost. It only suggests requests, never limits.
 - Cloud service costs: Infracost estimates pushed from CI, shown next to the Kubernetes cost.
 - Prometheus metrics on a port of their own (`METRICS_PORT`, 9102). A single exporter publishes each Application's cost per hour, and every API replica reports its own health. The chart can add ServiceMonitors and a PrometheusRule with a recording rule and starter alerts. See [docs/metrics.md](docs/metrics.md).
-- A Helm chart, published to `oci://ghcr.io/ppapapetrou76/charts/argocd-cost-intelligence`. It deploys the backend, the exporter, the UI plugin and a bundled PostgreSQL, with NetworkPolicies that only let `argocd-server` and `argocd-notifications-controller` reach the backend. A post-install hook registers the extension and the webhook in Argo CD. Multi-arch images (amd64 and arm64) are on GHCR.
+- A Helm chart, published to `oci://ghcr.io/octopusdeploy/charts/argocd-cost-intelligence`. It deploys the backend, the exporter, the UI plugin and a bundled PostgreSQL, with NetworkPolicies that only let `argocd-server` and `argocd-notifications-controller` reach the backend. A post-install hook registers the extension and the webhook in Argo CD. Multi-arch images (amd64 and arm64) are on GHCR.
 
 ### Security
 
@@ -28,5 +28,5 @@ The first public release. There's nothing to upgrade from.
 - `/on-sync` needs `Authorization: Bearer <WEBHOOK_SECRET>`. The backend won't start with a secret shorter than 16 characters.
 - The NetworkPolicies are what make the headers trustworthy, and they only work on a CNI that enforces NetworkPolicy. k3d and Flannel don't.
 
-[Unreleased]: https://github.com/ppapapetrou76/argocd-cost-intelligence/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/ppapapetrou76/argocd-cost-intelligence/releases/tag/v0.1.0
+[Unreleased]: https://github.com/OctopusDeploy/argocd-cost-intelligence/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/OctopusDeploy/argocd-cost-intelligence/releases/tag/v0.1.0

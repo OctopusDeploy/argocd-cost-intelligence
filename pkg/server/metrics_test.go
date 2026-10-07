@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ppapapetrou76/argocd-cost-intelligence/pkg/telemetry"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/telemetry"
 )
 
 // counterValues reads a counter's series from reg, keyed by the value of label.

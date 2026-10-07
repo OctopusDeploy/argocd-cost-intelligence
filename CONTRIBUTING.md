@@ -15,7 +15,7 @@ By participating you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md). 
 You need Go (the version in `go.mod`), Node.js 22, and Docker.
 
 ```bash
-git clone https://github.com/ppapapetrou76/argocd-cost-intelligence.git
+git clone https://github.com/OctopusDeploy/argocd-cost-intelligence.git
 cd argocd-cost-intelligence
 
 docker-compose up -d    # service on :8080, PostgreSQL, and a mock OpenCost on :9003

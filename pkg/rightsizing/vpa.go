@@ -18,7 +18,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 
-	"github.com/ppapapetrou76/argocd-cost-intelligence/pkg/models"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
 )
 
 // ErrUnavailable means the VPA API cannot be read: the cluster has no VPA, or the service may not

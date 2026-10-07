@@ -68,7 +68,7 @@ The chart's NetworkPolicies only limit incoming traffic. The backend accepts `ar
 
 ### Images
 
-The images are public on GHCR, so you don't need a pull secret: `ghcr.io/ppapapetrou76/argocd-cost-intelligence:v0.1.0` and `ghcr.io/ppapapetrou76/argocd-cost-intelligence-ui:v0.1.0`. The hook Job (`postInstallHook.image`) and the `argocd-server` init container (`busybox`) pull images too. Mirror those if your cluster can't reach public registries.
+The images are public on GHCR, so you don't need a pull secret: `ghcr.io/octopusdeploy/argocd-cost-intelligence:v0.1.0` and `ghcr.io/octopusdeploy/argocd-cost-intelligence-ui:v0.1.0`. The hook Job (`postInstallHook.image`) and the `argocd-server` init container (`busybox`) pull images too. Mirror those if your cluster can't reach public registries.
 
 ## Install
 
@@ -94,7 +94,7 @@ The chart creates its own namespace (`namespace.create=true`), so tell Helm not 
 
 ```bash
 helm install argocd-cost-intelligence \
-  oci://ghcr.io/ppapapetrou76/charts/argocd-cost-intelligence \
+  oci://ghcr.io/octopusdeploy/charts/argocd-cost-intelligence \
   --version 0.1.0 \
   --namespace argocd-cost-intel --create-namespace \
   --set namespace.create=false \
@@ -214,7 +214,7 @@ Database migrations are built into the backend and run when it starts, so an upg
 
 ```bash
 helm upgrade argocd-cost-intelligence \
-  oci://ghcr.io/ppapapetrou76/charts/argocd-cost-intelligence \
+  oci://ghcr.io/octopusdeploy/charts/argocd-cost-intelligence \
   --version <new-version> \
   --namespace argocd-cost-intel \
   --set namespace.create=false \

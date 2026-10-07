@@ -169,7 +169,7 @@ The chart adds `prometheus.io/scrape`, `prometheus.io/port` and `prometheus.io/p
 
 ```bash
 helm upgrade argocd-cost-intelligence \
-  oci://ghcr.io/ppapapetrou76/charts/argocd-cost-intelligence --version <version> \
+  oci://ghcr.io/octopusdeploy/charts/argocd-cost-intelligence --version <version> \
   -n argocd-cost-intel --reuse-values --set namespace.create=false \
   --set metrics.serviceMonitor.enabled=true \
   --set metrics.prometheusRule.enabled=true \

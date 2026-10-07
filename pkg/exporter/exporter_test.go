@@ -16,8 +16,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ppapapetrou76/argocd-cost-intelligence/pkg/models"
-	"github.com/ppapapetrou76/argocd-cost-intelligence/pkg/opencost"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/opencost"
 )
 
 var refreshedAt = time.Date(2026, 10, 4, 7, 0, 0, 0, time.UTC)

@@ -7,10 +7,12 @@ on:
 permissions:
   contents: read
 
+# GHCR and Helm only accept lowercase names, and github.repository keeps the repo's
+# capitals (OctopusDeploy), so the names are spelled out. They must match the docs and values.yaml.
 env:
-  BACKEND_IMAGE: ghcr.io/${{ github.repository }}
-  UI_IMAGE: ghcr.io/${{ github.repository }}-ui
-  CHART_REGISTRY: ghcr.io/${{ github.repository_owner }}/charts
+  BACKEND_IMAGE: ghcr.io/octopusdeploy/argocd-cost-intelligence
+  UI_IMAGE: ghcr.io/octopusdeploy/argocd-cost-intelligence-ui
+  CHART_REGISTRY: ghcr.io/octopusdeploy/charts
 
 jobs:
   # ── Checks ──────────────────────────────────────────────────────────────────
@@ -224,7 +226,7 @@ jobs:
 
             ```bash
             helm install argocd-cost-intelligence \
-              oci://ghcr.io/${{ github.repository_owner }}/charts/argocd-cost-intelligence \
+              oci://${{ env.CHART_REGISTRY }}/argocd-cost-intelligence \
               --version ${{ steps.version.outputs.semver }} \
               --namespace argocd-cost-intel --create-namespace \
               --set namespace.create=false \

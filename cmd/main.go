@@ -15,16 +15,16 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 
-	"github.com/ppapapetrou76/argocd-cost-intelligence/pkg/config"
-	"github.com/ppapapetrou76/argocd-cost-intelligence/pkg/exporter"
-	"github.com/ppapapetrou76/argocd-cost-intelligence/pkg/history"
-	"github.com/ppapapetrou76/argocd-cost-intelligence/pkg/hook"
-	"github.com/ppapapetrou76/argocd-cost-intelligence/pkg/models"
-	"github.com/ppapapetrou76/argocd-cost-intelligence/pkg/opencost"
-	"github.com/ppapapetrou76/argocd-cost-intelligence/pkg/rightsizing"
-	"github.com/ppapapetrou76/argocd-cost-intelligence/pkg/server"
-	"github.com/ppapapetrou76/argocd-cost-intelligence/pkg/storage"
-	"github.com/ppapapetrou76/argocd-cost-intelligence/pkg/telemetry"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/config"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/exporter"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/history"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/hook"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/opencost"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/rightsizing"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/server"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/storage"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/telemetry"
 )
 
 func main() {

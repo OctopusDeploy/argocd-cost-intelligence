@@ -12,9 +12,9 @@ keywords:
   - cost-analysis
   - opencost
 
-home: https://github.com/ppapapetrou76/argocd-cost-intelligence
+home: https://github.com/OctopusDeploy/argocd-cost-intelligence
 sources:
-  - https://github.com/ppapapetrou76/argocd-cost-intelligence
+  - https://github.com/OctopusDeploy/argocd-cost-intelligence
 
 maintainers:
   - name: Patroklos Papapetrou

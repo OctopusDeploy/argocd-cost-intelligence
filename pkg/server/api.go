@@ -17,15 +17,15 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/render"
 
-	"github.com/ppapapetrou76/argocd-cost-intelligence/pkg/cloudcost"
-	"github.com/ppapapetrou76/argocd-cost-intelligence/pkg/history"
-	"github.com/ppapapetrou76/argocd-cost-intelligence/pkg/hook"
-	"github.com/ppapapetrou76/argocd-cost-intelligence/pkg/models"
-	"github.com/ppapapetrou76/argocd-cost-intelligence/pkg/opencost"
-	"github.com/ppapapetrou76/argocd-cost-intelligence/pkg/rightsizing"
-	"github.com/ppapapetrou76/argocd-cost-intelligence/pkg/storage"
-	"github.com/ppapapetrou76/argocd-cost-intelligence/pkg/telemetry"
-	"github.com/ppapapetrou76/argocd-cost-intelligence/pkg/validation"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/cloudcost"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/history"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/hook"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/opencost"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/rightsizing"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/storage"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/telemetry"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/validation"
 )
 
 const (

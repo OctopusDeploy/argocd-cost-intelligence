@@ -9,7 +9,7 @@ namespace:
 costIntelligence:
   replicaCount: 1
   image:
-    repository: ghcr.io/ppapapetrou76/argocd-cost-intelligence
+    repository: ghcr.io/octopusdeploy/argocd-cost-intelligence
     tag: ""  # defaults to chart appVersion
     pullPolicy: IfNotPresent
 

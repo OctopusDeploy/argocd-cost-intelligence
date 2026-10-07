@@ -9,7 +9,7 @@ namespace:
 costIntelligence:
   # Service image
   image:
-    repository: ghcr.io/ppapapetrou76/argocd-cost-intelligence
+    repository: ghcr.io/octopusdeploy/argocd-cost-intelligence
     tag: ""  # defaults to .Chart.AppVersion when empty
     pullPolicy: IfNotPresent
 
@@ -234,7 +234,7 @@ ui:
   enabled: true
 
   image:
-    repository: ghcr.io/ppapapetrou76/argocd-cost-intelligence-ui
+    repository: ghcr.io/octopusdeploy/argocd-cost-intelligence-ui
     tag: ""  # defaults to .Chart.AppVersion when empty
     pullPolicy: IfNotPresent
 

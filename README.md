@@ -1,8 +1,8 @@
 # ArgoCD Cost Intelligence
 
-[![CI](https://github.com/ppapapetrou76/argocd-cost-intelligence/actions/workflows/ci.yml/badge.svg)](https://github.com/ppapapetrou76/argocd-cost-intelligence/actions/workflows/ci.yml)
+[![CI](https://github.com/OctopusDeploy/argocd-cost-intelligence/actions/workflows/ci.yml/badge.svg)](https://github.com/OctopusDeploy/argocd-cost-intelligence/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/ppapapetrou76/argocd-cost-intelligence?include_prereleases)](https://github.com/ppapapetrou76/argocd-cost-intelligence/releases)
+[![Release](https://img.shields.io/github/v/release/OctopusDeploy/argocd-cost-intelligence?include_prereleases)](https://github.com/OctopusDeploy/argocd-cost-intelligence/releases)
 
 A Kubernetes-native service that measures what each Argo CD application actually costs. After every successful sync it asks [OpenCost](https://www.opencost.io) what the application's namespace and pods cost, stores the result in PostgreSQL, and shows it in a **Cost Intelligence** tab inside the Argo CD UI.
 
@@ -25,7 +25,7 @@ Requires Argo CD 3.4+, OpenCost 1.121.1+ and Helm 3.8+.
 
 ```bash
 helm install argocd-cost-intelligence \
-  oci://ghcr.io/ppapapetrou76/charts/argocd-cost-intelligence \
+  oci://ghcr.io/octopusdeploy/charts/argocd-cost-intelligence \
   --version 0.1.0 \
   --namespace argocd-cost-intel --create-namespace \
   --set namespace.create=false \

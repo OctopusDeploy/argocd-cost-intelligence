@@ -5,7 +5,7 @@ This page lists the Helm values, how to manage the secrets, the ready-made profi
 The defaults are in [`helm/values.yaml`](../helm/values.yaml). To print them for a released version:
 
 ```bash
-helm show values oci://ghcr.io/ppapapetrou76/charts/argocd-cost-intelligence --version 0.1.0
+helm show values oci://ghcr.io/octopusdeploy/charts/argocd-cost-intelligence --version 0.1.0
 ```
 
 ## Helm values
@@ -118,7 +118,7 @@ kubectl create secret generic postgres-credentials \
   --from-literal=password="$(openssl rand -base64 32)"
 
 helm install argocd-cost-intelligence \
-  oci://ghcr.io/ppapapetrou76/charts/argocd-cost-intelligence \
+  oci://ghcr.io/octopusdeploy/charts/argocd-cost-intelligence \
   --version 0.1.0 --namespace argocd-cost-intel \
   --set namespace.create=false \
   --set postgres.auth.existingSecret=postgres-credentials \
@@ -136,7 +136,7 @@ Argo CD Notifications has to send a bearer token to `POST /api/cost-analysis/on-
 The profile files ship in the chart but aren't part of the OCI install path. To get them:
 
 ```bash
-helm pull oci://ghcr.io/ppapapetrou76/charts/argocd-cost-intelligence --version 0.1.0 --untar
+helm pull oci://ghcr.io/octopusdeploy/charts/argocd-cost-intelligence --version 0.1.0 --untar
 # then: -f argocd-cost-intelligence/values-minimal.yaml
 ```
 

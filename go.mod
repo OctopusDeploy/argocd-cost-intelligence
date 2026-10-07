@@ -1,4 +1,4 @@
-module github.com/ppapapetrou76/argocd-cost-intelligence
+module github.com/OctopusDeploy/argocd-cost-intelligence
 
 go 1.25.0
 

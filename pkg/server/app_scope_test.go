@@ -15,10 +15,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ppapapetrou76/argocd-cost-intelligence/pkg/hook"
-	"github.com/ppapapetrou76/argocd-cost-intelligence/pkg/models"
-	"github.com/ppapapetrou76/argocd-cost-intelligence/pkg/opencost"
-	"github.com/ppapapetrou76/argocd-cost-intelligence/pkg/rightsizing"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/hook"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/opencost"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/rightsizing"
 )
 
 // redisControllers are the pod-owning resources of the redis application, which deploys into the argocd

@@ -3,7 +3,7 @@ module github.com/ppapapetrou76/argocd-cost-intelligence
 go 1.25.0
 
 require (
-	github.com/go-chi/chi/v5 v5.0.10
+	github.com/go-chi/chi/v5 v5.3.2
 	github.com/go-chi/render v1.0.3
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/kelseyhightower/envconfig v1.4.0

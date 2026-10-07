@@ -18,7 +18,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
-    "@typescript-eslint/parser": "^6.0.0",
+    "@typescript-eslint/parser": "^8.71.0",
     "css-loader": "^6.8.0",
     "eslint": "^8.0.0",
     "eslint-plugin-jsx-a11y": "^6.10.2",

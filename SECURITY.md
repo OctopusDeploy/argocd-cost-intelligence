@@ -4,7 +4,7 @@
 
 Please do not open a public issue for a security problem.
 
-Report it privately through GitHub: open the repository's Security tab and choose Report a vulnerability. If that isn't available, email ppapapetrou76@gmail.com with "SECURITY" in the subject.
+Report it privately through GitHub: open the repository's Security tab and choose Report a vulnerability. If that isn't available, email pat.papapetrou@octopus.com with "SECURITY" in the subject.
 
 Include what you found, the affected version, and steps to reproduce. You can expect an acknowledgement within 5 working days. We will keep you informed while we work on a fix and credit you in the release notes unless you prefer not to be named.
 

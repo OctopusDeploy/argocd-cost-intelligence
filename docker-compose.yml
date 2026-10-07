@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  # Cost Intelligence Service
+  argocd-cost-intelligence:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mock-opencost:
+        condition: service_started
+    environment:
+      SERVER_PORT: 8080
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: cost_user
+      DB_PASSWORD: cost_password
+      DB_NAME: cost_intelligence
+      DB_SSL_MODE: disable
+      OPENCOST_BASE_URL: http://mock-opencost:9003
+      OPENCOST_TIMEOUT: 10s
+      # Local development only; send it as "Authorization: Bearer ..." to /on-sync.
+      WEBHOOK_SECRET: local-dev-webhook-secret
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - cost-intel
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: cost_user
+      POSTGRES_PASSWORD: cost_password
+      POSTGRES_DB: cost_intelligence
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cost_user -d cost_intelligence"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cost-intel
+
+  # Mock OpenCost Service
+  # Simulates OpenCost API for local testing
+  # Provides fake cost data so you can test without real Kubernetes
+  mock-opencost:
+    image: node:22-alpine
+    working_dir: /app
+    ports:
+      - "9003:9003"
+    volumes:
+      - ./mock-opencost-server.js:/app/server.js
+    command: node /app/server.js
+    networks:
+      - cost-intel
+
+volumes:
+  postgres_data:
+
+networks:
+  cost-intel:
+    driver: bridge

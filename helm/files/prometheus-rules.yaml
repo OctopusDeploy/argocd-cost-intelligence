@@ -1,0 +1,114 @@
+# Recording rules and starter alerts for ArgoCD Cost Intelligence's metrics (docs/metrics.md).
+# The chart wraps these groups in a PrometheusRule (metrics.prometheusRule.enabled); without the
+# Prometheus Operator, add this file to your Prometheus rule_files. Thresholds are starting points:
+# copy the rules and tune them to your spend. Tested with promtool (test/prometheus/rules_test.yaml).
+groups:
+  - name: argocd-cost-intelligence.rules
+    rules:
+      # Each Argo CD Application's cost per hour, all resources together. Monthly is this × 730;
+      # join argocd_app_info on (namespace, name) for the project, destination or health.
+      - record: namespace_name:argocd_cost_intelligence_application_hourly_cost:sum
+        expr: sum by (namespace, name) (argocd_cost_intelligence_application_hourly_cost)
+
+  - name: argocd-cost-intelligence.alerts
+    rules:
+      # An Application costs half as much again as over the past week, for two hours. The floor of
+      # 0.01 an hour (about 7 a month) keeps small Applications from alerting on cents.
+      - alert: ArgoCDApplicationCostIncrease
+        expr: |
+          namespace_name:argocd_cost_intelligence_application_hourly_cost:sum
+            > 1.5 * avg_over_time(namespace_name:argocd_cost_intelligence_application_hourly_cost:sum[7d] offset 1h)
+          and namespace_name:argocd_cost_intelligence_application_hourly_cost:sum > 0.01
+        for: 2h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Argo CD Application {{ $labels.namespace }}/{{ $labels.name }} costs over 50% more than over the past week"
+          description: "It now costs {{ $value | printf \"%.4f\" }} an hour (730 hours make a month). Check its last sync and the Cost Intelligence tab."
+
+      # The exporter has not refreshed for 15 minutes: three intervals at the default 5m.
+      - alert: ArgoCDCostIntelligenceExporterStale
+        expr: time() - argocd_cost_intelligence_exporter_last_refresh_timestamp_seconds > 900
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The ArgoCD Cost Intelligence exporter has not refreshed Application costs for {{ $value | humanizeDuration }}"
+          description: "Its Application cost series are empty or missing. exporter_refresh_errors_total says which step fails: applications means it cannot list Argo CD Applications."
+
+      # No exporter is scraped at all.
+      - alert: ArgoCDCostIntelligenceExporterAbsent
+        expr: absent(argocd_cost_intelligence_exporter_last_refresh_timestamp_seconds)
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No ArgoCD Cost Intelligence exporter is being scraped"
+          description: "Application cost metrics are missing. Check that the exporter Deployment runs and that Prometheus may reach its metrics port (metrics.allowedFrom)."
+
+      # A refresh step keeps failing: OpenCost for some namespace, or reading cloud estimates.
+      - alert: ArgoCDCostIntelligenceExporterErrors
+        expr: sum by (stage) (rate(argocd_cost_intelligence_exporter_refresh_errors_total[10m])) > 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The ArgoCD Cost Intelligence exporter's {{ $labels.stage }} step keeps failing"
+          description: "Applications it cannot measure are left out of the cost series. The exporter's log names the namespace or error."
+
+      # Most measurements after a sync fail, so syncs go unrecorded.
+      - alert: ArgoCDCostIntelligenceMeasurementsFailing
+        expr: |
+          sum(rate(argocd_cost_intelligence_sync_measurements_total{result="error"}[30m]))
+            / sum(rate(argocd_cost_intelligence_sync_measurements_total[30m])) > 0.5
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of ArgoCD Cost Intelligence's measurements after a sync fail"
+          description: "Syncs are not being measured. Check OpenCost (opencost_request_duration_seconds by code) and PostgreSQL (database_operation_duration_seconds by result)."
+
+      # Every sync webhook is refused: the token Argo CD Notifications sends no longer matches.
+      - alert: ArgoCDCostIntelligenceWebhooksRefused
+        expr: |
+          sum(increase(argocd_cost_intelligence_sync_webhooks_total{result="unauthorized"}[30m])) > 0
+          and sum(increase(argocd_cost_intelligence_sync_webhooks_total{result="accepted"}[30m])) == 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "ArgoCD Cost Intelligence refuses every sync webhook"
+          description: "The cost-intel-webhook-token key of argocd-notifications-secret must equal the service's WEBHOOK_SECRET. Running helm upgrade copies it again."
+
+      # Most requests to OpenCost fail.
+      - alert: ArgoCDCostIntelligenceOpenCostErrors
+        expr: |
+          sum(rate(argocd_cost_intelligence_opencost_request_duration_seconds_count{code!~"2.."}[10m]))
+            / sum(rate(argocd_cost_intelligence_opencost_request_duration_seconds_count[10m])) > 0.5
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of ArgoCD Cost Intelligence's requests to OpenCost fail"
+          description: "Costs cannot be measured. code=\"error\" means OpenCost did not answer; check OPENCOST_BASE_URL and OpenCost's health."
+
+      # The daily cost history recorder, which runs hourly on every API replica, has stopped. A
+      # replica that has not finished its first run reports 0 and is ignored.
+      - alert: ArgoCDCostIntelligenceHistoryStale
+        expr: time() - max(argocd_cost_intelligence_history_last_run_timestamp_seconds > 0) > 3 * 3600
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ArgoCD Cost Intelligence has not recorded daily cost history for {{ $value | humanizeDuration }}"
+          description: "Long Trends ranges will have gaps. Check the API's log for 'Daily cost history'."
+
+      # Every history run in the last three hours failed for some Application.
+      - alert: ArgoCDCostIntelligenceHistoryFailing
+        expr: |
+          sum(increase(argocd_cost_intelligence_history_runs_total{result="error"}[3h])) > 0
+          and sum(increase(argocd_cost_intelligence_history_runs_total{result="success"}[3h])) == 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "Every ArgoCD Cost Intelligence daily history run in 3 hours failed"
+          description: "The API's log names the Applications and errors under 'Daily cost history'."

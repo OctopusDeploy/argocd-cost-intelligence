@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argocd-cost-intel
+  labels:
+    app.kubernetes.io/name: argocd-cost-intel
+    app.kubernetes.io/part-of: argocd-cost-intel

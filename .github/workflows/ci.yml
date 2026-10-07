@@ -1,0 +1,169 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+    tags-ignore: ['v*']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    name: Go — test & lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff  # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Test
+        run: go test ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a  # v9.3.0
+        with:
+          version: v2.14.0
+
+  ui:
+    name: UI — test, build & lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: ui
+
+      - name: Build
+        run: npm run build
+        working-directory: ui
+
+      - name: Lint
+        run: npm run lint
+        working-directory: ui
+
+      - name: Type check
+        run: npm run typecheck
+        working-directory: ui
+
+      - name: Test
+        run: npm test
+        working-directory: ui
+
+  helm:
+    name: Helm — lint & template
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4  # v4
+
+      - name: Lint
+        run: helm lint ./helm --set postgres.auth.password=ci-test
+
+      - name: Template (default values)
+        run: |
+          helm template argocd-cost-intelligence ./helm \
+            --set postgres.auth.password=ci-test
+
+      - name: Template (local values)
+        run: |
+          helm template argocd-cost-intelligence ./helm \
+            -f helm/values-local.yaml \
+            --set postgres.auth.password=ci-test
+
+      - name: Template (metrics off)
+        run: |
+          helm template argocd-cost-intelligence ./helm \
+            --set postgres.auth.password=ci-test --set metrics.enabled=false
+
+      - name: Template (Prometheus Operator)
+        run: |
+          helm template argocd-cost-intelligence ./helm \
+            --set postgres.auth.password=ci-test \
+            --set metrics.serviceMonitor.enabled=true --set metrics.prometheusRule.enabled=true
+
+  # Each step is a Makefile target, so the same check runs locally with `make <target>`. The tools
+  # run in containers whose versions are pinned in the Makefile.
+  lint:
+    name: Lint — workflows, manifests, Dockerfiles, scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4  # v4
+
+      - name: GitHub workflows (actionlint)
+        run: make lint-actions
+
+      - name: Kubernetes manifests (kubeconform)
+        run: make lint-manifests
+
+      - name: Dockerfiles (hadolint)
+        run: make lint-dockerfile
+
+      - name: Shell scripts (shellcheck)
+        run: make lint-shell
+
+      - name: Embedded mock OpenCost
+        run: make lint-mock
+
+  prometheus-rules:
+    name: Prometheus rules — check & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+
+      - name: Check and test
+        run: |
+          docker run --rm -v "$PWD:/w" -w /w --entrypoint sh prom/prometheus -c \
+            'promtool check rules helm/files/prometheus-rules.yaml && promtool test rules test/prometheus/*_test.yaml'
+
+  security:
+    name: Security — vulnerabilities & secrets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          fetch-depth: 0
+
+      # The latest 1.25 patch, so the standard library is checked at its fixed
+      # version rather than the exact one in go.mod. Update with go.mod.
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff  # v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Go vulnerabilities (govulncheck)
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      # The plugin ships only production dependencies; dev tooling is not gated.
+      - name: npm vulnerabilities (production dependencies)
+        run: npm audit --omit=dev --audit-level=high
+        working-directory: ui
+
+      # Scans the whole history, using .gitleaks.toml at the repository root.
+      - name: Secrets (gitleaks)
+        run: |
+          docker run --rm -v "$PWD:/repo" -w /repo \
+            ghcr.io/gitleaks/gitleaks:v8.30.1 detect --source /repo --redact --verbose

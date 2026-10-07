@@ -1,0 +1,179 @@
+{{- with (.Values.costIntelligence.server | default dict).port }}
+{{- if ne (toString .) (toString $.Values.costIntelligence.port) }}
+{{- fail "costIntelligence.server.port was removed: set costIntelligence.port, which is now both the listen port and the Service port" }}
+{{- end }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "argocd-cost-intelligence.fullname" . }}
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.costIntelligence.autoscaling.enabled }}
+  replicas: {{ .Values.costIntelligence.replicaCount }}
+  {{- end }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      {{- include "argocd-cost-intelligence.selectorLabels" . | nindent 6 }}
+      component: backend
+  template:
+    metadata:
+      {{- if or .Values.commonAnnotations (not .Values.webhook.existingSecret) (include "argocd-cost-intelligence.metrics.scrapeAnnotations" .) }}
+      annotations:
+        {{- with .Values.commonAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- if not .Values.webhook.existingSecret }}
+        # Restart the pods when the webhook token changes: WEBHOOK_SECRET is read at startup.
+        checksum/webhook-token: {{ include "argocd-cost-intelligence.webhook.token" . | sha256sum }}
+        {{- end }}
+        {{- include "argocd-cost-intelligence.metrics.scrapeAnnotations" . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "argocd-cost-intelligence.selectorLabels" . | nindent 8 }}
+        component: backend
+    spec:
+      serviceAccountName: {{ include "argocd-cost-intelligence.serviceAccountName" . }}
+      {{- if .Values.security.podSecurityContext }}
+      securityContext:
+        {{- toYaml .Values.security.podSecurityContext | nindent 8 }}
+      {{- end }}
+      containers:
+      - name: {{ include "argocd-cost-intelligence.name" . }}
+        image: "{{ .Values.costIntelligence.image.repository }}:{{ .Values.costIntelligence.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.costIntelligence.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.costIntelligence.port }}
+          protocol: TCP
+        {{- if .Values.metrics.enabled }}
+        - name: metrics
+          containerPort: {{ .Values.metrics.port }}
+          protocol: TCP
+        {{- end }}
+        env:
+        - name: SERVER_PORT
+          value: {{ .Values.costIntelligence.port | quote }}
+        - name: METRICS_PORT
+          value: {{ ternary .Values.metrics.port 0 .Values.metrics.enabled | quote }}
+        - name: DB_HOST
+          value: {{ include "argocd-cost-intelligence.postgres.host" . }}
+        - name: DB_PORT
+          value: "{{ .Values.postgres.service.port }}"
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "argocd-cost-intelligence.postgres.secretName" . }}
+              key: username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "argocd-cost-intelligence.postgres.secretName" . }}
+              key: password
+        - name: DB_NAME
+          value: {{ .Values.postgres.auth.database | quote }}
+        - name: DB_SSL_MODE
+          value: {{ .Values.postgres.sslMode | quote }}
+        - name: DB_MAX_OPEN_CONNS
+          value: {{ .Values.costIntelligence.database.maxOpenConns | quote }}
+        - name: DB_MAX_IDLE_CONNS
+          value: {{ .Values.costIntelligence.database.maxIdleConns | quote }}
+        - name: SERVER_READ_TIMEOUT
+          value: {{ .Values.costIntelligence.server.readTimeout | quote }}
+        - name: SERVER_WRITE_TIMEOUT
+          value: {{ .Values.costIntelligence.server.writeTimeout | quote }}
+        - name: SERVER_IDLE_TIMEOUT
+          value: {{ .Values.costIntelligence.server.idleTimeout | quote }}
+        - name: OPENCOST_BASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "argocd-cost-intelligence.openCost.secretName" . }}
+              key: opencost-base-url
+        - name: OPENCOST_TIMEOUT
+          value: {{ .Values.openCost.timeout | quote }}
+        - name: WEBHOOK_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "argocd-cost-intelligence.webhook.secretName" . }}
+              key: token
+        - name: DAILY_HISTORY_DAYS
+          value: {{ .Values.costIntelligence.dailyHistoryDays | quote }}
+        - name: VPA_ENABLED
+          value: {{ .Values.costIntelligence.vpa.enabled | quote }}
+        {{- with .Values.costIntelligence.clusterScopeApp }}
+        - name: CLUSTER_SCOPE_APP
+          value: {{ . | quote }}
+        {{- end }}
+        {{- if .Values.security.containerSecurityContext }}
+        securityContext:
+          {{- toYaml .Values.security.containerSecurityContext | nindent 12 }}
+        {{- end }}
+        {{- if .Values.costIntelligence.resources }}
+        resources:
+          {{- toYaml .Values.costIntelligence.resources | nindent 12 }}
+        {{- end }}
+        {{- if .Values.healthChecks.livenessProbe.enabled }}
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: {{ .Values.healthChecks.livenessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.healthChecks.livenessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.healthChecks.livenessProbe.timeoutSeconds }}
+          failureThreshold: {{ .Values.healthChecks.livenessProbe.failureThreshold }}
+        {{- end }}
+        {{- if .Values.healthChecks.readinessProbe.enabled }}
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          initialDelaySeconds: {{ .Values.healthChecks.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.healthChecks.readinessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.healthChecks.readinessProbe.timeoutSeconds }}
+          failureThreshold: {{ .Values.healthChecks.readinessProbe.failureThreshold }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "argocd-cost-intelligence.fullname" . }}
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+    component: backend
+spec:
+  type: ClusterIP
+  ports:
+  - port: {{ .Values.costIntelligence.port }}
+    targetPort: http
+    protocol: TCP
+    name: http
+  {{- if .Values.metrics.enabled }}
+  - port: {{ .Values.metrics.port }}
+    targetPort: metrics
+    protocol: TCP
+    name: metrics
+  {{- end }}
+  selector:
+    {{- include "argocd-cost-intelligence.selectorLabels" . | nindent 4 }}
+    component: backend

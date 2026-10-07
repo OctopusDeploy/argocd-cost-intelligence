@@ -1,0 +1,33 @@
+{{- if .Values.costIntelligence.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "argocd-cost-intelligence.fullname" . }}
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "argocd-cost-intelligence.fullname" . }}
+  minReplicas: {{ .Values.costIntelligence.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.costIntelligence.autoscaling.maxReplicas }}
+  metrics:
+  {{- if .Values.costIntelligence.autoscaling.targetCPUUtilizationPercentage }}
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: {{ .Values.costIntelligence.autoscaling.targetCPUUtilizationPercentage }}
+  {{- end }}
+  {{- if .Values.costIntelligence.autoscaling.targetMemoryUtilizationPercentage }}
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: {{ .Values.costIntelligence.autoscaling.targetMemoryUtilizationPercentage }}
+  {{- end }}
+{{- end }}

@@ -1,0 +1,4 @@
+ignored:
+  # Pinning apk package versions breaks the build whenever Alpine drops the pinned one; the base
+  # image tag is what pins the release.
+  - DL3018

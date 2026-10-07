@@ -1,0 +1,53 @@
+{{- if .Values.rbac.create }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Values.rbac.roleName }}
+  labels:
+    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - namespaces
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - argoproj.io
+  resources:
+  - applications
+  verbs:
+  - get
+  - list
+  - watch
+{{- if .Values.costIntelligence.vpa.enabled }}
+# Rightsizing reads the Vertical Pod Autoscaler's recommendations (Goldilocks or any VPA). Read only.
+- apiGroups:
+  - autoscaling.k8s.io
+  resources:
+  - verticalpodautoscalers
+  verbs:
+  - get
+  - list
+{{- end }}
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Values.rbac.roleBindingName }}
+  labels:
+    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Values.rbac.roleName }}
+subjects:
+- kind: ServiceAccount
+  name: {{ include "argocd-cost-intelligence.serviceAccountName" . }}
+  namespace: {{ .Values.namespace.name }}
+{{- end }}

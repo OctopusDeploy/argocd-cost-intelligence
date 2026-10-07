@@ -1,0 +1,214 @@
+# Prometheus Metrics
+
+ArgoCD Cost Intelligence exports two kinds of metrics:
+
+- What each Argo CD Application costs, per hour. A single exporter process serves these. Use them for Grafana dashboards, chargeback queries and cost alerts, next to Argo CD's own `argocd_app_info`.
+- How the service itself is doing. Each API replica serves its own: requests, sync webhooks and measurements, calls to OpenCost and PostgreSQL, and the daily history recorder. Use them to tell whether costs are being measured at all.
+
+Both are served on a port of their own (`9102` by default), never on the API port. The [Helm chart](#scraping) adds scrape annotations and, if you want them, ServiceMonitors and a PrometheusRule with [recording rules and starter alerts](#recording-rules-and-alerts).
+
+## Application cost
+
+Every 5 minutes (`metrics.exporter.interval`), the exporter:
+
+1. lists the Applications Argo CD has now, in every namespace, from the Kubernetes API;
+2. asks OpenCost for the cost of each namespace their workloads run in, **over the last hour**, one query per namespace;
+3. attributes the pods to Applications by the workloads that own them (the same rule as the Cost Intelligence tab: a CronJob's Jobs and a Rollout's ReplicaSets count under their parent).
+
+Scrapes are served from the last refresh, so scraping is cheap and puts no load on OpenCost.
+
+| Metric | Type | Labels | Meaning |
+|---|---|---|---|
+| `argocd_cost_intelligence_application_hourly_cost` | gauge | `namespace`, `name`, `resource` | Cost per hour of the pods the Application's workloads own, averaged over the last hour. `resource` is `cpu`, `memory`, `gpu`, `storage`, `network` or `load_balancer`; together they are the Application's cost. |
+| `argocd_cost_intelligence_application_idle_hourly_cost` | gauge | `namespace`, `name`, `resource` | The part of the hourly cost paid for requested CPU or memory the pods did not use. `resource` is `cpu` or `memory`; a subset of `application_hourly_cost` for the same resource, never added to it. |
+| `argocd_cost_intelligence_application_estimated_hourly_cost` | gauge | `namespace`, `name`, `source` | Cost per hour of the Application's cloud services, as estimated by an IaC tool (`source="infracost"`) and [pushed from CI](../README.md#cloud-service-costs-infracost-integration). Infracost's monthly figure divided by 730. |
+| `argocd_cost_intelligence_application_workload_info` | gauge, always 1 | `namespace`, `name`, `workload_namespace`, `workload_kind`, `workload_name` | One series per pod-owning workload the Application manages, for [joining per-workload metrics](#an-applications-workloads-with-kube-state-metrics) to Applications. |
+
+The `namespace` and `name` labels identify the Application exactly as Argo CD's `argocd_app_info` does: `namespace` is where the Application resource lives (usually `argocd`), not where it deploys. Join on both: with apps-in-any-namespace, `team-a/web` and `team-b/web` are different Applications. Where an Application deploys is in `argocd_app_info`'s `dest_namespace`, or in `workload_namespace`.
+
+Costs are in OpenCost's currency, usually USD. Multiply by 730 for a month (the month Infracost and the cloud providers use), by 24 for a day.
+
+Each refresh replaces the series. An Application that has no workloads (only ConfigMaps, say) has no series. An Application that could not be measured, because OpenCost failed for one of its namespaces, has no cost series until it can be, rather than an old value; its `workload_info` stays. `exporter_refresh_errors_total` counts the failures. A deleted Application's series disappear at the next refresh.
+
+These metrics won't match the Cost Intelligence tab. The tab projects a month from the last 24 hours at each sync, while these are always the last hour, so they follow scaling, restarts and spot price changes as they happen.
+
+The metrics only cover the Application's own pods. Namespace and cluster totals, including pods no Application manages, idle node capacity and shared costs, are for OpenCost to report. Adding the metrics up gives the cost Argo CD Applications are responsible for, not your bill.
+
+### The exporter's own health
+
+| Metric | Type | Labels | Meaning |
+|---|---|---|---|
+| `argocd_cost_intelligence_exporter_last_refresh_timestamp_seconds` | gauge | | When the exporter last refreshed with the current list of Applications. Not updated when listing Applications fails. |
+| `argocd_cost_intelligence_exporter_last_refresh_duration_seconds` | gauge | | How long the last refresh took. |
+| `argocd_cost_intelligence_exporter_refresh_errors_total` | counter | `stage` | Failed refresh steps: `applications` (listing Applications; every cost series is dropped), `opencost` (one per namespace that failed), `estimates` (reading cloud estimates from PostgreSQL). |
+
+The exporter also reports `opencost_request_duration_seconds`, `database_operation_duration_seconds`, and Go and process metrics, as below.
+
+### Cardinality
+
+About 8 series per Application with workloads, plus one per workload and one per cloud estimate: some 12,000 series for 1,000 Applications. Pods are never a label.
+
+## Service health
+
+Each API replica reports its own; Prometheus tells replicas apart by target.
+
+| Metric | Type | Labels | Meaning |
+|---|---|---|---|
+| `argocd_cost_intelligence_http_request_duration_seconds` | histogram | `route`, `method`, `code` | API requests. `route` is the route pattern, such as `/api/cost-analysis/{appName}/actual`, never the actual path; `unmatched` for paths no route serves. |
+| `argocd_cost_intelligence_sync_webhooks_total` | counter | `result` | Sync notifications from Argo CD: `accepted`, `unauthorized` (wrong or missing token), `invalid` (unreadable, or no application namespace) or `overloaded` (refused because too many measurements are running). |
+| `argocd_cost_intelligence_sync_measurements_total` | counter | `result` | Cost measurements after accepted notifications: `success` or `error`. |
+| `argocd_cost_intelligence_sync_measurement_duration_seconds` | histogram | | Duration of a measurement, including the 5 s wait for metrics to settle. |
+| `argocd_cost_intelligence_opencost_request_duration_seconds` | histogram | `endpoint`, `code` | Requests to OpenCost, by API path (`/allocation`, `/allocation/summary`, `/assets`, ...) and HTTP status; `code="error"` when no response arrived. |
+| `argocd_cost_intelligence_database_operation_duration_seconds` | histogram | `operation`, `result` | Storage operations against PostgreSQL, such as `SaveActual`. A record that does not exist yet is a `success`. |
+| `argocd_cost_intelligence_history_runs_total` | counter | `result` | Runs of the daily cost history recorder: `success`, or `error` when any Application failed. |
+| `argocd_cost_intelligence_history_last_run_timestamp_seconds` | gauge | | When the recorder last finished a run; 0 until the first one, and always with `DAILY_HISTORY_DAYS=0`. |
+| `go_*`, `process_*` | | | Go runtime and process metrics. |
+
+Every `result` starts at zero, so rates and alerts work before the first event.
+
+## Example queries
+
+Each Application's monthly cost:
+
+```promql
+namespace_name:argocd_cost_intelligence_application_hourly_cost:sum * 730
+```
+
+`namespace_name:argocd_cost_intelligence_application_hourly_cost:sum` is the [recording rule](#recording-rules-and-alerts); without it, use `sum by (namespace, name) (argocd_cost_intelligence_application_hourly_cost)`.
+
+Monthly cost by Argo CD project (or `dest_namespace`, `dest_server`, ...):
+
+```promql
+sum by (project) (
+  namespace_name:argocd_cost_intelligence_application_hourly_cost:sum
+  * on (namespace, name) group_left (project) argocd_app_info
+) * 730
+```
+
+This needs `argocd_app_info` scraped with its own `namespace` label. If yours shows `exported_namespace` instead, scrape Argo CD's metrics with `honorLabels: true` (in the `argo/argo-cd` chart, `controller.metrics.serviceMonitor.honorLabels`), or rename it with `label_replace`.
+
+The ten most expensive Applications:
+
+```promql
+topk(10, namespace_name:argocd_cost_intelligence_application_hourly_cost:sum)
+```
+
+What share of each Application's cost pays for requests it does not use:
+
+```promql
+sum by (namespace, name) (argocd_cost_intelligence_application_idle_hourly_cost)
+  / namespace_name:argocd_cost_intelligence_application_hourly_cost:sum
+```
+
+Cost by resource across all Applications:
+
+```promql
+sum by (resource) (argocd_cost_intelligence_application_hourly_cost) * 730
+```
+
+Each Application's cost a week ago, and the change since:
+
+```promql
+namespace_name:argocd_cost_intelligence_application_hourly_cost:sum
+  - namespace_name:argocd_cost_intelligence_application_hourly_cost:sum offset 1w
+```
+
+Full-stack cost per hour, Kubernetes plus cloud services:
+
+```promql
+namespace_name:argocd_cost_intelligence_application_hourly_cost:sum
+  + on (namespace, name) group_left
+    sum by (namespace, name) (argocd_cost_intelligence_application_estimated_hourly_cost)
+```
+
+### An Application's workloads with kube-state-metrics
+
+`application_workload_info` maps Applications to workloads. Rename its labels to the other metric's with `label_replace`, then join. For example, the replicas each Application's Deployments want:
+
+```promql
+sum by (app_namespace, app_name) (
+  kube_deployment_spec_replicas
+  * on (namespace, deployment) group_left (app_namespace, app_name)
+    label_replace(label_replace(label_replace(label_replace(
+      argocd_cost_intelligence_application_workload_info{workload_kind="Deployment"},
+      "app_namespace", "$1", "namespace", "(.*)"),
+      "app_name", "$1", "name", "(.*)"),
+      "namespace", "$1", "workload_namespace", "(.*)"),
+      "deployment", "$1", "workload_name", "(.*)")
+)
+```
+
+## Recording rules and alerts
+
+[`helm/files/prometheus-rules.yaml`](../helm/files/prometheus-rules.yaml) holds one recording rule and some starter alerts. With the Prometheus Operator, `metrics.prometheusRule.enabled=true` installs them as a PrometheusRule. Otherwise add the file to your Prometheus `rule_files`. They're tested with `promtool` ([`test/prometheus/`](../test/prometheus/)).
+
+| Rule | When |
+|---|---|
+| `namespace_name:argocd_cost_intelligence_application_hourly_cost:sum` | Each Application's cost per hour, every resource together. |
+| `ArgoCDApplicationCostIncrease` | An Application costs more than 1.5× its average over the past week, and more than 0.01 an hour, for 2 hours. |
+| `ArgoCDCostIntelligenceExporterStale` | The exporter has not refreshed for 15 minutes. |
+| `ArgoCDCostIntelligenceExporterAbsent` | No exporter is scraped, for 15 minutes. |
+| `ArgoCDCostIntelligenceExporterErrors` | A refresh step keeps failing for 30 minutes. |
+| `ArgoCDCostIntelligenceMeasurementsFailing` | More than half of the measurements after a sync fail, for 15 minutes. |
+| `ArgoCDCostIntelligenceWebhooksRefused` | Webhooks were refused in the last 30 minutes and none accepted: the token Argo CD sends no longer matches. |
+| `ArgoCDCostIntelligenceOpenCostErrors` | More than half of the requests to OpenCost fail, for 15 minutes. |
+| `ArgoCDCostIntelligenceHistoryStale` | No replica has recorded daily cost history for 3 hours. |
+| `ArgoCDCostIntelligenceHistoryFailing` | Every history run in the last 3 hours failed. |
+
+The thresholds are starting points. The cost alert compares with the recording rule's own history, so it needs the rule to have run for a week before it is reliable. To tune them, copy the file and set `metrics.prometheusRule.enabled=false`.
+
+There's no metric for "cost change since the last sync" or "anomaly". Those are queries over the cost series, like the ones above, so Prometheus works them out from data it already has.
+
+## Scraping
+
+### Pod annotations (default)
+
+The chart adds `prometheus.io/scrape`, `prometheus.io/port` and `prometheus.io/path` to the API and exporter pods (`metrics.podAnnotations`), which the `kubernetes-pods` job of the `prometheus-community/prometheus` chart discovers. That job sets `honor_labels: true`; your own job must too, or Prometheus renames the exporter's `namespace` label to `exported_namespace` and the joins with `argocd_app_info` stop matching.
+
+### Prometheus Operator
+
+```bash
+helm upgrade argocd-cost-intelligence \
+  oci://ghcr.io/ppapapetrou76/charts/argocd-cost-intelligence --version <version> \
+  -n argocd-cost-intel --reuse-values --set namespace.create=false \
+  --set metrics.serviceMonitor.enabled=true \
+  --set metrics.prometheusRule.enabled=true \
+  --set metrics.serviceMonitor.labels.release=kube-prometheus-stack \
+  --set metrics.prometheusRule.labels.release=kube-prometheus-stack \
+  --set metrics.podAnnotations=false
+```
+
+The labels are the ones your Prometheus selects ServiceMonitors and PrometheusRules by. This creates one ServiceMonitor for the API replicas and one for the exporter, which sets `honorLabels: true`. Turn the annotations off if your Prometheus also scrapes by annotation, or every series is scraped twice.
+
+### Why the exporter is a separate Deployment
+
+Cost is the same whichever process reads it. If every API replica exported it, a `sum` would count each Application once per replica, and the count would change as the HPA scales. One exporter replica, like kube-state-metrics, exports it once. It uses the `Recreate` strategy, so two never run during an upgrade. While it restarts, the cost series have a gap of a minute or two, which `ArgoCDCostIntelligenceExporterAbsent` tolerates.
+
+Health metrics are the other way round: each replica reports its own requests and errors, so they come from every API replica.
+
+## Security
+
+Anyone who can query your Prometheus sees every Application's cost. Argo CD's RBAC doesn't apply there. If that matters, restrict who may query Prometheus or Grafana, or turn the exporter off (`metrics.exporter.enabled=false`).
+
+The metrics port is the only port Prometheus may reach. The API trusts the `Argocd-Application-Name` header Argo CD's proxy sets, so anything that can reach the API port can read any application's costs ([why](operations.md#networkpolicy)). The chart's NetworkPolicy therefore admits Prometheus to the metrics port only, from `metrics.allowedFrom`, by default any pod in the `monitoring` namespace. Set it to your Prometheus's namespace or pods:
+
+```yaml
+metrics:
+  allowedFrom:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: prometheus-system
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+```
+
+With an empty list, nothing may reach the metrics port. `/metrics` holds no secrets and needs no authentication; it carries no pod names, labels or annotations.
+
+The exporter lists Argo CD Applications with the chart's ServiceAccount, which already may (`argoproj.io` `applications`, `get`/`list`), and reads cloud estimates from PostgreSQL. It runs no migrations and serves no API.
+
+## Configuration
+
+The `metrics.*` Helm values (port, pod annotations, `allowedFrom`, exporter interval and resources, ServiceMonitor, PrometheusRule) are listed in [configuration.md](configuration.md#metrics). The environment variables, if you run it without the chart, are `METRICS_PORT` (default `9102`; `0` turns `/metrics` off), `MODE=exporter` and `EXPORTER_INTERVAL` (default `5m`, at least `1m`).
+
+`MODE=exporter` lists Applications through the in-cluster configuration, so it cannot run outside Kubernetes. In exporter mode `/health` and `/ready` are served on the metrics port; `/ready` answers once the first refresh has finished.

@@ -1,0 +1,15 @@
+title = "argocd-cost-intelligence"
+
+[extend]
+useDefault = true
+
+# Reviewed false positives: documentation curl examples, a fixed secret used
+# only by unit tests, and pod names in a test table.
+[[allowlists]]
+description = "Documentation, dev script and test fixtures"
+paths = [
+  '''docs/development\.md''',
+  '''scripts/setup-dev\.sh''',
+  '''pkg/config/config_test\.go''',
+  '''pkg/models/resources_test\.go''',
+]

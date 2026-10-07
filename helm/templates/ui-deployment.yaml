@@ -1,0 +1,80 @@
+{{- if .Values.features.deployUI }}
+{{- if .Values.ui.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "argocd-cost-intelligence.fullname" . }}-ui
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+    component: ui
+spec:
+  replicas: {{ .Values.ui.replicas }}
+  selector:
+    matchLabels:
+      {{- include "argocd-cost-intelligence.selectorLabels" . | nindent 6 }}
+      component: ui
+  template:
+    metadata:
+      labels:
+        {{- include "argocd-cost-intelligence.selectorLabels" . | nindent 8 }}
+        component: ui
+    spec:
+      {{- if .Values.security.podSecurityContext }}
+      securityContext:
+        {{- toYaml .Values.security.podSecurityContext | nindent 8 }}
+      {{- end }}
+      containers:
+      - name: ui
+        image: "{{ .Values.ui.image.repository }}:{{ .Values.ui.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.ui.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.ui.port }}
+          protocol: TCP
+        {{- if .Values.security.containerSecurityContext }}
+        securityContext:
+          {{- toYaml .Values.security.containerSecurityContext | nindent 12 }}
+        {{- end }}
+        {{- if .Values.ui.resources }}
+        resources:
+          {{- toYaml .Values.ui.resources | nindent 12 }}
+        {{- end }}
+        livenessProbe:
+          httpGet:
+            path: /index.js
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /index.js
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "argocd-cost-intelligence.fullname" . }}-ui
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+    component: ui
+spec:
+  type: ClusterIP
+  ports:
+  - port: {{ .Values.ui.port }}
+    targetPort: http
+    protocol: TCP
+    name: http
+  selector:
+    {{- include "argocd-cost-intelligence.selectorLabels" . | nindent 4 }}
+    component: ui
+{{- end }}
+{{- end }}

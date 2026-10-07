@@ -1,0 +1,270 @@
+# Installation
+
+This page covers installing Argo CD Cost Intelligence with Helm, checking that it works, upgrading and removing it. Chart settings are in [configuration.md](configuration.md). If something goes wrong, see [operations.md](operations.md#troubleshooting).
+
+## What the chart installs
+
+Everything goes into the `argocd-cost-intel` namespace, which the chart creates:
+
+| Component | Kind | What it does |
+|---|---|---|
+| `argocd-cost-intelligence` | Deployment (HPA, 2 to 5 replicas), Service on 8080 | REST API and sync webhook |
+| `argocd-cost-intelligence-exporter` | Deployment, 1 replica | Publishes application cost as Prometheus metrics |
+| `argocd-cost-intelligence-ui` | Deployment, Service on 3000 | Serves the React bundle that `argocd-server` loads as an extension |
+| `postgres` | StatefulSet, headless Service, PVC `postgres-pvc` | Cost history. You can use an external database instead, see [configuration.md](configuration.md#external-postgresql) |
+
+These names assume the release is called `argocd-cost-intelligence`. With another release name, the Deployments and Services are named after it.
+
+The chart also runs a post-install/post-upgrade hook Job that changes Argo CD itself. It runs on every `helm install` and `helm upgrade`:
+
+| Where | What changes |
+|---|---|
+| `argocd-cm` | `extension.config`: the extension proxy, pointing at the backend Service |
+| `argocd-cmd-params-cm` | `server.enable.proxy.extension: "true"` |
+| `argocd-notifications-cm` | `service.webhook.cost-intel`, `trigger.on-sync-succeeded`, `template.app-sync-succeeded` and `subscriptions` |
+| `argocd-notifications-secret` | The key `cost-intel-webhook-token`, the bearer token the webhook sends |
+| `argocd-server` Deployment | An init container, `cost-intel-extension`, and a volume that fetch the UI bundle from the UI Service |
+| ClusterRole and binding `argocd-notifications-controller` | Applied so the notifications controller can read Applications in every namespace. If you already have a ClusterRole with that name, its rules are overwritten. |
+
+The hook then restarts `argocd-notifications-controller`, the UI Deployment and `argocd-server`, so the Argo CD UI reloads during an install or upgrade. When the hook succeeds it deletes its own ServiceAccount, ClusterRole and Job.
+
+## Prerequisites
+
+| You need | Notes |
+|---|---|
+| A Kubernetes cluster | Any cluster Argo CD supports. |
+| Argo CD 3.4 or 3.5 | The plugin uses the proxy extension feature, which the hook turns on. `argocd-notifications-controller` must be running in `argoCd.namespace`. |
+| OpenCost 1.121.1 or later | The backend and exporter call it on port 9003. The default URL is `http://opencost.opencost:9003`. See [opencost.io/docs/install](https://www.opencost.io/docs/install). |
+| Helm 3.8 or later | The chart is published as an OCI artifact. |
+| Cluster-admin | The hook patches resources in the Argo CD namespace and creates a ClusterRole. |
+| A default StorageClass | The bundled PostgreSQL claims a 20 GiB PVC. Without a default class, set `postgres.persistence.storageClassName`. |
+| metrics-server | The backend HPA needs it. Without it, set `costIntelligence.autoscaling.enabled=false`. |
+
+### Compatibility
+
+| Component | Supported | Last tested with |
+|---|---|---|
+| Argo CD | 3.4 and 3.5 | 3.5.0 |
+| OpenCost | 1.121.1+ (the label picker on Chargeback needs 1.120.3+) | 1.121.3 |
+| Kubernetes | Any version Argo CD supports | 1.31 (k3s) |
+| Helm | 3.8+ | 4.2.0 |
+| PostgreSQL | The bundled `postgres:15-alpine`, or an external instance | 15 |
+| Vertical Pod Autoscaler (optional) | A recommender serving `autoscaling.k8s.io/v1` | VPA 1.7.1, Goldilocks 4.16.2 |
+
+"Supported" means the versions the plugin is built for. "Last tested with" is the version we last ran it against. The UI runs on the React that Argo CD provides (16.14 on Argo CD 3.4, 19 on 3.5), so it only uses APIs that both have. Other versions may work too. If you try one, please tell us how it went.
+
+### Network
+
+The backend and exporter must reach OpenCost on port 9003. The exporter and the hook also need the Kubernetes API.
+
+The chart's NetworkPolicies only limit incoming traffic. The backend accepts `argocd-server` and `argocd-notifications-controller`, the UI pod accepts `argocd-server`, PostgreSQL accepts the backend and exporter, and Prometheus can reach the metrics port (9102). Outgoing traffic is not restricted by the chart, but it may be restricted in your cluster:
+
+- If the OpenCost namespace limits incoming traffic, let pods from `argocd-cost-intel` reach port 9003.
+- If the Argo CD namespace limits outgoing traffic, let `argocd-server` reach `argocd-cost-intel` on ports 8080 and 3000, and `argocd-notifications-controller` reach it on 8080.
+
+[operations.md](operations.md#networkpolicy) explains how the policies work and what to do if your CNI blocks kubelet probes.
+
+> **Warning:** k3d and clusters that use the Flannel CNI don't enforce NetworkPolicy. Install with `--set networkPolicy.enabled=false` there. Otherwise the policies do nothing, and you'd think you were protected when you aren't.
+
+### Images
+
+The images are public on GHCR, so you don't need a pull secret: `ghcr.io/ppapapetrou76/argocd-cost-intelligence:v0.1.0` and `ghcr.io/ppapapetrou76/argocd-cost-intelligence-ui:v0.1.0`. The hook Job (`postInstallHook.image`) and the `argocd-server` init container (`busybox`) pull images too. Mirror those if your cluster can't reach public registries.
+
+## Install
+
+### Choose your settings
+
+**PostgreSQL password.** The chart stores it in a Secret called `postgres-credentials`. Don't commit it. To manage that Secret yourself, see [configuration.md](configuration.md#postgresql-credentials).
+
+**OpenCost URL**, if it isn't `http://opencost.opencost:9003`: `--set openCost.baseURL=http://<service>.<namespace>.svc.cluster.local:9003`.
+
+**Argo CD namespace**, if it isn't `argocd`: `--set argoCd.namespace=<namespace>`.
+
+**Who sees cluster-wide costs.** The Namespaces and Chargeback pages show what every team spends, so they stay off until you choose who may see them. Argo CD's extension proxy can only check whether a viewer may `get` one Application, so one Application acts as the gate. Anyone who can view it sees cluster-wide costs. Any existing Application will do. List them with `kubectl get applications -A` and pass `<namespace>:<name>`, where the namespace is the one the Application resource lives in (usually `argocd`):
+
+```bash
+--set costIntelligence.clusterScopeApp=argocd:<app-name>
+```
+
+You can skip this. Per-application costs work without it, and the cluster-wide pages tell you how to turn them on. You can set it later with `helm upgrade --reuse-values --set ...`.
+
+### Run the install
+
+The chart creates its own namespace (`namespace.create=true`), so tell Helm not to create it, or the two collide:
+
+```bash
+helm install argocd-cost-intelligence \
+  oci://ghcr.io/ppapapetrou76/charts/argocd-cost-intelligence \
+  --version 0.1.0 \
+  --namespace argocd-cost-intel --create-namespace \
+  --set namespace.create=false \
+  --set postgres.auth.password=<your-secure-password> \
+  --wait --timeout 10m
+```
+
+`--wait` also waits for the hook, and the hook waits for the Argo CD rollouts it triggers. On a slow cluster that takes several minutes, so give it a generous timeout. `--namespace` must equal `namespace.name`.
+
+Before you run it, know what the hook does to your existing configuration:
+
+> **Warning:** The hook replaces `trigger.on-sync-succeeded` and `subscriptions` in `argocd-notifications-cm`. If you already use Argo CD Notifications with those keys, back the ConfigMap up first and merge your entries back in afterwards. Also, if something reconciles `argocd-cm`, `argocd-notifications-cm` or the `argocd-server` Deployment (Argo CD managing itself, for example), it will revert the hook's patches. In that case set `features.autoPatchArgoCd=false` and make the changes in your own source of truth. [`deploy/argocd-notifications-patch.yaml`](../deploy/argocd-notifications-patch.yaml) has the notifications part, and the rest is in [`helm/templates/post-install-hook.yaml`](../helm/templates/post-install-hook.yaml).
+
+### Grant access in Argo CD
+
+Viewers need permission to invoke the extension, and `get` on an Application to see its tab (they usually have that already). Add this to `argocd-rbac-cm`:
+
+```
+p, role:cost-viewer, extensions, invoke, cost-intel, allow
+# only for the people who may see cluster-wide costs (the gate from above):
+p, role:platform, applications, get, <project>/<app-name>, allow
+```
+
+Then assign the roles to your groups as you normally do.
+
+### Install with Argo CD or helm template
+
+The chart generates the sync webhook's token and reads it back on `helm upgrade`, so it stays the same. Argo CD and `helm template` render without cluster access, so they'd generate a new token on every render. That restarts the backend each time and leaves the Application permanently out of sync. Create the Secret yourself instead:
+
+```bash
+kubectl create secret generic cost-intel-webhook -n argocd-cost-intel \
+  --from-literal=token=$(openssl rand -hex 24)
+```
+
+Then set `webhook.existingSecret=cost-intel-webhook`. Give the database password the same treatment: use `postgres.auth.existingSecret`, or a values file that isn't in version control, because a render can't read the generated password back.
+
+To rotate the webhook token, update the Secret and run the hook again (`helm upgrade`, or sync the chart). Then restart the backend, which reads the token only at startup:
+
+```bash
+kubectl rollout restart deployment/argocd-cost-intelligence -n argocd-cost-intel
+```
+
+## Check that it works
+
+The hook Job is deleted when it succeeds, and most of its patch steps tolerate failure. So check the result rather than the Job:
+
+```bash
+kubectl get pods -n argocd-cost-intel      # backend, exporter, ui, postgres-0: all Running
+
+# Argo CD was wired up
+kubectl get cm argocd-cm -n argocd -o jsonpath='{.data.extension\.config}'
+kubectl get cm argocd-cmd-params-cm -n argocd -o jsonpath='{.data.server\.enable\.proxy\.extension}'
+kubectl get cm argocd-notifications-cm -n argocd -o jsonpath='{.data.service\.webhook\.cost-intel}'
+kubectl get deploy argocd-server -n argocd \
+  -o jsonpath='{.spec.template.spec.initContainers[*].name}'      # includes cost-intel-extension
+
+# Backend health
+kubectl port-forward svc/argocd-cost-intelligence 18080:8080 -n argocd-cost-intel &
+curl -s http://localhost:18080/health      # {"status":"ok"}
+```
+
+Then open any Application in Argo CD. It has a **Cost Intelligence** tab, which stays empty until the application's next successful sync. At that point Argo CD Notifications calls the webhook, the backend waits 5 seconds, asks OpenCost and stores the result. Sync an application and the tab fills within the UI's 30-second refresh.
+
+## Optional: rightsizing
+
+Cost Intelligence can tell you which requests to set for each container and what that would save per month. It doesn't work this out itself. It reads the recommendations of the [Vertical Pod Autoscaler](https://github.com/kubernetes/autoscaler/tree/master/vertical-pod-autoscaler) (VPA) and prices them with OpenCost. Without a VPA the rest of the plugin works as usual and rightsizing stays hidden. The chart doesn't install a VPA, and the service never creates or changes one. It only reads them.
+
+You need three things:
+
+1. **The VPA recommender in the cluster**, plus metrics-server. Follow the [VPA installation guide](https://github.com/kubernetes/autoscaler/blob/master/vertical-pod-autoscaler/docs/installation.md) or use your provider's add-on (GKE Autopilot has it on by default). To check:
+   ```bash
+   kubectl get crd verticalpodautoscalers.autoscaling.k8s.io
+   ```
+2. **A `VerticalPodAutoscaler` in `Off` mode for each workload you want advice on.** In `Off` mode the VPA only recommends. In any other mode (`Initial`, `Recreate`, `Auto`, `InPlaceOrRecreate`) it sets requests itself, so the workload shows as managed by the VPA and gets no advice. You can let [Goldilocks](https://goldilocks.docs.fairwinds.com/installation/) (from Fairwinds, needs the VPA) create one for every workload in a labelled namespace:
+   ```bash
+   kubectl label namespace <namespace> goldilocks.fairwinds.com/enabled=true
+   ```
+   or write one yourself:
+   ```yaml
+   apiVersion: autoscaling.k8s.io/v1
+   kind: VerticalPodAutoscaler
+   metadata:
+     name: web
+     namespace: <namespace>
+   spec:
+     targetRef:
+       apiVersion: apps/v1
+       kind: Deployment
+       name: web
+     updatePolicy:
+       updateMode: "Off"
+   ```
+3. **`costIntelligence.vpa.enabled`** left at its default of `true`. That lets the backend `get` and `list` `verticalpodautoscalers`.
+
+What to expect:
+
+- The VPA needs some usage history. Until it has it, the **Resources** tab shows no recommendation. For about the first day the upper bound is far above the target, so the recommendation is marked low confidence, the upper bound is hidden and there's no memory-limit warning. A container that uses almost nothing gets the VPA's minimum, not a measured figure.
+- Once there is a recommendation, **Actual costs** names the workloads to change and the monthly saving or cost, when it's at least $1. **Resources** shows each container's requests next to the VPA's range, and the requests to paste into your manifest.
+- Only requests are suggested. Limits are left alone, except for a warning when a memory limit is below the most the VPA expects the container to need.
+- The application must have synced since you installed or upgraded Cost Intelligence, so that its cost record lists the workloads it manages.
+
+## Optional: Prometheus metrics
+
+By default the chart serves metrics on port 9102: each Application's cost per hour (from the exporter) and the health of each API replica. If your Prometheus scrapes by `prometheus.io/*` pod annotations (the `prometheus-community/prometheus` chart does), you don't need to do anything else, as long as it scrapes with `honor_labels: true`. Two settings are worth checking:
+
+- **Who may scrape.** The NetworkPolicy admits only `metrics.allowedFrom`, which defaults to the `monitoring` namespace. If your Prometheus runs somewhere else, set it, or the targets show as down:
+  ```bash
+  --set 'metrics.allowedFrom[0].namespaceSelector.matchLabels.kubernetes\.io/metadata\.name=prometheus'
+  ```
+- **The Prometheus Operator.** Use `metrics.serviceMonitor.enabled`, `metrics.prometheusRule.enabled`, their `labels`, and `metrics.podAnnotations=false`. See [metrics.md](metrics.md#prometheus-operator).
+
+Anyone who can query that Prometheus sees every Application's cost, whatever Argo CD's RBAC says. To export only the service's own health, set `metrics.exporter.enabled=false`. To export nothing, set `metrics.enabled=false`. [metrics.md](metrics.md) lists the metrics, how to join them with `argocd_app_info`, and example queries and alerts.
+
+## Upgrade
+
+Database migrations are built into the backend and run when it starts, so an upgrade needs no manual database work. The PostgreSQL password is read back from the existing Secret, so you don't pass it again.
+
+```bash
+helm upgrade argocd-cost-intelligence \
+  oci://ghcr.io/ppapapetrou76/charts/argocd-cost-intelligence \
+  --version <new-version> \
+  --namespace argocd-cost-intel \
+  --set namespace.create=false \
+  <the same --set and -f flags as at install, minus postgres.auth.password> \
+  --wait --timeout 10m
+```
+
+Keep your settings in a values file and pass it with `-f` every time. `--reuse-values` works too, but it pins every chart default to the old release, so values that a newer chart adds aren't picked up. Read the [changelog](../CHANGELOG.md) for anything that needs action on your side.
+
+The hook runs again on every upgrade. That keeps Argo CD's configuration in step with the chart (including the webhook token) and restarts `argocd-server`.
+
+## Uninstall
+
+```bash
+helm uninstall argocd-cost-intelligence -n argocd-cost-intel
+```
+
+> **Warning:** This deletes the PostgreSQL PVC, and with it all stored cost history. The chart doesn't mark the PVC to be kept. [Back up first](operations.md#backup-restore-and-pruning) if you want the data. If the chart created the namespace, `helm uninstall` removes that too.
+
+The hook's changes to Argo CD stay behind. Remove them in this order. A `remove` fails if its key is already gone, so skip that command if so.
+
+```bash
+# 1. Extension proxy config and feature flag
+kubectl patch cm argocd-cm -n argocd \
+  --type json -p '[{"op":"remove","path":"/data/extension.config"}]'
+kubectl patch cm argocd-cmd-params-cm -n argocd \
+  --type json -p '[{"op":"remove","path":"/data/server.enable.proxy.extension"}]'
+
+# 2. Notifications entries. This removes `subscriptions` and the trigger entirely,
+#    so restore your own from the backup you took at install, if you had any.
+kubectl patch cm argocd-notifications-cm -n argocd \
+  --type json -p '[
+    {"op":"remove","path":"/data/service.webhook.cost-intel"},
+    {"op":"remove","path":"/data/trigger.on-sync-succeeded"},
+    {"op":"remove","path":"/data/template.app-sync-succeeded"},
+    {"op":"remove","path":"/data/subscriptions"}
+  ]'
+
+# 3. The webhook token
+kubectl patch secret argocd-notifications-secret -n argocd \
+  --type json -p '[{"op":"remove","path":"/data/cost-intel-webhook-token"}]'
+
+# 4. The UI init container and volume on argocd-server
+#    (one patch: the volume mount must go together with the volume)
+kubectl patch deployment argocd-server -n argocd --type strategic \
+  -p '{"spec":{"template":{"spec":{"initContainers":[{"name":"cost-intel-extension","$patch":"delete"}],"containers":[{"name":"argocd-server","volumeMounts":[{"mountPath":"/tmp/extensions","$patch":"delete"}]}],"volumes":[{"name":"cost-intel-ext-js","$patch":"delete"}]}}}}'
+
+# 5. Restart so the changes apply
+kubectl rollout restart deployment/argocd-server -n argocd
+kubectl rollout restart deployment/argocd-notifications-controller -n argocd
+```
+
+The `argocd-notifications-controller` ClusterRole and ClusterRoleBinding that the hook applied stay in place. They give that controller access to Applications and projects. Delete them only if you didn't have them before the install.

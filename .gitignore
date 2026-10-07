@@ -1,0 +1,52 @@
+# Binaries
+bin/
+dist/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Go build cache
+.cache/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Env
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Local tooling and AI assistants
+.claude/
+.serena/
+.impeccable/
+.junie/
+
+# Dependencies
+node_modules/
+ui/node_modules/
+
+# Build artifacts
+vendor/
+out/
+
+# Database
+*.db
+*.sqlite
+
+# Logs and test output
+*.log
+*.out
+
+# Internal planning, not published
+BACKLOG.md
+STRUCTURE.txt
+mockups/

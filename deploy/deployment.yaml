@@ -1,0 +1,168 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argocd-cost-intelligence
+  namespace: argocd-cost-intel
+  labels:
+    app: argocd-cost-intelligence
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: argocd-cost-intelligence
+  template:
+    metadata:
+      labels:
+        app: argocd-cost-intelligence
+      # Each replica's own health metrics, on the metrics port: never the API port (see docs/metrics.md).
+      # Scrape with honor_labels: true.
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9102"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: argocd-cost-intelligence
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: argocd-cost-intelligence
+        image: argocd-cost-intelligence:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        - name: metrics
+          containerPort: 9102
+          protocol: TCP
+        env:
+        - name: SERVER_PORT
+          value: "8080"
+        # Prometheus metrics; "0" turns them off.
+        - name: METRICS_PORT
+          value: "9102"
+        - name: DB_HOST
+          value: postgres.argocd-cost-intel.svc.cluster.local
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: postgres-credentials
+              key: username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-credentials
+              key: password
+        - name: DB_NAME
+          value: "cost_intelligence"
+        - name: DB_SSL_MODE
+          value: "disable"
+        - name: OPENCOST_BASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: argocd-cost-intel-config
+              key: opencost-base-url
+        - name: OPENCOST_TIMEOUT
+          value: "10s"
+        - name: WEBHOOK_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: argocd-cost-intelligence-webhook
+              key: token
+        # Days of daily cost history to keep; 0 turns recording off.
+        - name: DAILY_HISTORY_DAYS
+          value: "400"
+        # Rightsizing from Vertical Pod Autoscaler recommendations; needs the VPA rule in rbac.yaml.
+        - name: VPA_ENABLED
+          value: "true"
+        # Argo CD Application whose viewers may see cluster-wide cost data (Namespaces and
+        # Chargeback pages). Unset turns those pages off.
+        # - name: CLUSTER_SCOPE_APP
+        #   value: "argocd:<application-name>"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 3
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: argocd-cost-intelligence
+  namespace: argocd-cost-intel
+  labels:
+    app: argocd-cost-intelligence
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: http
+    protocol: TCP
+    name: http
+  - port: 9102
+    targetPort: metrics
+    protocol: TCP
+    name: metrics
+  selector:
+    app: argocd-cost-intelligence
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: argocd-cost-intelligence
+  namespace: argocd-cost-intel
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: argocd-cost-intelligence
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80

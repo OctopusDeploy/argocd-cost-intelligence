@@ -1,0 +1,121 @@
+# Exports every Argo CD Application's cost to Prometheus (docs/metrics.md). One replica, like
+# kube-state-metrics: cost is global state, and several replicas would each export the same series.
+# Recreate keeps two from running during an update. Scrape it with honor_labels: true, so its
+# namespace label (the Application's namespace) is not renamed exported_namespace.
+#
+# These manifests have no NetworkPolicy; the Helm chart admits only Prometheus to this port.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argocd-cost-intelligence-exporter
+  namespace: argocd-cost-intel
+  labels:
+    app: argocd-cost-intelligence-exporter
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: argocd-cost-intelligence-exporter
+  template:
+    metadata:
+      labels:
+        app: argocd-cost-intelligence-exporter
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9102"
+        prometheus.io/path: "/metrics"
+    spec:
+      # Lists Argo CD Applications, which rbac.yaml allows.
+      serviceAccountName: argocd-cost-intelligence
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: exporter
+        image: argocd-cost-intelligence:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: metrics
+          containerPort: 9102
+          protocol: TCP
+        env:
+        - name: MODE
+          value: exporter
+        - name: METRICS_PORT
+          value: "9102"
+        # How often every Application is measured: one OpenCost query per namespace. At least 1m.
+        - name: EXPORTER_INTERVAL
+          value: "5m"
+        # PostgreSQL, for the cloud estimates CI pushes.
+        - name: DB_HOST
+          value: postgres.argocd-cost-intel.svc.cluster.local
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: postgres-credentials
+              key: username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-credentials
+              key: password
+        - name: DB_NAME
+          value: "cost_intelligence"
+        - name: DB_SSL_MODE
+          value: "disable"
+        - name: OPENCOST_BASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: argocd-cost-intel-config
+              key: opencost-base-url
+        - name: OPENCOST_TIMEOUT
+          value: "10s"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: metrics
+          periodSeconds: 10
+          timeoutSeconds: 5
+        # Ready once the first refresh has finished.
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: metrics
+          periodSeconds: 5
+          timeoutSeconds: 5
+        resources:
+          requests:
+            cpu: 20m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: argocd-cost-intelligence-exporter
+  namespace: argocd-cost-intel
+  labels:
+    app: argocd-cost-intelligence-exporter
+spec:
+  type: ClusterIP
+  ports:
+  - port: 9102
+    targetPort: metrics
+    protocol: TCP
+    name: metrics
+  selector:
+    app: argocd-cost-intelligence-exporter

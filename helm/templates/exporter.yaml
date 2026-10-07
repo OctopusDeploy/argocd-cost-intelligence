@@ -1,0 +1,133 @@
+{{- if and .Values.metrics.enabled .Values.metrics.exporter.enabled }}
+# The exporter exports every Argo CD Application's cost to Prometheus. Cost is global state, so it runs
+# as one replica, like kube-state-metrics: several would each export the same series. Recreate keeps
+# two from running during an upgrade.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "argocd-cost-intelligence.fullname" . }}-exporter
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+    component: exporter
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "argocd-cost-intelligence.selectorLabels" . | nindent 6 }}
+      component: exporter
+  template:
+    metadata:
+      {{- if or .Values.commonAnnotations .Values.metrics.podAnnotations }}
+      annotations:
+        {{- with .Values.commonAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- include "argocd-cost-intelligence.metrics.scrapeAnnotations" . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "argocd-cost-intelligence.selectorLabels" . | nindent 8 }}
+        component: exporter
+    spec:
+      # Lists Argo CD Applications, which the ClusterRole allows.
+      serviceAccountName: {{ include "argocd-cost-intelligence.serviceAccountName" . }}
+      {{- if .Values.security.podSecurityContext }}
+      securityContext:
+        {{- toYaml .Values.security.podSecurityContext | nindent 8 }}
+      {{- end }}
+      containers:
+      - name: exporter
+        image: "{{ .Values.costIntelligence.image.repository }}:{{ .Values.costIntelligence.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.costIntelligence.image.pullPolicy }}
+        ports:
+        - name: metrics
+          containerPort: {{ .Values.metrics.port }}
+          protocol: TCP
+        env:
+        - name: MODE
+          value: exporter
+        - name: METRICS_PORT
+          value: {{ .Values.metrics.port | quote }}
+        - name: EXPORTER_INTERVAL
+          value: {{ .Values.metrics.exporter.interval | quote }}
+        # PostgreSQL, for the cloud estimates CI pushes.
+        - name: DB_HOST
+          value: {{ include "argocd-cost-intelligence.postgres.host" . }}
+        - name: DB_PORT
+          value: "{{ .Values.postgres.service.port }}"
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "argocd-cost-intelligence.postgres.secretName" . }}
+              key: username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "argocd-cost-intelligence.postgres.secretName" . }}
+              key: password
+        - name: DB_NAME
+          value: {{ .Values.postgres.auth.database | quote }}
+        - name: DB_SSL_MODE
+          value: {{ .Values.postgres.sslMode | quote }}
+        - name: OPENCOST_BASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "argocd-cost-intelligence.openCost.secretName" . }}
+              key: opencost-base-url
+        - name: OPENCOST_TIMEOUT
+          value: {{ .Values.openCost.timeout | quote }}
+        {{- if .Values.security.containerSecurityContext }}
+        securityContext:
+          {{- toYaml .Values.security.containerSecurityContext | nindent 12 }}
+        {{- end }}
+        {{- with .Values.metrics.exporter.resources }}
+        resources:
+          {{- toYaml . | nindent 12 }}
+        {{- end }}
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: metrics
+          periodSeconds: 10
+          timeoutSeconds: 5
+        # Ready once the first refresh has finished, which takes one OpenCost query per namespace.
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: metrics
+          periodSeconds: 5
+          timeoutSeconds: 5
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "argocd-cost-intelligence.fullname" . }}-exporter
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+    component: exporter
+spec:
+  type: ClusterIP
+  ports:
+  - port: {{ .Values.metrics.port }}
+    targetPort: metrics
+    protocol: TCP
+    name: metrics
+  selector:
+    {{- include "argocd-cost-intelligence.selectorLabels" . | nindent 4 }}
+    component: exporter
+{{- end }}

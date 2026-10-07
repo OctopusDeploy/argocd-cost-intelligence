@@ -1,0 +1,157 @@
+{{- if .Values.features.autoPatchArgoCd }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "argocd-cost-intelligence.fullname" . }}-post-install
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        {{- include "argocd-cost-intelligence.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "argocd-cost-intelligence.fullname" . }}-post-install
+      restartPolicy: Never
+      containers:
+      - name: patch-argocd
+        image: {{ .Values.postInstallHook.image }}
+        env:
+        - name: WEBHOOK_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "argocd-cost-intelligence.webhook.secretName" . }}
+              key: token
+        command:
+        - /bin/sh
+        - -c
+        - |
+          set -e
+
+          echo "Waiting for Argo CD notifications controller..."
+          kubectl wait --for=condition=available --timeout=300s \
+            deployment/argocd-notifications-controller -n {{ .Values.argoCd.namespace }} || true
+
+          echo "Ensuring Argo CD notifications controller has cluster-scoped RBAC..."
+          kubectl create clusterrole argocd-notifications-controller \
+            --verb=get,list,watch,update,patch \
+            --resource=applications.argoproj.io \
+            --resource=appprojects.argoproj.io \
+            --dry-run=client -o yaml | kubectl apply -f - || true
+          kubectl create clusterrolebinding argocd-notifications-controller \
+            --clusterrole=argocd-notifications-controller \
+            --serviceaccount={{ .Values.argoCd.namespace }}:argocd-notifications-controller \
+            --dry-run=client -o yaml | kubectl apply -f - || true
+
+          echo "Configuring Argo CD extension proxy backend..."
+          BACKEND_URL="http://{{ include "argocd-cost-intelligence.fullname" . }}.{{ .Values.namespace.name }}.svc.cluster.local:{{ .Values.costIntelligence.port }}"
+          EXTENSION_CONFIG="extensions:\n- name: cost-intel\n  backend:\n    services:\n    - url: ${BACKEND_URL}"
+          kubectl patch cm argocd-cm -n {{ .Values.argoCd.namespace }} --type merge \
+            -p "{\"data\":{\"extension.config\":\"${EXTENSION_CONFIG}\"}}" || true
+
+          echo "Enabling proxy extension feature flag (Alpha, required since ArgoCD 2.7)..."
+          kubectl patch cm argocd-cmd-params-cm -n {{ .Values.argoCd.namespace }} --type merge \
+            -p '{"data":{"server.enable.proxy.extension":"true"}}' || true
+
+          # Not "|| true": without the token every webhook is refused, so a failure here must fail
+          # the hook. The token is passed base64-encoded and never printed.
+          echo "Sharing the webhook token with Argo CD Notifications..."
+          TOKEN_B64=$(printf '%s' "$WEBHOOK_TOKEN" | base64 | tr -d '\n')
+          kubectl get secret argocd-notifications-secret -n {{ .Values.argoCd.namespace }} >/dev/null 2>&1 || \
+            kubectl create secret generic argocd-notifications-secret -n {{ .Values.argoCd.namespace }}
+          kubectl patch secret argocd-notifications-secret -n {{ .Values.argoCd.namespace }} --type merge \
+            -p "{\"data\":{\"cost-intel-webhook-token\":\"${TOKEN_B64}\"}}"
+
+          echo "Patching Argo CD notifications config..."
+          kubectl patch cm argocd-notifications-cm -n {{ .Values.argoCd.namespace }} --type merge -p '{
+            "data": {
+              "service.webhook.cost-intel": "url: http://{{ include "argocd-cost-intelligence.fullname" . }}.{{ .Values.namespace.name }}.svc.cluster.local:{{ .Values.costIntelligence.port }}/api/cost-analysis/on-sync\nheaders:\n- name: Content-Type\n  value: application/json\n- name: Authorization\n  value: Bearer $cost-intel-webhook-token\n",
+              "trigger.on-sync-succeeded": "- when: app.status.operationState.phase in [\"Succeeded\"] and app.status.operationState.finishedAt != \"\"\n  oncePer: app.status.operationState.finishedAt\n  send: [app-sync-succeeded]\n",
+              "template.app-sync-succeeded": "webhook:\n  cost-intel:\n    method: POST\n    headers:\n    - name: Content-Type\n      value: application/json\n    body: |\n      {\n        \"applicationName\": \"{{ "{{" }}.app.metadata.name{{ "}}" }}\",\n        \"applicationNamespace\": \"{{ "{{" }}.app.metadata.namespace{{ "}}" }}\",\n        \"namespace\": \"{{ "{{" }}.app.spec.destination.namespace{{ "}}" }}\",\n        \"resources\": [{{ "{{" }}range $i, $r := .app.status.resources{{ "}}" }}{{ "{{" }}if $i{{ "}}" }}, {{ "{{" }}end{{ "}}" }}{\"kind\": \"{{ "{{" }}$r.kind{{ "}}" }}\", \"name\": \"{{ "{{" }}$r.name{{ "}}" }}\", \"namespace\": \"{{ "{{" }}with index $r \"namespace\"{{ "}}" }}{{ "{{" }}.{{ "}}" }}{{ "{{" }}end{{ "}}" }}\"}{{ "{{" }}end{{ "}}" }}],\n        \"syncTimestamp\": \"{{ "{{" }}.app.status.operationState.finishedAt{{ "}}" }}\",\n        \"syncResult\": \"Succeeded\"\n      }\n",
+              "subscriptions": "- recipients:\n  - cost-intel\n  triggers:\n  - on-sync-succeeded\n"
+            }
+          }' || true
+
+          echo "Restarting Argo CD notifications controller..."
+          kubectl rollout restart deployment/argocd-notifications-controller -n {{ .Values.argoCd.namespace }} || true
+          kubectl rollout status deployment/argocd-notifications-controller -n {{ .Values.argoCd.namespace }} --timeout=300s || true
+
+          {{- if and .Values.features.deployUI .Values.ui.enabled .Values.ui.autoRegister }}
+          echo "Restarting Cost Intelligence UI to pick up new image..."
+          kubectl rollout restart deployment/{{ include "argocd-cost-intelligence.fullname" . }}-ui -n {{ .Values.namespace.name }} || true
+          kubectl rollout status deployment/{{ include "argocd-cost-intelligence.fullname" . }}-ui -n {{ .Values.namespace.name }} --timeout=120s || true
+
+          echo "Injecting Cost Intelligence UI extension into Argo CD server..."
+          kubectl patch deployment argocd-server -n {{ .Values.argoCd.namespace }} --type strategic -p '{"spec":{"template":{"spec":{"initContainers":[{"name":"cost-intel-extension","image":"busybox:latest","securityContext":{"runAsUser":1000,"runAsNonRoot":true,"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}},"command":["sh","-c","for i in 1 2 3 4 5; do wget -qO /ext/extension-cost-intel.js http://{{ include "argocd-cost-intelligence.fullname" . }}-ui.{{ .Values.namespace.name }}.svc.cluster.local:{{ .Values.ui.port }}/index.js && echo OK && exit 0; sleep 10; done; echo Warning: extension download failed; exit 0"],"volumeMounts":[{"name":"cost-intel-ext-js","mountPath":"/ext"}]}],"containers":[{"name":"argocd-server","volumeMounts":[{"name":"cost-intel-ext-js","mountPath":"/tmp/extensions"}]}],"volumes":[{"name":"cost-intel-ext-js","emptyDir":{}}]}}}}' || true
+
+          echo "Restarting Argo CD server to pick up new UI extension..."
+          kubectl rollout restart deployment/argocd-server -n {{ .Values.argoCd.namespace }} || true
+          kubectl rollout status deployment/argocd-server -n {{ .Values.argoCd.namespace }} --timeout=300s || true
+          {{- end }}
+
+          echo "Post-install hook completed successfully!"
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "argocd-cost-intelligence.fullname" . }}-post-install
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "argocd-cost-intelligence.fullname" . }}-post-install
+  labels:
+    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "patch"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "create", "patch"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "list", "watch", "patch"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["clusterroles", "clusterrolebindings"]
+  verbs: ["get", "create", "update", "patch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "argocd-cost-intelligence.fullname" . }}-post-install
+  labels:
+    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "argocd-cost-intelligence.fullname" . }}-post-install
+subjects:
+- kind: ServiceAccount
+  name: {{ include "argocd-cost-intelligence.fullname" . }}-post-install
+  namespace: {{ .Values.namespace.name }}
+{{- end }}

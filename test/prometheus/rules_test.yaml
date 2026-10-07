@@ -1,0 +1,215 @@
+# Unit tests for helm/files/prometheus-rules.yaml. Run from the repository root:
+#   docker run --rm -v "$PWD:/w" -w /w --entrypoint promtool prom/prometheus test rules test/prometheus/*_test.yaml
+rule_files:
+  - ../../helm/files/prometheus-rules.yaml
+
+evaluation_interval: 1m
+
+tests:
+  # The recording rule adds up an Application's resources, and keeps same-named Applications apart.
+  - interval: 1m
+    input_series:
+      - series: 'argocd_cost_intelligence_application_hourly_cost{namespace="team-a",name="web",resource="cpu"}'
+        values: '0.04x10'
+      - series: 'argocd_cost_intelligence_application_hourly_cost{namespace="team-a",name="web",resource="memory"}'
+        values: '0.01x10'
+      - series: 'argocd_cost_intelligence_application_hourly_cost{namespace="team-b",name="web",resource="cpu"}'
+        values: '0.5x10'
+    promql_expr_test:
+      - expr: namespace_name:argocd_cost_intelligence_application_hourly_cost:sum
+        eval_time: 5m
+        exp_samples:
+          - labels: 'namespace_name:argocd_cost_intelligence_application_hourly_cost:sum{namespace="team-a",name="web"}'
+            value: 0.05
+          - labels: 'namespace_name:argocd_cost_intelligence_application_hourly_cost:sum{namespace="team-b",name="web"}'
+            value: 0.5
+
+  # The exporter refreshes until minute 10, then stops.
+  - interval: 1m
+    input_series:
+      - series: 'argocd_cost_intelligence_exporter_last_refresh_timestamp_seconds{job="exporter"}'
+        values: '0+60x10 600x40'
+    alert_rule_test:
+      - alertname: ArgoCDCostIntelligenceExporterStale
+        eval_time: 20m
+        exp_alerts: []
+      - alertname: ArgoCDCostIntelligenceExporterStale
+        eval_time: 35m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: exporter
+            exp_annotations:
+              summary: "The ArgoCD Cost Intelligence exporter has not refreshed Application costs for 25m 0s"
+              description: "Its Application cost series are empty or missing. exporter_refresh_errors_total says which step fails: applications means it cannot list Argo CD Applications."
+      - alertname: ArgoCDCostIntelligenceExporterAbsent
+        eval_time: 35m
+        exp_alerts: []
+
+  - interval: 1m
+    input_series: []
+    alert_rule_test:
+      - alertname: ArgoCDCostIntelligenceExporterAbsent
+        eval_time: 16m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "No ArgoCD Cost Intelligence exporter is being scraped"
+              description: "Application cost metrics are missing. Check that the exporter Deployment runs and that Prometheus may reach its metrics port (metrics.allowedFrom)."
+
+  # OpenCost fails for some namespace on every refresh; estimates never fail.
+  - interval: 1m
+    input_series:
+      - series: 'argocd_cost_intelligence_exporter_refresh_errors_total{stage="opencost"}'
+        values: '0+1x60'
+      - series: 'argocd_cost_intelligence_exporter_refresh_errors_total{stage="estimates"}'
+        values: '0x60'
+    alert_rule_test:
+      - alertname: ArgoCDCostIntelligenceExporterErrors
+        eval_time: 45m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              stage: opencost
+            exp_annotations:
+              summary: "The ArgoCD Cost Intelligence exporter's opencost step keeps failing"
+              description: "Applications it cannot measure are left out of the cost series. The exporter's log names the namespace or error."
+
+  # Three measurements in four fail, across two replicas.
+  - interval: 1m
+    input_series:
+      - series: 'argocd_cost_intelligence_sync_measurements_total{pod="a",result="error"}'
+        values: '0+2x60'
+      - series: 'argocd_cost_intelligence_sync_measurements_total{pod="b",result="error"}'
+        values: '0+1x60'
+      - series: 'argocd_cost_intelligence_sync_measurements_total{pod="a",result="success"}'
+        values: '0+1x60'
+    alert_rule_test:
+      - alertname: ArgoCDCostIntelligenceMeasurementsFailing
+        eval_time: 40m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "75% of ArgoCD Cost Intelligence's measurements after a sync fail"
+              description: "Syncs are not being measured. Check OpenCost (opencost_request_duration_seconds by code) and PostgreSQL (database_operation_duration_seconds by result)."
+
+  # One measurement in four fails.
+  - interval: 1m
+    input_series:
+      - series: 'argocd_cost_intelligence_sync_measurements_total{result="error"}'
+        values: '0+1x60'
+      - series: 'argocd_cost_intelligence_sync_measurements_total{result="success"}'
+        values: '0+3x60'
+    alert_rule_test:
+      - alertname: ArgoCDCostIntelligenceMeasurementsFailing
+        eval_time: 40m
+        exp_alerts: []
+
+  # Every webhook is refused.
+  - interval: 1m
+    input_series:
+      - series: 'argocd_cost_intelligence_sync_webhooks_total{result="unauthorized"}'
+        values: '0+1x60'
+      - series: 'argocd_cost_intelligence_sync_webhooks_total{result="accepted"}'
+        values: '0x60'
+    alert_rule_test:
+      - alertname: ArgoCDCostIntelligenceWebhooksRefused
+        eval_time: 40m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "ArgoCD Cost Intelligence refuses every sync webhook"
+              description: "The cost-intel-webhook-token key of argocd-notifications-secret must equal the service's WEBHOOK_SECRET. Running helm upgrade copies it again."
+
+  # Some webhooks are refused (a stray client), but Argo CD's get through.
+  - interval: 1m
+    input_series:
+      - series: 'argocd_cost_intelligence_sync_webhooks_total{result="unauthorized"}'
+        values: '0+1x60'
+      - series: 'argocd_cost_intelligence_sync_webhooks_total{result="accepted"}'
+        values: '0+1x60'
+    alert_rule_test:
+      - alertname: ArgoCDCostIntelligenceWebhooksRefused
+        eval_time: 40m
+        exp_alerts: []
+
+  # Three OpenCost requests in four fail, with a 5xx or no answer.
+  - interval: 1m
+    input_series:
+      - series: 'argocd_cost_intelligence_opencost_request_duration_seconds_count{endpoint="/allocation",code="500"}'
+        values: '0+2x60'
+      - series: 'argocd_cost_intelligence_opencost_request_duration_seconds_count{endpoint="/allocation",code="error"}'
+        values: '0+1x60'
+      - series: 'argocd_cost_intelligence_opencost_request_duration_seconds_count{endpoint="/allocation",code="200"}'
+        values: '0+1x60'
+    alert_rule_test:
+      - alertname: ArgoCDCostIntelligenceOpenCostErrors
+        eval_time: 40m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "75% of ArgoCD Cost Intelligence's requests to OpenCost fail"
+              description: "Costs cannot be measured. code=\"error\" means OpenCost did not answer; check OPENCOST_BASE_URL and OpenCost's health."
+
+  # Replica b last recorded at minute 1; replica a has not finished a run and reports 0.
+  - interval: 1m
+    input_series:
+      - series: 'argocd_cost_intelligence_history_last_run_timestamp_seconds{pod="a"}'
+        values: '0x300'
+      - series: 'argocd_cost_intelligence_history_last_run_timestamp_seconds{pod="b"}'
+        values: '60x300'
+    alert_rule_test:
+      - alertname: ArgoCDCostIntelligenceHistoryStale
+        eval_time: 150m
+        exp_alerts: []
+      - alertname: ArgoCDCostIntelligenceHistoryStale
+        eval_time: 200m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "ArgoCD Cost Intelligence has not recorded daily cost history for 3h 19m 0s"
+              description: "Long Trends ranges will have gaps. Check the API's log for 'Daily cost history'."
+
+  # No replica has finished a run (or history is off): nothing to call stale.
+  - interval: 1m
+    input_series:
+      - series: 'argocd_cost_intelligence_history_last_run_timestamp_seconds{pod="a"}'
+        values: '0x300'
+    alert_rule_test:
+      - alertname: ArgoCDCostIntelligenceHistoryStale
+        eval_time: 200m
+        exp_alerts: []
+
+  # Every hourly run fails.
+  - interval: 1m
+    input_series:
+      - series: 'argocd_cost_intelligence_history_runs_total{result="error"}'
+        values: '0+0.0167x240'
+      - series: 'argocd_cost_intelligence_history_runs_total{result="success"}'
+        values: '0x240'
+    alert_rule_test:
+      - alertname: ArgoCDCostIntelligenceHistoryFailing
+        eval_time: 200m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "Every ArgoCD Cost Intelligence daily history run in 3 hours failed"
+              description: "The API's log names the Applications and errors under 'Daily cost history'."
+
+  # One run in three succeeds.
+  - interval: 1m
+    input_series:
+      - series: 'argocd_cost_intelligence_history_runs_total{result="error"}'
+        values: '0+0.0167x240'
+      - series: 'argocd_cost_intelligence_history_runs_total{result="success"}'
+        values: '0x120 1x120'
+    alert_rule_test:
+      - alertname: ArgoCDCostIntelligenceHistoryFailing
+        eval_time: 200m
+        exp_alerts: []

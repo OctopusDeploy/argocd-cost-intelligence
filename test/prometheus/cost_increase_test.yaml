@@ -1,0 +1,37 @@
+# Unit tests for the cost increase alert in helm/files/prometheus-rules.yaml, which compares with a
+# week. Apart from rules_test.yaml because a week at 1m resolution is more than promtool's tests may
+# load into one query. Run from the repository root:
+#   docker run --rm -v "$PWD:/w" -w /w --entrypoint promtool prom/prometheus test rules test/prometheus/*_test.yaml
+rule_files:
+  - ../../helm/files/prometheus-rules.yaml
+
+evaluation_interval: 10m
+
+tests:
+  # A week at one cost, then a jump: only the Application above the floor alerts, and only after 2h.
+  - interval: 10m
+    input_series:
+      - series: 'argocd_cost_intelligence_application_hourly_cost{namespace="team-a",name="web",resource="cpu"}'
+        values: '0.04x1008 0.12x30'
+      - series: 'argocd_cost_intelligence_application_hourly_cost{namespace="team-a",name="web",resource="memory"}'
+        values: '0.01x1038'
+      # Five times as much, but under 0.01 an hour.
+      - series: 'argocd_cost_intelligence_application_hourly_cost{namespace="team-a",name="tiny",resource="cpu"}'
+        values: '0.001x1008 0.005x30'
+      # A fifth more: not enough.
+      - series: 'argocd_cost_intelligence_application_hourly_cost{namespace="team-a",name="steady",resource="cpu"}'
+        values: '1x1008 1.2x30'
+    alert_rule_test:
+      - alertname: ArgoCDApplicationCostIncrease
+        eval_time: 169h  # 1h after the jump: pending, not firing
+        exp_alerts: []
+      - alertname: ArgoCDApplicationCostIncrease
+        eval_time: 171h
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: team-a
+              name: web
+            exp_annotations:
+              summary: "Argo CD Application team-a/web costs over 50% more than over the past week"
+              description: "It now costs 0.1300 an hour (730 hours make a month). Check its last sync and the Cost Intelligence tab."

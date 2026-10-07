@@ -1,0 +1,16 @@
+{{- if and .Values.metrics.enabled .Values.metrics.prometheusRule.enabled }}
+# The recording rules and alerts in files/prometheus-rules.yaml, for the Prometheus Operator. The file
+# is inserted as it is, not rendered, so the alerts' own templates reach Prometheus intact.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "argocd-cost-intelligence.fullname" . }}
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+    {{- with .Values.metrics.prometheusRule.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  {{- .Files.Get "files/prometheus-rules.yaml" | fromYaml | toYaml | nindent 2 }}
+{{- end }}

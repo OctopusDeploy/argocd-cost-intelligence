@@ -1,0 +1,29 @@
+# Local k3d development overrides
+# k3d uses flannel which does not enforce NetworkPolicy — disable to avoid false assurance.
+networkPolicy:
+  enabled: false
+
+costIntelligence:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  image:
+    repository: argocd-cost-intelligence
+    tag: latest
+
+postgres:
+  persistence:
+    size: 1Gi
+
+ui:
+  image:
+    repository: argocd-cost-intelligence-ui
+    tag: latest
+
+openCost:
+  baseURL: http://opencost.opencost:9003
+
+
+features:
+  autoPatchArgoCd: true
+  deployUI: true

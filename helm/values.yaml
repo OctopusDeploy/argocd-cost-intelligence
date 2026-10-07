@@ -1,0 +1,343 @@
+# ArgoCD Cost Intelligence - Helm Values
+
+# Namespace configuration
+namespace:
+  create: true
+  name: argocd-cost-intel
+
+# Cost Intelligence Service Configuration
+costIntelligence:
+  # Service image
+  image:
+    repository: ghcr.io/ppapapetrou76/argocd-cost-intelligence
+    tag: ""  # defaults to .Chart.AppVersion when empty
+    pullPolicy: IfNotPresent
+
+  # Service replicas (HPA will override this)
+  replicaCount: 2
+
+  # Port the backend listens on (SERVER_PORT), exposed by its Service and
+  # admitted by its NetworkPolicy
+  port: 8080
+
+  # Argo CD Application ("<namespace>:<name>") that gates cluster-wide cost data: the
+  # Namespaces and Chargeback pages, and cluster control-plane cost. Only users Argo CD RBAC
+  # allows to get this Application can see them, for example with
+  #   p, role:platform, applications, get, <project>/<name>, allow
+  # Any existing Application works; the one that deploys this chart is a natural choice.
+  # Empty turns cluster-wide cost data off for everyone. Per-application costs are unaffected.
+  clusterScopeApp: ""
+
+  # Days of each application's daily cost to keep in PostgreSQL (DAILY_HISTORY_DAYS). OpenCost
+  # answers only for the days its Prometheus still keeps, often 15; this history lets the Trends
+  # tab show 6 months or a year. About one row per application per day. 0 turns recording off.
+  dailyHistoryDays: 400
+
+  # PostgreSQL connection pool per replica (DB_MAX_OPEN_CONNS, DB_MAX_IDLE_CONNS). Keep
+  # replicas x maxOpenConns below PostgreSQL's max_connections.
+  database:
+    maxOpenConns: 25
+    maxIdleConns: 5
+
+  # HTTP server timeouts (SERVER_READ_TIMEOUT, SERVER_WRITE_TIMEOUT, SERVER_IDLE_TIMEOUT). Raise writeTimeout if
+  # large trend or daily queries are cut off.
+  server:
+    readTimeout: 10s
+    writeTimeout: 10s
+    idleTimeout: 120s
+
+  # Rightsizing advice from the Vertical Pod Autoscaler's recommendations (VPA_ENABLED): CPU and
+  # memory per container, for workloads that Goldilocks, or anything else, has created a VPA for in
+  # recommendation-only mode. Adds read-only access to verticalpodautoscalers to the ClusterRole.
+  # Without a VPA in the cluster the app tab keeps its CPU suggestion from OpenCost data.
+  vpa:
+    enabled: true
+
+  # Resource limits
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  # Horizontal Pod Autoscaler
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+# PostgreSQL Configuration
+postgres:
+  enabled: true
+
+  # StatefulSet configuration
+  replicaCount: 1
+
+  image:
+    repository: postgres
+    tag: "15-alpine"
+    pullPolicy: IfNotPresent
+
+  # SSL mode for the PostgreSQL connection.
+  # "disable"     — plaintext; acceptable only for the bundled StatefulSet postgres
+  #                 (intra-cluster, same namespace, encrypted overlay networks).
+  #                 MUST be changed when using an external postgres instance.
+  # "require"     — TLS required; set when postgres has TLS enabled.
+  # "verify-full" — TLS + certificate chain verification (production recommended).
+  # When postgres.auth.existingSecret is set (external postgres), use "require" or
+  # "verify-full" to protect credentials in transit.
+  sslMode: "disable"
+
+  # Database credentials
+  auth:
+    username: cost_user
+    # password is required only on first install when existingSecret is not set.
+    # On subsequent helm upgrades the value is read from the existing K8s Secret.
+    # Supply it with: --set postgres.auth.password=<value>
+    # or via a separate values override file that is NOT committed to version control.
+    password: ""
+    database: cost_intelligence
+    # existingSecret — name of a pre-existing K8s Secret (in the same namespace) that
+    # contains 'username' and 'password' keys. When set, Helm will NOT create or manage
+    # the postgres Secret; postgres.auth.password is ignored.
+    # Create it once with: kubectl create secret generic <name> \
+    #   --namespace=<namespace> --from-literal=username=<user> --from-literal=password=<pwd>
+    # Then upgrade with: --set postgres.auth.existingSecret=<name>
+    existingSecret: ""
+
+  # Storage
+  persistence:
+    enabled: true
+    storageClassName: ""  # Use default storage class
+    size: 20Gi
+
+  # Security context — postgres starts as root then drops to uid 999 internally,
+  # so we don't set runAsNonRoot/runAsUser here. readOnlyRootFilesystem must be
+  # false because postgres writes to /var/run/postgresql and temp dirs.
+  podSecurityContext:
+    fsGroup: 999
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+
+  # Resource limits
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+  # Service
+  service:
+    type: ClusterIP
+    port: 5432
+
+# OpenCost Configuration
+openCost:
+  # OpenCost API endpoint
+  # Default assumes OpenCost is installed in 'opencost' namespace
+  baseURL: http://opencost.opencost:9003
+  timeout: 10s
+
+# Argo CD Notifications Integration
+argoCd:
+  # Namespace where Argo CD is installed
+  namespace: argocd
+
+  # Enable automatic patching of Argo CD notifications
+  notificationsIntegration:
+    enabled: true
+
+# Security Configuration
+security:
+  # Pod Security Context
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+
+  # Container Security Context
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    capabilities:
+      drop:
+        - ALL
+
+# RBAC Configuration
+rbac:
+  create: true
+  # Role names
+  roleName: argocd-cost-intelligence
+  roleBindingName: argocd-cost-intelligence
+  serviceAccountName: argocd-cost-intelligence
+
+# Service Account
+serviceAccount:
+  create: true
+  name: argocd-cost-intelligence
+
+# Health checks
+healthChecks:
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+# Ingress (optional)
+# Exposing the backend directly bypasses Argo CD's extension proxy, which authorizes
+# every API request; anyone reaching the Ingress could forge the proxy's headers.
+# With networkPolicy.enabled the ingress controller is blocked. Leave this off.
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: cost-intel.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# Node affinity and tolerations
+nodeSelector: {}
+affinity: {}
+tolerations: []
+
+# Labels to apply to all resources
+commonLabels:
+  app.kubernetes.io/part-of: argocd-cost-intelligence
+
+# Annotations to apply to all resources
+commonAnnotations: {}
+
+# UI Plugin Configuration
+ui:
+  enabled: true
+
+  image:
+    repository: ghcr.io/ppapapetrou76/argocd-cost-intelligence-ui
+    tag: ""  # defaults to .Chart.AppVersion when empty
+    pullPolicy: IfNotPresent
+
+  port: 3000
+
+  replicas: 1
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+  # Auto-register plugin with Argo CD
+  autoRegister: true
+
+# Webhook authentication. Argo CD Notifications must send this token as a bearer token to
+# POST /api/cost-analysis/on-sync; the post-install hook copies it into
+# argocd-notifications-secret (key cost-intel-webhook-token).
+webhook:
+  # Name of an existing Secret in namespace.name holding the token under the key "token"
+  # (at least 16 characters). Leave empty to let the chart generate and keep one.
+  # Set it when Argo CD or `helm template` renders this chart: they cannot read the
+  # generated Secret back, so every render would generate a new token.
+  existingSecret: ""
+
+# NetworkPolicy — restricts which pods may reach the backend.
+# Requires a CNI that enforces NetworkPolicy (Calico, Cilium, Weave, etc.).
+# k3d's default flannel CNI does NOT enforce policies; set enabled: false there.
+networkPolicy:
+  enabled: true
+  # Only argocd-server (extension proxy, UI bundle download) and
+  # argocd-notifications-controller (on-sync webhook) may reach the pods. The API
+  # trusts Argo CD's proxy headers, so any other client could forge them.
+  #
+  # Kubelet probes need no rule: Kubernetes always allows traffic between a pod and
+  # its own node. If your CNI does not (probes fail once the policy is applied), list
+  # the node addresses here, e.g. ["10.0.0.0/16"]. Everything in these ranges,
+  # including hostNetwork pods, can then reach the API port, so keep them narrow.
+  probeCIDRs: []
+
+# Prometheus metrics (docs/metrics.md lists every metric, with example queries and alerts).
+metrics:
+  # Serve /metrics on a port of its own: each API replica reports its own health (requests,
+  # sync webhooks and measurements, OpenCost and database calls), and the exporter below reports
+  # each Argo CD Application's cost. false turns both off.
+  enabled: true
+  port: 9102
+
+  # Add prometheus.io/scrape, /port and /path annotations to the pods, for a Prometheus that
+  # discovers pods by them (the prometheus-community chart's kubernetes-pods job does). Scrape with
+  # honor_labels: true, as that job does, so the exporter's namespace label (the Application's
+  # namespace, as in Argo CD's own metrics) is not renamed exported_namespace.
+  podAnnotations: true
+
+  # Peers the NetworkPolicy admits to the metrics port, and only to it: the Prometheus that
+  # scrapes it. NetworkPolicy "from" entries; the default admits the "monitoring" namespace.
+  # Anyone who can query that Prometheus sees every Application's cost.
+  allowedFrom:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+
+  # The exporter: a single-replica Deployment that measures every Argo CD Application's cost per
+  # hour from OpenCost and exports it. One replica, so the series are not repeated per API replica.
+  exporter:
+    enabled: true
+    # How often every Application is measured (EXPORTER_INTERVAL): one OpenCost query per
+    # namespace the Applications deploy to. At least 1m.
+    interval: 5m
+    resources:
+      requests:
+        cpu: 20m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+
+  # ServiceMonitors for the Prometheus Operator, for the API replicas and the exporter. The
+  # exporter's sets honorLabels: true.
+  serviceMonitor:
+    enabled: false
+    interval: 1m
+    # Labels your Prometheus selects ServiceMonitors by, e.g. release: kube-prometheus-stack.
+    labels: {}
+
+  # A PrometheusRule with recording rules and starter alerts (helm/files/prometheus-rules.yaml),
+  # for the Prometheus Operator. Without the Operator, copy that file into your rule files.
+  prometheusRule:
+    enabled: false
+    labels: {}
+
+# Post-install hook configuration
+postInstallHook:
+  # kubectl image for the ArgoCD registration job.
+  # alpine/k8s provides stable versioned tags matching Kubernetes releases.
+  image: alpine/k8s:1.32.3
+
+# Feature flags
+features:
+  # Enable automatic patching of Argo CD
+  autoPatchArgoCd: true
+  # Deploy UI plugin
+  deployUI: true

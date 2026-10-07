@@ -1,0 +1,171 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "argocd-cost-intelligence.fullname" . }}
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "argocd-cost-intelligence.selectorLabels" . | nindent 6 }}
+      component: backend
+  policyTypes:
+    - Ingress
+  ingress:
+    # ArgoCD notifications controller → POST /api/cost-analysis/on-sync
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.argoCd.namespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: argocd-notifications-controller
+      ports:
+        - port: {{ .Values.costIntelligence.port }}
+          protocol: TCP
+
+    # ArgoCD server → extension proxy (browser GET requests)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.argoCd.namespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: argocd-server
+      ports:
+        - port: {{ .Values.costIntelligence.port }}
+          protocol: TCP
+
+    {{- if .Values.metrics.enabled }}
+    {{- include "argocd-cost-intelligence.metrics.ingressRule" . | nindent 4 }}
+    {{- end }}
+
+    # No rule for kubelet probes: traffic from the pod's own node is always allowed
+    # (Kubernetes NetworkPolicy spec). A rule with `ports` but no `from` would admit
+    # every source and let any pod forge the Argocd-Application-Name header.
+    {{- with .Values.networkPolicy.probeCIDRs }}
+
+    # Kubelet probes, for CNIs that do not exempt node traffic (see docs/operations.md)
+    - from:
+        {{- range . }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      ports:
+        - port: {{ $.Values.costIntelligence.port }}
+          protocol: TCP
+    {{- end }}
+
+{{- if and .Values.features.deployUI .Values.ui.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "argocd-cost-intelligence.fullname" . }}-ui
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "argocd-cost-intelligence.selectorLabels" . | nindent 6 }}
+      component: ui
+  policyTypes:
+    - Ingress
+  ingress:
+    # ArgoCD server initContainer fetches the extension JS bundle
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.argoCd.namespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: argocd-server
+      ports:
+        - port: {{ .Values.ui.port }}
+          protocol: TCP
+
+    # No rule for kubelet probes: node traffic is always allowed (see the backend policy).
+    {{- with .Values.networkPolicy.probeCIDRs }}
+
+    # Kubelet probes, for CNIs that do not exempt node traffic (see docs/operations.md)
+    - from:
+        {{- range . }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      ports:
+        - port: {{ $.Values.ui.port }}
+          protocol: TCP
+    {{- end }}
+{{- end }}
+{{- if and .Values.metrics.enabled .Values.metrics.exporter.enabled }}
+---
+# The exporter serves only /metrics, so Prometheus is all it admits. Without metrics.allowedFrom
+# nothing is admitted; kubelet probes come from the node, which is always allowed.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "argocd-cost-intelligence.fullname" . }}-exporter
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "argocd-cost-intelligence.selectorLabels" . | nindent 6 }}
+      component: exporter
+  policyTypes:
+    - Ingress
+  ingress:
+    {{- include "argocd-cost-intelligence.metrics.ingressRule" . | nindent 4 }}
+    {{- with .Values.networkPolicy.probeCIDRs }}
+
+    # Kubelet probes, for CNIs that do not exempt node traffic (see docs/operations.md)
+    - from:
+        {{- range . }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      ports:
+        - port: {{ $.Values.metrics.port }}
+          protocol: TCP
+    {{- end }}
+{{- end }}
+{{- if .Values.postgres.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "argocd-cost-intelligence.fullname" . }}-postgres
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "argocd-cost-intelligence.selectorLabels" . | nindent 6 }}
+      app: postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    # Backend pods, and the exporter, which reads cloud estimates. Probes are exec
+    # (pg_isready), so they need no rule.
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "argocd-cost-intelligence.selectorLabels" . | nindent 14 }}
+              component: backend
+        {{- if and .Values.metrics.enabled .Values.metrics.exporter.enabled }}
+        - podSelector:
+            matchLabels:
+              {{- include "argocd-cost-intelligence.selectorLabels" . | nindent 14 }}
+              component: exporter
+        {{- end }}
+      ports:
+        - port: 5432
+          protocol: TCP
+{{- end }}
+{{- end }}

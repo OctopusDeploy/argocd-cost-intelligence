@@ -21,20 +21,47 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Build
+        run: go build ./...
+
       - name: Test
-        run: go test ./...
+        run: go test -race ./...
 
       # Starts PostgreSQL with testcontainers; the runner's Docker is enough.
       - name: Test storage against PostgreSQL
         run: go test -tags=integration -timeout=300s ./pkg/storage/...
 
+      # The mock stands in for OpenCost. REQUIRE_OPENCOST turns "nothing is listening" from a skip
+      # into a failure, so a mock that did not start cannot pass the step.
+      - name: Test the OpenCost client against the mock
+        env:
+          REQUIRE_OPENCOST: "1"
+        run: |
+          node mock-opencost-server.js > mock-opencost.log 2>&1 &
+          for _ in $(seq 1 20); do
+            curl -sf -o /dev/null http://localhost:9003/health && break
+            sleep 0.5
+          done
+          if ! curl -sf -o /dev/null http://localhost:9003/health; then
+            echo "The mock OpenCost did not start:"
+            cat mock-opencost.log
+            exit 1
+          fi
+          go test -tags=integration -timeout=120s ./pkg/opencost/...
+
       - name: Vet
-        run: go vet ./...
+        run: go vet -tags=integration ./...
 
       - name: Lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a  # v9.3.0
         with:
           version: v2.14.0
+          args: --build-tags=integration
+
+      - name: Go modules are tidy
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
 
   ui:
     name: UI — test, build & lint
@@ -67,6 +94,23 @@ jobs:
       - name: Test
         run: npm test
         working-directory: ui
+
+      - name: No generated declaration files in src
+        run: test -z "$(find src -name '*.d.ts')"
+        working-directory: ui
+
+  images:
+    name: Images — build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+
+      # Nothing is pushed. This catches a broken Dockerfile before a release does.
+      - name: Backend image
+        run: docker build -t argocd-cost-intelligence:ci .
+
+      - name: UI image
+        run: docker build -t argocd-cost-intelligence-ui:ci ui
 
   helm:
     name: Helm — lint & template

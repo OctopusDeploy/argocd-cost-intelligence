@@ -33,11 +33,17 @@ func opencostBaseURL(t *testing.T) string {
 		u = "http://localhost:9003"
 	}
 	// Skip, rather than fail, when nothing is listening: these tests need a live OpenCost or
-	// the mock (node mock-opencost-server.js).
+	// the mock (node mock-opencost-server.js). CI sets REQUIRE_OPENCOST=1 so a mock that did not
+	// start fails the run instead of passing it silently.
 	parsed, err := url.Parse(u)
 	if err == nil {
-		conn, dialErr := net.DialTimeout("tcp", parsed.Host, time.Second)
+		dialCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		conn, dialErr := (&net.Dialer{}).DialContext(dialCtx, "tcp", parsed.Host)
 		if dialErr != nil {
+			if os.Getenv("REQUIRE_OPENCOST") != "" {
+				t.Fatalf("no OpenCost reachable at %s (%v)", u, dialErr)
+			}
 			t.Skipf("no OpenCost reachable at %s (%v)", u, dialErr)
 		}
 		_ = conn.Close()

@@ -60,7 +60,7 @@ func run(m *testing.M) int {
 	if err != nil {
 		panic("failed to connect to test database: " + err.Error())
 	}
-	defer testStorage.Close() //nolint:errcheck
+	defer testStorage.Close()
 
 	if err := testStorage.InitializeSchema(ctx); err != nil {
 		panic("failed to initialize schema: " + err.Error())
@@ -680,7 +680,7 @@ func exec(t *testing.T, db *sql.DB, query string) {
 // namespacesByKey returns column ns of table, keyed by the key column's value.
 func namespacesByKey(t *testing.T, db *sql.DB, table, key, ns string) map[string]string {
 	t.Helper()
-	rows, err := db.QueryContext(context.Background(), "SELECT "+key+", "+ns+" FROM "+table)
+	rows, err := db.QueryContext(context.Background(), "SELECT "+key+", "+ns+" FROM "+table) //nolint:gosec // identifiers come from the calling test, not from input
 	require.NoError(t, err)
 	defer rows.Close()
 	got := map[string]string{}

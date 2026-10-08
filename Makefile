@@ -250,7 +250,7 @@ lint: lint-go lint-ui lint-helm lint-prometheus lint-actions lint-manifests lint
 lint-go:
 	@echo "Running golangci-lint..."
 	@which golangci-lint > /dev/null || (echo "Installing golangci-lint $(GOLANGCI_LINT_VERSION)..." && go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION))
-	golangci-lint run ./...
+	golangci-lint run --build-tags=integration ./...
 
 lint-ui:
 	@echo "Linting the UI..."

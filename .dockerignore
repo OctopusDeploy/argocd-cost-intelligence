@@ -1,0 +1,7 @@
+# Keep local state out of the build context: a stale vendor/ breaks the Go build.
+.git
+vendor
+bin
+ui/node_modules
+ui/dist
+BACKLOG.md

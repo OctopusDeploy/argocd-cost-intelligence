@@ -1,0 +1,3 @@
+# A local node_modules or dist would replace what the image builds itself.
+node_modules
+dist

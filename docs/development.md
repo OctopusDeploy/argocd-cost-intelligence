@@ -41,13 +41,13 @@ Files with `//go:build integration` only run with `-tags=integration`.
 
 ```bash
 make test-integration                       # both suites below, 120s timeout (the OpenCost tests skip if none is running)
-go test -tags=integration ./pkg/storage/... # storage only (CI runs this one)
+go test -tags=integration ./pkg/storage/... # storage only
 make test-opencost                          # OpenCost client only
 ```
 
 `pkg/storage` starts a throwaway PostgreSQL 16 with testcontainers, so it needs a running Docker daemon and nothing else. It applies the real migrations, up and down.
 
-`pkg/opencost` talks to a real OpenCost at `OPENCOST_BASE_URL` (default `http://localhost:9003`), for the namespace in `TEST_NAMESPACE`. The tests skip when nothing is listening, so `make test-integration` passes without it. To run them, either start the mock (`node mock-opencost-server.js`, port 9003) or port-forward a real OpenCost (`kubectl port-forward svc/opencost 9003:9003 -n opencost`), then run `make test-opencost`.
+`pkg/opencost` talks to a real OpenCost at `OPENCOST_BASE_URL` (default `http://localhost:9003`), for the namespace in `TEST_NAMESPACE`. The tests skip when nothing is listening, so `make test-integration` passes without it. CI runs them against the mock with `REQUIRE_OPENCOST=1`, which turns that skip into a failure. To run them, either start the mock (`node mock-opencost-server.js`, port 9003) or port-forward a real OpenCost (`kubectl port-forward svc/opencost 9003:9003 -n opencost`), then run `make test-opencost`.
 
 ## Prometheus rules
 

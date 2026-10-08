@@ -24,6 +24,10 @@ jobs:
       - name: Test
         run: go test ./...
 
+      # Starts PostgreSQL with testcontainers; the runner's Docker is enough.
+      - name: Test storage against PostgreSQL
+        run: go test -tags=integration -timeout=300s ./pkg/storage/...
+
       - name: Vet
         run: go vet ./...
 

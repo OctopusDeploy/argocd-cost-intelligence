@@ -41,7 +41,7 @@ Files with `//go:build integration` only run with `-tags=integration`.
 
 ```bash
 make test-integration                       # both suites below, 120s timeout (the OpenCost tests skip if none is running)
-go test -tags=integration ./pkg/storage/... # storage only
+go test -tags=integration ./pkg/storage/... # storage only (CI runs this one)
 make test-opencost                          # OpenCost client only
 ```
 

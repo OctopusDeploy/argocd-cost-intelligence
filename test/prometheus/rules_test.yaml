@@ -1,5 +1,5 @@
 # Unit tests for helm/files/prometheus-rules.yaml. Run from the repository root:
-#   docker run --rm -v "$PWD:/w" -w /w --entrypoint promtool prom/prometheus test rules test/prometheus/*_test.yaml
+#   docker run --rm -v "$PWD:/w" -w /w --entrypoint promtool prom/prometheus:v3.15.0 test rules test/prometheus/*_test.yaml
 rule_files:
   - ../../helm/files/prometheus-rules.yaml
 

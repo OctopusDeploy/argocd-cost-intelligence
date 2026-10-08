@@ -22,7 +22,7 @@ ACTIONLINT_IMAGE      ?= rhysd/actionlint:1.7.12
 KUBECONFORM_IMAGE     ?= ghcr.io/yannh/kubeconform:v0.8.0
 HADOLINT_IMAGE        ?= hadolint/hadolint:v2.15.1
 SHELLCHECK_IMAGE      ?= koalaman/shellcheck:v0.11.0
-PROMTOOL_IMAGE        ?= prom/prometheus
+PROMTOOL_IMAGE        ?= prom/prometheus:v3.15.0
 
 DOCKER_RUN = docker run --rm -v "$(CURDIR):/repo" -w /repo
 # What the chart renders with each feature on, so kubeconform sees every optional object.

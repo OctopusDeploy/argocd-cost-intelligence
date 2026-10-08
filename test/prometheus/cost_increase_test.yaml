@@ -1,7 +1,7 @@
 # Unit tests for the cost increase alert in helm/files/prometheus-rules.yaml, which compares with a
 # week. Apart from rules_test.yaml because a week at 1m resolution is more than promtool's tests may
 # load into one query. Run from the repository root:
-#   docker run --rm -v "$PWD:/w" -w /w --entrypoint promtool prom/prometheus test rules test/prometheus/*_test.yaml
+#   docker run --rm -v "$PWD:/w" -w /w --entrypoint promtool prom/prometheus:v3.15.0 test rules test/prometheus/*_test.yaml
 rule_files:
   - ../../helm/files/prometheus-rules.yaml
 

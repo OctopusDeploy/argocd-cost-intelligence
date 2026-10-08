@@ -178,7 +178,7 @@ jobs:
 
       - name: Check and test
         run: |
-          docker run --rm -v "$PWD:/w" -w /w --entrypoint sh prom/prometheus -c \
+          docker run --rm -v "$PWD:/w" -w /w --entrypoint sh prom/prometheus:v3.15.0 -c \
             'promtool check rules helm/files/prometheus-rules.yaml && promtool test rules test/prometheus/*_test.yaml'
 
   security:

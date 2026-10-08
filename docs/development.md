@@ -54,7 +54,7 @@ make test-opencost                          # OpenCost client only
 The recording rules and alerts in `helm/files/prometheus-rules.yaml` have `promtool` tests in `test/prometheus/`:
 
 ```bash
-docker run --rm -v "$PWD:/w" -w /w --entrypoint sh prom/prometheus -c \
+docker run --rm -v "$PWD:/w" -w /w --entrypoint sh prom/prometheus:v3.15.0 -c \
   'promtool check rules helm/files/prometheus-rules.yaml && promtool test rules test/prometheus/*_test.yaml'
 ```
 

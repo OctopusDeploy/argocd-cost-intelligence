@@ -494,7 +494,7 @@ func (p *PostgresCostStorage) GetCloudEstimate(ctx context.Context, app models.A
 		&est.PushedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
-		return &models.CloudServiceEstimate{}, nil
+		return nil, nil //nolint:nilnil // no record is a valid answer, documented on the interface
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to query cloud estimate: %w", err)
@@ -654,7 +654,7 @@ func (p *PostgresCostStorage) GetDailyProgress(ctx context.Context, app models.A
 	var progress models.DailyProgress
 	err := p.db.QueryRowContext(ctx, query, app.Namespace, app.Name).Scan(&progress.Through, &progress.Scope)
 	if errors.Is(err, sql.ErrNoRows) {
-		return &models.DailyProgress{}, nil
+		return nil, nil //nolint:nilnil // no record is a valid answer, documented on the interface
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to query daily progress: %w", err)

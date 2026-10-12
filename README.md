@@ -19,6 +19,24 @@ A Kubernetes-native service that measures what each Argo CD application actually
 - Cloud service costs, optional: Infracost estimates pushed from CI and shown next to the Kubernetes cost.
 - Prometheus metrics, optional: the cost of each Application per hour, and the service's own health.
 
+## Screenshots
+
+The tabs on an application, in the Argo CD dark theme:
+
+![Actual costs: monthly cost, cost breakdown, resource efficiency and what changed since the last sync](docs/images/actual-costs.webp)
+
+![Resources: cost per controller and Vertical Pod Autoscaler rightsizing suggestions](docs/images/resources.webp)
+
+![Trends: daily cost for the last 30 days with a month-end forecast](docs/images/trends.webp)
+
+The system page, for people who can see cluster-wide costs:
+
+![Namespaces: cost, idle spend and efficiency per namespace](docs/images/namespaces.webp)
+
+![Chargeback: cost grouped by a Kubernetes label](docs/images/chargeback.webp)
+
+These come from a small test cluster, so the amounts are small and the data is a few days old.
+
 ## Quick start
 
 Requires Argo CD 3.4+, OpenCost 1.121.1+ and Helm 3.8+.

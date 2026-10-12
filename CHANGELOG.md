@@ -6,7 +6,7 @@ All notable changes to this project are listed here. The format follows [Keep a 
 
 ### Breaking
 
-- Building from source needs Go 1.26 or newer. The images and the Helm chart are unaffected.
+- Building from source needs Go 1.27 or newer. The images and the Helm chart are unaffected.
 
 ### Security
 

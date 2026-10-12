@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useContainerWidth } from '../hooks/useContainerWidth';
 import { Tokens, useTokens, visuallyHidden } from '../theme/tokens';
 import { DailyCost } from '../utils/api';
-import { niceTicks } from '../utils/chartScale';
+import { niceTicks, tickDecimals } from '../utils/chartScale';
 import { MonthForecast } from '../utils/forecast';
 import { formatDay, formatEstimate, formatMoney, formatMonth } from '../utils/format';
 import { addDays, fromFirstCost, spanDays } from '../utils/ranges';
@@ -75,7 +75,7 @@ export const DailyChart: React.FC<Props> = ({ dailyCosts, today, from, to, forec
   const costs = data.map(day => day.totalCost);
   const ticks = niceTicks(Math.max(...costs, ...slots.map(slot => slot.trend ?? 0)));
   const yMax = ticks[ticks.length - 1];
-  const tickDecimals = Number.isInteger(ticks[1]) ? 0 : 2;
+  const decimals = tickDecimals(ticks);
   const plotWidth = Math.max(width - PAD.left - PAD.right, 1);
   const plotHeight = height - PAD.top - PAD.bottom;
   const baseline = PAD.top + plotHeight;
@@ -213,7 +213,7 @@ export const DailyChart: React.FC<Props> = ({ dailyCosts, today, from, to, forec
               strokeWidth={1}
             />
             <text x={PAD.left - 8} y={yOf(tick) + 4} textAnchor="end" fontSize={11} fill={t.textMuted}>
-              {tick === 0 ? '$0' : formatMoney(tick, 'USD', tickDecimals)}
+              {tick === 0 ? '$0' : formatMoney(tick, 'USD', decimals)}
             </text>
           </g>
         ))}

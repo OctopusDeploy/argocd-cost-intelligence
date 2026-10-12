@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useContainerWidth } from '../hooks/useContainerWidth';
 import { Tokens, useTokens, visuallyHidden } from '../theme/tokens';
-import { niceTicks } from '../utils/chartScale';
+import { niceTicks, tickDecimals } from '../utils/chartScale';
 import { formatDay, formatMoney } from '../utils/format';
 import { chartHeight } from '../utils/layout';
 import { Granularity, PeriodBucket } from '../utils/ranges';
@@ -43,7 +43,7 @@ export const PeriodChart: React.FC<Props> = ({ buckets, unit }) => {
 
   const ticks = niceTicks(Math.max(...buckets.map(bucket => bucket.cost)));
   const yMax = ticks[ticks.length - 1];
-  const tickDecimals = Number.isInteger(ticks[1]) ? 0 : 2;
+  const decimals = tickDecimals(ticks);
   const plotWidth = Math.max(width - PAD.left - PAD.right, 1);
   const plotHeight = height - PAD.top - PAD.bottom;
   const baseline = PAD.top + plotHeight;
@@ -126,7 +126,7 @@ export const PeriodChart: React.FC<Props> = ({ buckets, unit }) => {
               strokeWidth={1}
             />
             <text x={PAD.left - 8} y={yOf(tick) + 4} textAnchor="end" fontSize={11} fill={t.textMuted}>
-              {tick === 0 ? '$0' : formatMoney(tick, 'USD', tickDecimals)}
+              {tick === 0 ? '$0' : formatMoney(tick, 'USD', decimals)}
             </text>
           </g>
         ))}

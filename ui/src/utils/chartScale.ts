@@ -10,3 +10,17 @@ export function niceTicks(max: number, targetCount = 4): number[] {
   const decimals = Math.max(0, 1 - Math.floor(Math.log10(step)));
   return Array.from({ length: count + 1 }, (_, i) => Number((i * step).toFixed(decimals)));
 }
+
+const MAX_TICK_DECIMALS = 6;
+
+// tickDecimals is how many decimals the labels of `ticks` need so that no two read the same: none for
+// whole amounts, cents for ordinary ones (never one decimal: $0.2 reads oddly), and more when the steps are fractions of a cent (an app
+// costing $0.003 a day would otherwise label every tick "$0.00").
+export function tickDecimals(ticks: number[]): number {
+  const fits = (decimals: number) => ticks.every(tick => Math.abs(tick - Number(tick.toFixed(decimals))) < 1e-9);
+  if (fits(0)) return 0;
+  for (let decimals = 2; decimals < MAX_TICK_DECIMALS; decimals++) {
+    if (fits(decimals)) return decimals;
+  }
+  return MAX_TICK_DECIMALS;
+}

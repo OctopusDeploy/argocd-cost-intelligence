@@ -4,6 +4,14 @@ All notable changes to this project are listed here. The format follows [Keep a 
 
 ## [Unreleased]
 
+### Breaking
+
+- Building from source needs Go 1.26 or newer. The images and the Helm chart are unaffected.
+
+### Security
+
+- `golang.org/x/net` is updated from 0.57.0 to 0.60.0 to fix GO-2026-6603, GO-2026-6610, GO-2026-6611, GO-2026-6612 and GO-2026-6617 in its HTTP/2 transport, which the Kubernetes client (rightsizing and the exporter) uses.
+
 ## [0.1.0] - 2026-10-04
 
 The first public release. There's nothing to upgrade from.

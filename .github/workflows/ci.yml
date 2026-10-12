@@ -191,9 +191,11 @@ jobs:
 
       # The latest 1.26 patch, so the standard library is checked at its fixed
       # version rather than the exact one in go.mod. Update with go.mod.
+      # check-latest skips the runner's tool cache, which can lag a release.
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff  # v5
         with:
           go-version: '1.26'
+          check-latest: true
           cache: true
 
       - name: Go vulnerabilities (govulncheck)

@@ -2,10 +2,15 @@ name: Release
 
 on:
   push:
-    tags: ['v*']
+    tags: ['v[0-9]+.[0-9]+.[0-9]+*']
 
 permissions:
   contents: read
+
+# Two pushes of the same tag must not interleave their package pushes.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 # GHCR and Helm only accept lowercase names, and github.repository keeps the repo's
 # capitals (OctopusDeploy), so the names are spelled out. They must match the docs and values.yaml.
@@ -21,6 +26,17 @@ jobs:
     name: Test before publishing
     runs-on: ubuntu-latest
     steps:
+      # The trigger pattern is loose (it cannot express the pre-release part), and `helm package`
+      # would fail on a name like v1.2.3.4 after the images were already pushed.
+      - name: Tag is a version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Tag '$TAG' is not vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-prerelease"
+            exit 1
+          fi
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
@@ -106,8 +122,12 @@ jobs:
             org.opencontainers.image.version=${{ steps.version.outputs.tag }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # GHCR reads the repository link from the index of a multi-platform image, not from the
+          # labels, which sit in each platform's config. An unlinked package can refuse a later push.
+          annotations: |
+            index:org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
 
   docker-ui:
     needs: verify
@@ -163,8 +183,12 @@ jobs:
             org.opencontainers.image.version=${{ steps.version.outputs.tag }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # GHCR reads the repository link from the index of a multi-platform image, not from the
+          # labels, which sit in each platform's config. An unlinked package can refuse a later push.
+          annotations: |
+            index:org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=ui
+          cache-to: type=gha,mode=max,scope=ui
 
   # ── Helm chart ──────────────────────────────────────────────────────────────
   helm-publish:

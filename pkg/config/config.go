@@ -81,7 +81,7 @@ func LoadConfig() (*Config, error) {
 
 func (c *DatabaseConfig) DSN() string {
 	return fmt.Sprintf(
-		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s connect_timeout=5",
 		c.Host,
 		c.Port,
 		c.User,

@@ -188,6 +188,13 @@ serviceAccount:
 
 # Health checks
 healthChecks:
+  # The service waits up to a minute for PostgreSQL before it listens. The liveness probe starts
+  # only once this probe passes, so a database that is slow to come up does not restart the pod.
+  startupProbe:
+    enabled: true
+    periodSeconds: 5
+    failureThreshold: 30
+
   livenessProbe:
     enabled: true
     initialDelaySeconds: 10

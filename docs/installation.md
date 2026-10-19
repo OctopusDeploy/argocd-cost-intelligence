@@ -72,6 +72,16 @@ The images are public on GHCR, so you don't need a pull secret: `ghcr.io/octopus
 
 ## Install
 
+### Try it without OpenCost
+
+To look at the plugin before you have an OpenCost, the repository has a mock that answers with fixed data. Use it to try things out; the amounts mean nothing.
+
+```bash
+kubectl apply -f https://raw.githubusercontent.com/OctopusDeploy/argocd-cost-intelligence/main/deploy/mock-opencost.yaml
+```
+
+It runs as `opencost` in the `opencost` namespace, so the default OpenCost URL works. The mock knows a few workloads: `nginx`, `redis-master`, `redis-replica`, `data-migration-job` and `frontend`. An application's own cost is the cost of the workloads it deploys, so an application with other names shows $0 (its namespace still shows the mock's amounts). To see numbers, deploy an application with a Deployment called `nginx`, in a namespace other than `production`. Remove the mock with `kubectl delete -f` on the same file, and install a real OpenCost before you rely on the numbers.
+
 ### Choose your settings
 
 **PostgreSQL password.** The chart stores it in a Secret called `postgres-credentials`. Don't commit it. To manage that Secret yourself, see [configuration.md](configuration.md#postgresql-credentials).

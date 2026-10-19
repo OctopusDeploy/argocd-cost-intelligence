@@ -110,13 +110,17 @@ Before you run it, know what the hook does to your existing configuration:
 
 ### Grant access in Argo CD
 
-Viewers need permission to invoke the extension, and `get` on an Application to see its tab (they usually have that already). Add this to `argocd-rbac-cm`:
+Append these lines to the `policy.csv` in `argocd-rbac-cm`. It is a single key, so edit the ConfigMap (`kubectl edit configmap argocd-rbac-cm -n argocd`) and keep what is already there; a patch that sets only these lines replaces your rules. If Argo CD's own Helm chart or GitOps manages the ConfigMap, add them there.
 
 ```
+# the built-in admin role; every other role needs its own line
+p, role:admin, extensions, invoke, cost-intel, allow
 p, role:cost-viewer, extensions, invoke, cost-intel, allow
 # only for the people who may see cluster-wide costs (the gate from above):
 p, role:platform, applications, get, <project>/<app-name>, allow
 ```
+
+Viewers need permission to invoke the extension, and `get` on an Application to see its tab (they usually have that already). On Argo CD 3.5 the extension is denied to everyone until a policy allows it, `admin` included. Without a rule the tab shows "401: Unauthorized extension request".
 
 Then assign the roles to your groups as you normally do.
 

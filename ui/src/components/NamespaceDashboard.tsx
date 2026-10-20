@@ -162,8 +162,6 @@ const NamespacesView: React.FC<NamespacesViewProps> = ({ data, urlNamespace, onS
 
 const NOT_MEASURED_IDLE: Stat = { label: 'Idle spend', value: '—', detail: 'Not measured yet' };
 
-// controlPlaneStat reports the managed control-plane fee, and says why when it cannot.
-
 // clusterIdleStat sums the idle cost of the namespaces it was measured for, as a share of their cost
 // alone, so the two figures agree while records from before it was measured remain.
 function clusterIdleStat(namespaces: NamespaceSummary[]): Stat {
@@ -191,6 +189,7 @@ function namespaceIdleStat(namespace: NamespaceSummary): Stat {
   };
 }
 
+// controlPlaneStat reports the managed control-plane fee, and says why when it cannot.
 function controlPlaneStat(overhead: ClusterOverhead | null, error: string | null, t: Tokens): Stat {
   const label = 'Control plane fee';
   if (error) {

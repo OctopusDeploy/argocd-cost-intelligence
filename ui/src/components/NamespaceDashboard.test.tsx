@@ -86,8 +86,9 @@ function withNamespaceData(overrides: Partial<UseNamespaceDataResult> = {}) {
   });
 }
 
-const stat = (label: string) => {
-  const term = screen.getAllByText(label, { selector: 'dt' })[0];
+// The cluster's stat comes first, the selected namespace's after it.
+const stat = (label: string, index = 0) => {
+  const term = screen.getAllByText(label, { selector: 'dt' })[index];
   return { value: term.nextElementSibling?.textContent, detail: term.nextElementSibling?.nextElementSibling?.textContent };
 };
 
@@ -115,6 +116,39 @@ describe('NamespaceDashboard', () => {
     expect(stat('Cluster monthly cost')).toEqual({ value: '$2,883.60', detail: '2 namespaces · 3 apps' });
     expect(stat('Control plane fee')).toEqual({ value: 'Not available', detail: "OpenCost didn't return cluster assets" });
     expect(stat('Pricing').value).toBe('Estimated');
+  });
+
+  it('shows idle spend as a share of the cost it was measured for', () => {
+    render(<NamespaceDashboard />);
+
+    expect(stat('Idle spend')).toEqual({ value: '$1,315.35', detail: '46% of the cluster cost' });
+    expect(stat('Idle spend', 1)).toEqual({ value: '$899.19', detail: '45% of the namespace cost' });
+  });
+
+  it('leaves out of idle spend the namespaces it was not measured for', () => {
+    withNamespaceData({
+      namespaces: [
+        { namespace: 'argocd', totalCost: 2018.1, idleCost: null, appCount: 2, measuredAt },
+        { namespace: 'prometheus', totalCost: 865.5, idleCost: 416.16, appCount: 1, measuredAt },
+        { namespace: 'quiet', totalCost: 40, idleCost: 0, appCount: 1, measuredAt },
+      ],
+    });
+    render(<NamespaceDashboard />);
+
+    expect(stat('Idle spend')).toEqual({
+      value: '$416.16',
+      detail: '46% of the cost of the 2 of 3 namespaces measured',
+    });
+    expect(stat('Idle spend', 1)).toEqual({ value: '—', detail: 'Not measured yet. Measured at the next sync' });
+  });
+
+  it('shows idle spend as not measured when no namespace has it', () => {
+    withNamespaceData({
+      namespaces: [{ namespace: 'argocd', totalCost: 2018.1, idleCost: null, appCount: 2, measuredAt }],
+    });
+    render(<NamespaceDashboard />);
+
+    expect(stat('Idle spend')).toEqual({ value: '—', detail: 'Not measured yet' });
   });
 
   it('shows the selected namespace and lets another be picked', () => {

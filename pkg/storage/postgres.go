@@ -127,8 +127,9 @@ func (p *PostgresCostStorage) SaveActual(ctx context.Context, actual *models.Cos
 	INSERT INTO cost_actuals
 	(id, application_name, application_namespace, deployment_namespace, sync_timestamp, measured_at,
 	 total_monthly_cost, estimate_accuracy, estimate_vs_actual,
-	 resources_json, opencost_output_json, efficiency_json, pods_json, app_json, measured_on)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+	 resources_json, opencost_output_json, efficiency_json, pods_json, app_json, measured_on,
+	 idle_monthly_cost)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 	ON CONFLICT (id) DO UPDATE SET
 		total_monthly_cost = EXCLUDED.total_monthly_cost,
 		estimate_accuracy = EXCLUDED.estimate_accuracy,
@@ -138,6 +139,7 @@ func (p *PostgresCostStorage) SaveActual(ctx context.Context, actual *models.Cos
 		efficiency_json = EXCLUDED.efficiency_json,
 		pods_json = EXCLUDED.pods_json,
 		app_json = EXCLUDED.app_json,
+		idle_monthly_cost = EXCLUDED.idle_monthly_cost,
 		deployment_namespace = EXCLUDED.deployment_namespace,
 		measured_at = EXCLUDED.measured_at
 	`
@@ -161,10 +163,12 @@ func (p *PostgresCostStorage) SaveFirstActual(ctx context.Context, actual *model
 	INSERT INTO cost_actuals
 	(id, application_name, application_namespace, deployment_namespace, sync_timestamp, measured_at,
 	 total_monthly_cost, estimate_accuracy, estimate_vs_actual,
-	 resources_json, opencost_output_json, efficiency_json, pods_json, app_json, measured_on)
+	 resources_json, opencost_output_json, efficiency_json, pods_json, app_json, measured_on,
+	 idle_monthly_cost)
 	SELECT $1::varchar, $2::varchar, $3::varchar, $4::varchar, $5::timestamp, $6::timestamp,
 	       $7::numeric, $8::numeric, $9::numeric,
-	       $10::jsonb, $11::jsonb, $12::jsonb, $13::jsonb, $14::jsonb, $15::varchar
+	       $10::jsonb, $11::jsonb, $12::jsonb, $13::jsonb, $14::jsonb, $15::varchar,
+	       $16::numeric
 	WHERE NOT EXISTS (
 	    SELECT 1 FROM cost_actuals WHERE application_namespace = $3 AND application_name = $2
 	)
@@ -239,6 +243,7 @@ func actualColumns(actual *models.CostActual) ([]any, error) {
 		string(podsJSON),
 		appJSON,
 		measuredOn,
+		actual.IdleMonthlyCost,
 	}, nil
 }
 
@@ -246,7 +251,7 @@ func (p *PostgresCostStorage) GetLatestActual(ctx context.Context, app models.Ap
 	query := `
 	SELECT id, application_name, application_namespace, deployment_namespace, sync_timestamp, measured_on, measured_at,
 		   total_monthly_cost, estimate_accuracy, estimate_vs_actual,
-		   resources_json, opencost_output_json, efficiency_json, pods_json, app_json
+		   resources_json, opencost_output_json, efficiency_json, pods_json, app_json, idle_monthly_cost
 	FROM cost_actuals
 	WHERE application_namespace = $1 AND application_name = $2
 	ORDER BY measured_at DESC
@@ -272,6 +277,7 @@ func (p *PostgresCostStorage) GetLatestActual(ctx context.Context, app models.Ap
 		&efficiencyJSON,
 		&podsJSON,
 		&appJSON,
+		&actual.IdleMonthlyCost,
 	)
 
 	if errors.Is(err, sql.ErrNoRows) {
@@ -336,7 +342,7 @@ func (p *PostgresCostStorage) GetActualsInDateRange(ctx context.Context, app mod
 	query := `
 	SELECT id, application_name, application_namespace, deployment_namespace, sync_timestamp, measured_on, measured_at,
 		   total_monthly_cost, estimate_accuracy, estimate_vs_actual,
-		   resources_json, opencost_output_json, efficiency_json, pods_json, app_json
+		   resources_json, opencost_output_json, efficiency_json, pods_json, app_json, idle_monthly_cost
 	FROM cost_actuals
 	WHERE application_namespace = $1 AND application_name = $2 AND measured_at BETWEEN $3 AND $4
 	ORDER BY measured_at DESC
@@ -369,6 +375,7 @@ func (p *PostgresCostStorage) GetActualsInDateRange(ctx context.Context, app mod
 			&efficiencyJSON,
 			&podsJSON,
 			&appJSON,
+			&actual.IdleMonthlyCost,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan cost actual: %w", err)
 		}
@@ -438,22 +445,21 @@ func (p *PostgresCostStorage) ListNamespaces(ctx context.Context) ([]models.Name
 	WITH latest_per_app AS (
 	    SELECT DISTINCT ON (application_namespace, application_name)
 	        application_namespace, application_name, deployment_namespace, total_monthly_cost,
-	        efficiency_json, measured_at
+	        idle_monthly_cost, measured_at
 	    FROM cost_actuals
 	    WHERE deployment_namespace <> ''
 	    ORDER BY application_namespace, application_name, measured_at DESC
 	),
 	latest_per_namespace AS (
 	    SELECT DISTINCT ON (deployment_namespace)
-	        deployment_namespace, total_monthly_cost, efficiency_json, measured_at
+	        deployment_namespace, total_monthly_cost, idle_monthly_cost, measured_at
 	    FROM latest_per_app
 	    ORDER BY deployment_namespace, measured_at DESC, application_namespace, application_name
 	)
 	SELECT
 	    ns.deployment_namespace,
 	    ns.total_monthly_cost,
-	    COALESCE((ns.efficiency_json->>'cpuIdleCost')::float8, 0)
-	        + COALESCE((ns.efficiency_json->>'ramIdleCost')::float8, 0) AS idle_cost,
+	    ns.idle_monthly_cost,
 	    apps.app_count,
 	    ns.measured_at
 	FROM latest_per_namespace ns

@@ -154,6 +154,37 @@ func TestSaveAndGetLatestActual_WithEfficiency(t *testing.T) {
 	assert.InDelta(t, 497.7, got.Efficiency.RAMIdleCost, 0.01)
 }
 
+func TestSaveActual_RoundTripsIdleMonthlyCost(t *testing.T) {
+	truncate(t)
+
+	now := time.Now().UTC().Truncate(time.Second)
+	idle := 212.5
+	measured := &models.CostActual{
+		ID: "idle-1", ApplicationName: "my-app", ApplicationNamespace: "argocd",
+		SyncTimestamp: now, MeasuredAt: now, TotalMonthlyCost: 300.0, IdleMonthlyCost: &idle,
+	}
+	older := &models.CostActual{
+		ID: "idle-0", ApplicationName: "my-app", ApplicationNamespace: "argocd",
+		SyncTimestamp: now.Add(-time.Hour), MeasuredAt: now.Add(-time.Hour), TotalMonthlyCost: 280.0,
+	}
+	require.NoError(t, testStorage.SaveActual(context.Background(), older))
+	require.NoError(t, testStorage.SaveActual(context.Background(), measured))
+
+	got, err := testStorage.GetLatestActual(context.Background(), myApp)
+	require.NoError(t, err)
+	require.NotNil(t, got.IdleMonthlyCost)
+	assert.InDelta(t, 212.5, *got.IdleMonthlyCost, 0.01)
+
+	history, err := testStorage.GetActualsInDateRange(context.Background(), myApp, now.Add(-2*time.Hour), now.Add(time.Hour))
+	require.NoError(t, err)
+	require.Len(t, history, 2)
+	for _, r := range history {
+		if r.ID == "idle-0" {
+			assert.Nil(t, r.IdleMonthlyCost, "a record without an idle cost reads back without one")
+		}
+	}
+}
+
 func TestSaveActual_Upsert_UpdatesExistingRecord(t *testing.T) {
 	truncate(t)
 
@@ -395,21 +426,22 @@ func TestListNamespaces_CountsSharedNamespaceOnce(t *testing.T) {
 	truncate(t)
 
 	now := time.Now().UTC().Truncate(time.Second)
+	idle := func(v float64) *float64 { return &v }
 	records := []*models.CostActual{
 		// Both apps deploy to "shared", and each record measures the whole namespace.
 		{
 			ID: "s1", ApplicationName: "app-a", ApplicationNamespace: "argocd", DeploymentNamespace: "shared",
-			SyncTimestamp: now, MeasuredAt: now.Add(-2 * time.Hour), TotalMonthlyCost: 100.0,
-			Efficiency: &models.EfficiencyMetrics{CPUIdleCost: 30.0, RAMIdleCost: 10.0},
+			SyncTimestamp: now, MeasuredAt: now.Add(-2 * time.Hour), TotalMonthlyCost: 100.0, IdleMonthlyCost: idle(40.0),
 		},
 		{
 			ID: "s2", ApplicationName: "app-b", ApplicationNamespace: "argocd", DeploymentNamespace: "shared",
-			SyncTimestamp: now, MeasuredAt: now.Add(-time.Hour), TotalMonthlyCost: 120.0,
-			Efficiency: &models.EfficiencyMetrics{CPUIdleCost: 40.0, RAMIdleCost: 15.0},
+			SyncTimestamp: now, MeasuredAt: now.Add(-time.Hour), TotalMonthlyCost: 120.0, IdleMonthlyCost: idle(55.0),
 		},
+		// Measured before the idle cost was.
 		{
 			ID: "o1", ApplicationName: "app-c", ApplicationNamespace: "argocd", DeploymentNamespace: "other",
 			SyncTimestamp: now, MeasuredAt: now, TotalMonthlyCost: 50.0,
+			Efficiency: &models.EfficiencyMetrics{CPUIdleCost: 30.0, RAMIdleCost: 10.0},
 		},
 	}
 	for _, r := range records {
@@ -422,13 +454,14 @@ func TestListNamespaces_CountsSharedNamespaceOnce(t *testing.T) {
 
 	assert.Equal(t, "shared", got[0].Namespace)
 	assert.InDelta(t, 120.0, got[0].TotalCost, 0.01, "a shared namespace costs its latest measurement, not the sum of its apps")
-	assert.InDelta(t, 55.0, got[0].IdleCost, 0.01)
+	require.NotNil(t, got[0].IdleCost)
+	assert.InDelta(t, 55.0, *got[0].IdleCost, 0.01, "idle as of the latest measurement")
 	assert.Equal(t, 2, got[0].AppCount)
 	assert.WithinDuration(t, now.Add(-time.Hour), got[0].MeasuredAt, time.Second, "measured at the latest record")
 
 	assert.Equal(t, "other", got[1].Namespace)
 	assert.InDelta(t, 50.0, got[1].TotalCost, 0.01)
-	assert.InDelta(t, 0.0, got[1].IdleCost, 0.01, "a record without efficiency has no idle cost")
+	assert.Nil(t, got[1].IdleCost, "a record from before the idle cost was measured has none, not zero")
 	assert.Equal(t, 1, got[1].AppCount)
 }
 
@@ -986,7 +1019,10 @@ func TestSaveFirstActual_StoresAMeasurementAtInstallWithoutASync(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC().Truncate(time.Second)
 
-	saved, err := testStorage.SaveFirstActual(ctx, installRecord("install-1", now))
+	record := installRecord("install-1", now)
+	idle := 12.5
+	record.IdleMonthlyCost = &idle
+	saved, err := testStorage.SaveFirstActual(ctx, record)
 	require.NoError(t, err)
 	assert.True(t, saved)
 
@@ -1001,6 +1037,8 @@ func TestSaveFirstActual_StoresAMeasurementAtInstallWithoutASync(t *testing.T) {
 	assert.Equal(t, now, stored.UTC(), "the measurement time is stored in place of a sync, so older replicas can read the row")
 	require.NotNil(t, got.App)
 	assert.Equal(t, models.ManagedResources{{Kind: "Deployment", Name: "web"}}, got.App.Controllers)
+	require.NotNil(t, got.IdleMonthlyCost)
+	assert.InDelta(t, 12.5, *got.IdleMonthlyCost, 0.01)
 
 	inRange, err := testStorage.GetActualsInDateRange(ctx, myApp, now.Add(-time.Hour), now.Add(time.Hour))
 	require.NoError(t, err)
@@ -1074,6 +1112,24 @@ func TestMigration009_AddsMeasuredOn(t *testing.T) {
 		VALUES ('install', 'api', 'argocd', '2026-10-02 10:00:00', '2026-10-02 10:00:00', 1, 'install')`)
 
 	require.NoError(t, m.Migrate(8))
+	var count int
+	require.NoError(t, db.QueryRowContext(context.Background(), "SELECT count(*) FROM cost_actuals").Scan(&count))
+	assert.Equal(t, 2, count, "down keeps every record")
+}
+
+func TestMigration010_AddsIdleMonthlyCost(t *testing.T) {
+	db, m := newDatabaseAt(t, 9)
+	exec(t, db, `INSERT INTO cost_actuals (id, application_name, application_namespace, sync_timestamp, measured_at, total_monthly_cost)
+		VALUES ('old', 'web', 'argocd', '2026-10-01 10:00:00', '2026-10-01 10:05:00', 1)`)
+
+	require.NoError(t, m.Migrate(10))
+	var idle sql.NullFloat64
+	require.NoError(t, db.QueryRowContext(context.Background(), "SELECT idle_monthly_cost FROM cost_actuals WHERE id = 'old'").Scan(&idle))
+	assert.False(t, idle.Valid, "an existing record's idle cost was never measured, so it is not zero")
+	exec(t, db, `INSERT INTO cost_actuals (id, application_name, application_namespace, sync_timestamp, measured_at, total_monthly_cost, idle_monthly_cost)
+		VALUES ('new', 'api', 'argocd', '2026-10-02 10:00:00', '2026-10-02 10:00:00', 1, 0.5)`)
+
+	require.NoError(t, m.Migrate(9))
 	var count int
 	require.NoError(t, db.QueryRowContext(context.Background(), "SELECT count(*) FROM cost_actuals").Scan(&count))
 	assert.Equal(t, 2, count, "down keeps every record")

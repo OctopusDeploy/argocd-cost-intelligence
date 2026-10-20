@@ -24,6 +24,10 @@ type CostActual struct {
 	Pods             []PodCost             `json:"pods,omitempty"`
 	Anomaly          *CostAnomaly          `json:"anomaly,omitempty"`
 	CloudEstimate    *CloudServiceEstimate `json:"cloudEstimate,omitempty"`
+	// IdleMonthlyCost is the part of the namespace's CPU and memory cost paid for requests its pods
+	// did not use, projected like TotalMonthlyCost. Nil for records measured before it was, or without
+	// the namespace's pods. Stored, never sent: Efficiency carries the same cost by resource.
+	IdleMonthlyCost *float64 `json:"-"`
 	// App is the application's own share of the measurement above, which covers its whole deployment
 	// namespace. Nil for records stored before applications were measured on their own, or synced by a
 	// notifications template that does not send the application's resources. Stored, never sent: the
@@ -150,8 +154,9 @@ type DataQuality struct {
 type NamespaceSummary struct {
 	Namespace string  `json:"namespace"`
 	TotalCost float64 `json:"totalCost"`
-	// IdleCost is the requested-but-unused CPU and memory cost from the same measurement.
-	IdleCost   float64   `json:"idleCost"`
+	// IdleCost is the requested-but-unused CPU and memory cost from the same measurement. Nil when
+	// that measurement did not measure it.
+	IdleCost   *float64  `json:"idleCost"`
 	AppCount   int       `json:"appCount"`
 	MeasuredAt time.Time `json:"measuredAt"`
 }

@@ -116,7 +116,6 @@ const NamespacesView: React.FC<NamespacesViewProps> = ({ data, urlNamespace, onS
   }
 
   const clusterTotal = namespaces.reduce((sum, ns) => sum + ns.totalCost, 0);
-  const clusterIdle = namespaces.reduce((sum, ns) => sum + (ns.idleCost ?? 0), 0);
   const appCount = namespaces.reduce((sum, ns) => sum + ns.appCount, 0);
   const selected = namespaces.find(ns => ns.namespace === selectedNs) ?? null;
 
@@ -129,11 +128,7 @@ const NamespacesView: React.FC<NamespacesViewProps> = ({ data, urlNamespace, onS
             value: formatMoney(clusterTotal),
             detail: `${pluralize(namespaces.length, 'namespace')} · ${pluralize(appCount, 'app')}`,
           },
-          {
-            label: 'Idle spend',
-            value: formatMoney(clusterIdle),
-            detail: `${formatPercent(clusterTotal > 0 ? clusterIdle / clusterTotal : 0)} of the cluster cost`,
-          },
+          clusterIdleStat(namespaces),
           controlPlaneStat(overhead, overheadError, t),
           { label: 'Pricing', value: <PricingValue quality={quality} t={t} />, detail: pricingDetail(quality) },
         ]}
@@ -166,6 +161,35 @@ const NamespacesView: React.FC<NamespacesViewProps> = ({ data, urlNamespace, onS
 };
 
 // controlPlaneStat reports the managed control-plane fee, and says why when it cannot.
+const NOT_MEASURED_IDLE: Stat = { label: 'Idle spend', value: '—', detail: 'Not measured yet' };
+
+// clusterIdleStat sums the idle cost of the namespaces it was measured for, as a share of their cost
+// alone, so the two figures agree while records from before it was measured remain.
+function clusterIdleStat(namespaces: NamespaceSummary[]): Stat {
+  const measured = namespaces.filter(ns => ns.idleCost !== null);
+  if (measured.length === 0) return NOT_MEASURED_IDLE;
+  const idle = measured.reduce((sum, ns) => sum + (ns.idleCost ?? 0), 0);
+  const cost = measured.reduce((sum, ns) => sum + ns.totalCost, 0);
+  const share = formatPercent(cost > 0 ? idle / cost : 0);
+  return {
+    label: 'Idle spend',
+    value: formatMoney(idle),
+    detail:
+      measured.length === namespaces.length
+        ? `${share} of the cluster cost`
+        : `${share} of the cost of the ${measured.length} of ${namespaces.length} namespaces measured`,
+  };
+}
+
+function namespaceIdleStat(namespace: NamespaceSummary): Stat {
+  if (namespace.idleCost === null) return { ...NOT_MEASURED_IDLE, detail: 'Not measured yet. Measured at the next sync' };
+  return {
+    label: 'Idle spend',
+    value: formatMoney(namespace.idleCost),
+    detail: `${formatPercent(namespace.totalCost > 0 ? namespace.idleCost / namespace.totalCost : 0)} of the namespace cost`,
+  };
+}
+
 function controlPlaneStat(overhead: ClusterOverhead | null, error: string | null, t: Tokens): Stat {
   const label = 'Control plane fee';
   if (error) {
@@ -239,11 +263,7 @@ const NamespaceDetail: React.FC<NamespaceDetailProps> = ({
           value: formatMoney(namespace.totalCost),
           detail: `${formatPercent(clusterTotal > 0 ? namespace.totalCost / clusterTotal : 0)} of the cluster`,
         },
-        {
-          label: 'Idle spend',
-          value: formatMoney(namespace.idleCost ?? 0),
-          detail: `${formatPercent(namespace.totalCost > 0 ? (namespace.idleCost ?? 0) / namespace.totalCost : 0)} of the namespace cost`,
-        },
+        namespaceIdleStat(namespace),
         {
           label: 'Efficiency',
           value:

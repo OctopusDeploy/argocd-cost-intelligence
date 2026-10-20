@@ -128,6 +128,8 @@ func newOpenCostTestServer(t *testing.T) *httptest.Server {
 						{
 							"redis-0": {
 								CPUCost: 6.0, RAMCost: 3.0, TotalCost: 9.0,
+								CPUCoreRequestAverage: 1, CPUCoreUsageAverage: 0.25,
+								RAMByteRequestAverage: 100, RAMByteUsageAverage: 50,
 								Properties: opencost.AllocationProperties{Pod: "redis-0", Namespace: "test-ns", ControllerKind: "statefulset", Controller: "redis"},
 							},
 							"nginx-abc": {
@@ -375,6 +377,11 @@ func TestOnApplicationSync_Success_StoresCostAndEfficiency(t *testing.T) {
 	assert.InDelta(t, 0.4, saved.Efficiency.CPUEfficiency, 1e-9)
 	assert.InDelta(t, 0.55, saved.Efficiency.TotalEfficiency, 1e-9)
 	assert.InDelta(t, 0.8, saved.Efficiency.CPUCoresUsedMax, 1e-9, "peak CPU should be merged")
+	// The summary has no idle cost; the namespace's is its pods' unused requests.
+	assert.InDelta(t, 135.0, saved.Efficiency.CPUIdleCost, 1e-9) // 6 * 0.75 * 30
+	assert.InDelta(t, 45.0, saved.Efficiency.RAMIdleCost, 1e-9)  // 3 * 0.5 * 30
+	require.NotNil(t, saved.IdleMonthlyCost)
+	assert.InDelta(t, 180.0, *saved.IdleMonthlyCost, 1e-9)
 
 	assert.Len(t, saved.Pods, 2, "pod breakdown should be populated")
 	var totalPodCost float64
@@ -551,6 +558,7 @@ func TestOnApplicationSync_PodFailure_IsNonFatal(t *testing.T) {
 	require.NoError(t, err, "pod failure should not abort the sync")
 	require.NotNil(t, saved)
 	assert.Empty(t, saved.Pods, "pods should be nil/empty when pod call fails")
+	assert.Nil(t, saved.IdleMonthlyCost, "without its pods the namespace's idle cost is not measured")
 }
 
 func TestOnApplicationSync_EfficiencyFailure_IsNonFatal(t *testing.T) {
@@ -591,6 +599,8 @@ func TestOnApplicationSync_EfficiencyFailure_IsNonFatal(t *testing.T) {
 	require.NoError(t, err, "efficiency failure should not abort the sync")
 	require.NotNil(t, saved)
 	assert.Nil(t, saved.Efficiency, "efficiency should be nil when summary call fails")
+	require.NotNil(t, saved.IdleMonthlyCost, "the idle cost comes from the pods, not the summary")
+	assert.Zero(t, *saved.IdleMonthlyCost)
 }
 
 // ---- GetLatestCostForApplication ----

@@ -45,8 +45,6 @@ func TestParseSummaryResponse_SingleWindow(t *testing.T) {
 			RAMByteRequestAverage: 512 * 1024 * 1024,
 			RAMByteUsageAverage:   358 * 1024 * 1024,
 			RAMByteLimitAverage:   1024 * 1024 * 1024,
-			CPUCostIdle:           10.0,
-			RAMCostIdle:           5.0,
 			Efficiency:            0.55,
 		},
 	})
@@ -60,8 +58,8 @@ func TestParseSummaryResponse_SingleWindow(t *testing.T) {
 	assert.InDelta(t, 0.4, got.CPUCoresUsed, 1e-9)
 	assert.InDelta(t, float64(512*1024*1024), got.RAMBytesRequested, 1e-9)
 	assert.InDelta(t, float64(358*1024*1024), got.RAMBytesUsed, 1e-9)
-	assert.InDelta(t, 300.0, got.CPUIdleCost, 1e-9) // 10 * 30
-	assert.InDelta(t, 150.0, got.RAMIdleCost, 1e-9) // 5 * 30
+	assert.Zero(t, got.CPUIdleCost, "the summary has no idle cost: it is measured from the pods")
+	assert.Zero(t, got.RAMIdleCost)
 	assert.InDelta(t, 2.0, got.CPUCoresLimit, 1e-9)
 	assert.InDelta(t, float64(1024*1024*1024), got.RAMBytesLimit, 1e-9)
 }
@@ -604,20 +602,6 @@ func TestParsePodBreakdown_ReplacedPod_SharesNamespacePeriod(t *testing.T) {
 		total += p.TotalCost
 	}
 	assert.InDelta(t, 60.0, total, 1e-9) // $1 over 12h
-}
-
-func TestParseSummaryResponse_IdleCostScalesByMeasuredPeriod(t *testing.T) {
-	t.Parallel()
-
-	end := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
-	resp := summaryResp(map[string]SummaryAllocationData{
-		"new-ns": {Start: end.Add(-6 * time.Hour), End: end, CPUCostIdle: 1.0, RAMCostIdle: 0.5, Efficiency: 0.5},
-	})
-	got := parseSummaryResponse(resp)
-	require.NotNil(t, got)
-
-	assert.InDelta(t, 120.0, got.CPUIdleCost, 1e-9) // 1.0 * 120
-	assert.InDelta(t, 60.0, got.RAMIdleCost, 1e-9)  // 0.5 * 120
 }
 
 func TestParseChargebackEntries_ScalesByMeasuredPeriod(t *testing.T) {

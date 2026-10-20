@@ -391,11 +391,12 @@ data:
             step: 86400000000000,
             sets: [{
               window: win,
+              // cpuCostIdle and ramCostIdle are 0, as real OpenCost returns them.
               allocations: {
-                'platform':         { cpuCoreRequestAverage: 2.0, cpuCoreUsageAverage: 1.24, cpuCoreLimitAverage: 4.0, cpuCost: 20.67, cpuCostIdle: 12.40, ramByteRequestAverage: 2147483648, ramByteUsageAverage: 1342177280, ramByteLimitAverage: 4294967296, ramCost: 16.01, ramCostIdle: 6.08, efficiency: 0.62 },
-                'payments':         { cpuCoreRequestAverage: 1.5, cpuCoreUsageAverage: 1.07, cpuCoreLimitAverage: 3.0, cpuCost: 14.83, cpuCostIdle: 8.92,  ramByteRequestAverage: 1073741824, ramByteUsageAverage:  805306368, ramByteLimitAverage: 2147483648, ramCost: 11.01, ramCostIdle: 4.18, efficiency: 0.71 },
-                'data-engineering': { cpuCoreRequestAverage: 1.0, cpuCoreUsageAverage: 0.55, cpuCoreLimitAverage: 2.0, cpuCost: 9.35,  cpuCostIdle: 5.61,  ramByteRequestAverage:  536870912, ramByteUsageAverage:  268435456, ramByteLimitAverage: 1073741824, ramCost: 7.34,  ramCostIdle: 2.94, efficiency: 0.55 },
-                'infrastructure':   { cpuCoreRequestAverage: 0.8, cpuCoreUsageAverage: 0.56, cpuCoreLimitAverage: 1.6, cpuCost: 5.23,  cpuCostIdle: 3.14,  ramByteRequestAverage:  536870912, ramByteUsageAverage:  402653184, ramByteLimitAverage: 1073741824, ramCost: 4.01,  ramCostIdle: 1.60, efficiency: 0.70 },
+                'platform':         { cpuCoreRequestAverage: 2.0, cpuCoreUsageAverage: 1.24, cpuCoreLimitAverage: 4.0, cpuCost: 20.67, cpuCostIdle: 0, ramByteRequestAverage: 2147483648, ramByteUsageAverage: 1342177280, ramByteLimitAverage: 4294967296, ramCost: 16.01, ramCostIdle: 0, efficiency: 0.62 },
+                'payments':         { cpuCoreRequestAverage: 1.5, cpuCoreUsageAverage: 1.07, cpuCoreLimitAverage: 3.0, cpuCost: 14.83, cpuCostIdle: 0,  ramByteRequestAverage: 1073741824, ramByteUsageAverage:  805306368, ramByteLimitAverage: 2147483648, ramCost: 11.01, ramCostIdle: 0, efficiency: 0.71 },
+                'data-engineering': { cpuCoreRequestAverage: 1.0, cpuCoreUsageAverage: 0.55, cpuCoreLimitAverage: 2.0, cpuCost: 9.35,  cpuCostIdle: 0,  ramByteRequestAverage:  536870912, ramByteUsageAverage:  268435456, ramByteLimitAverage: 1073741824, ramCost: 7.34,  ramCostIdle: 0, efficiency: 0.55 },
+                'infrastructure':   { cpuCoreRequestAverage: 0.8, cpuCoreUsageAverage: 0.56, cpuCoreLimitAverage: 1.6, cpuCost: 5.23,  cpuCostIdle: 0,  ramByteRequestAverage:  536870912, ramByteUsageAverage:  402653184, ramByteLimitAverage: 1073741824, ramCost: 4.01,  ramCostIdle: 0, efficiency: 0.70 },
               },
             }],
             window: win,
@@ -417,8 +418,10 @@ data:
       const cpuCoreUsageAverage = 0.4;
       const ramByteRequestAverage = 536870912;   // 512 MB
       const ramByteUsageAverage = 375809638;     // ~358 MB
-      const cpuCostIdle = totalCPU * 0.60;      // 60% idle (40% efficient)
-      const ramCostIdle = totalRAM * 0.30;      // 30% idle (70% efficient)
+      // Real OpenCost never computes its idle fields (up to 1.121.3 they are only summed, so always 0);
+      // the service measures idle cost from the pods' requests and usage instead.
+      const cpuCostIdle = 0;
+      const ramCostIdle = 0;
 
       const window = { start: costs.window[0], end: costs.window[1] };
       return {

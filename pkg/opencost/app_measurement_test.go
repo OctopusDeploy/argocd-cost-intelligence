@@ -120,6 +120,47 @@ func TestPodEfficiency_PricesTheUnusedShareOfEachRequest(t *testing.T) {
 	assert.InDelta(t, 600.0, got.RAMBytesUsedMax, 1e-9)
 }
 
+func TestEfficiency_MeasuresTheNamespacesIdleCostFromItsPods(t *testing.T) {
+	t.Parallel()
+
+	// Two applications share a namespace that has run for six hours.
+	web := podAlloc("web-1", "deployment", "web", 2, 1)
+	web.CPUCoreRequestAverage, web.CPUCoreUsageAverage = 1, 0.25
+	web.RAMByteRequestAverage, web.RAMByteUsageAverage = 1000, 500
+	api := podAlloc("api-1", "deployment", "api", 1, 0)
+	api.CPUCoreRequestAverage, api.CPUCoreUsageAverage = 1, 0.5
+	for _, a := range []*AllocationData{&web, &api} {
+		a.Start = day.Add(18 * time.Hour)
+		a.Minutes = 360
+	}
+	pods := &PodAllocations{resp: AllocationResponse{Data: []map[string]AllocationData{{
+		"web-1": web,
+		"api-1": api,
+		// OpenCost's unallocated capacity requests nothing of the namespace's.
+		"__idle__": {CPUCost: 9, CPUCoreRequestAverage: 1},
+	}}}}
+
+	got := pods.Efficiency()
+
+	require.NotNil(t, got)
+	assert.InDelta(t, (2*0.75+1*0.5)*120, got.CPUIdleCost, 1e-9, "6 hours of unused requests projected onto 720")
+	assert.InDelta(t, 1*0.5*120, got.RAMIdleCost, 1e-9)
+	var apps float64
+	for _, controller := range []string{"web", "api"} {
+		app := pods.ForApplication(models.ManagedResources{{Kind: "Deployment", Name: controller}})
+		apps += app.Efficiency.CPUIdleCost + app.Efficiency.RAMIdleCost
+	}
+	assert.InDelta(t, got.CPUIdleCost+got.RAMIdleCost, apps, 1e-9, "the applications' idle cost adds up to the namespace's")
+}
+
+func TestEfficiency_NamespaceWithoutPods(t *testing.T) {
+	t.Parallel()
+
+	pods := &PodAllocations{resp: AllocationResponse{Data: []map[string]AllocationData{{"__idle__": {CPUCost: 9}}}}}
+
+	assert.Nil(t, pods.Efficiency())
+}
+
 func TestPodEfficiency_CountsAReplacedPodAndItsReplacementAsOne(t *testing.T) {
 	t.Parallel()
 

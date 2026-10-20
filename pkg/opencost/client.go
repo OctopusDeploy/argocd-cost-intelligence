@@ -240,12 +240,10 @@ type SummaryAllocationData struct {
 	CPUCoreUsageAverage   float64   `json:"cpuCoreUsageAverage"`
 	CPUCoreLimitAverage   float64   `json:"cpuCoreLimitAverage"`
 	CPUCost               float64   `json:"cpuCost"`
-	CPUCostIdle           float64   `json:"cpuCostIdle"`
 	RAMByteRequestAverage float64   `json:"ramByteRequestAverage"`
 	RAMByteUsageAverage   float64   `json:"ramByteUsageAverage"`
 	RAMByteLimitAverage   float64   `json:"ramByteLimitAverage"`
 	RAMCost               float64   `json:"ramCost"`
-	RAMCostIdle           float64   `json:"ramCostIdle"`
 	Efficiency            float64   `json:"efficiency"`
 }
 
@@ -423,6 +421,13 @@ func (p *PodAllocations) Pods() []models.PodCost {
 	return parsePodBreakdown(p.resp)
 }
 
+// Efficiency measures every pod in the namespace as podEfficiency measures an application's: its
+// idle cost is the unused share of each pod's request, projected onto a month from the period the
+// namespace's pods ran. Nil without pods.
+func (p *PodAllocations) Efficiency() *models.EfficiencyMetrics {
+	return podEfficiency(p.resp)
+}
+
 // ForApplication measures the pods the application's resources own: their monthly cost and its
 // breakdown, their efficiency and the pods themselves, projected onto a month from the period those
 // pods ran rather than the namespace's, so a new application in an older namespace is not
@@ -510,9 +515,9 @@ func ownedAllocations(resp AllocationResponse, resources models.ManagedResources
 // which overstates them when pods replaced each other rather than ran side by side: a recommendation
 // sized from them errs towards headroom.
 //
-// OpenCost's own idle fields (cpuCostIdle, ramCostIdle) describe unallocated cluster capacity and are
-// zero on a pod. A pod using less than it requests pays for its request, so its idle cost is the
-// unused share of its cost.
+// OpenCost's own idle fields (cpuCostIdle, ramCostIdle) are never computed: up to 1.121.3 they are only
+// copied and summed, so they are zero on every allocation. A pod using less than it requests pays for
+// its request, so its idle cost is the unused share of its cost.
 func podEfficiency(resp AllocationResponse) *models.EfficiencyMetrics {
 	periodStart, periodEnd := measuredPeriod(resp)
 	periodMinutes := 24 * 60.0
@@ -1059,6 +1064,9 @@ func parsePodBreakdown(resp AllocationResponse) []models.PodCost {
 	return pods
 }
 
+// parseSummaryResponse reads a namespace's requests, usage and efficiency. It has no idle cost: the
+// summary's idle fields are always zero (see podEfficiency), so the namespace's idle cost is measured
+// from its pods (PodAllocations.Efficiency).
 func parseSummaryResponse(resp SummaryAllocationResponse) *models.EfficiencyMetrics {
 	var agg SummaryAllocationData
 	var count int
@@ -1077,8 +1085,6 @@ func parseSummaryResponse(resp SummaryAllocationResponse) *models.EfficiencyMetr
 			agg.RAMByteRequestAverage += alloc.RAMByteRequestAverage
 			agg.RAMByteUsageAverage += alloc.RAMByteUsageAverage
 			agg.RAMByteLimitAverage += alloc.RAMByteLimitAverage
-			agg.CPUCostIdle += alloc.CPUCostIdle
-			agg.RAMCostIdle += alloc.RAMCostIdle
 			agg.Efficiency += alloc.Efficiency
 			count++
 		}
@@ -1096,8 +1102,6 @@ func parseSummaryResponse(resp SummaryAllocationResponse) *models.EfficiencyMetr
 		ramEff = agg.RAMByteUsageAverage / agg.RAMByteRequestAverage
 	}
 
-	monthlyMultiplier := monthlyFactor(agg.Start, agg.End)
-
 	return &models.EfficiencyMetrics{
 		CPUEfficiency:     cpuEff,
 		RAMEfficiency:     ramEff,
@@ -1106,8 +1110,6 @@ func parseSummaryResponse(resp SummaryAllocationResponse) *models.EfficiencyMetr
 		CPUCoresUsed:      agg.CPUCoreUsageAverage,
 		RAMBytesRequested: agg.RAMByteRequestAverage,
 		RAMBytesUsed:      agg.RAMByteUsageAverage,
-		CPUIdleCost:       agg.CPUCostIdle * monthlyMultiplier,
-		RAMIdleCost:       agg.RAMCostIdle * monthlyMultiplier,
 		CPUCoresLimit:     agg.CPUCoreLimitAverage,
 		RAMBytesLimit:     agg.RAMByteLimitAverage,
 	}

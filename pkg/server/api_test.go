@@ -922,8 +922,9 @@ func TestHandleGetDailyCosts_InvalidNamespaceFromDB_Returns400(t *testing.T) {
 func TestHandleListNamespaces_Success(t *testing.T) {
 	t.Parallel()
 
+	idle := 320.5
 	namespaces := []models.NamespaceSummary{
-		{Namespace: "production", TotalCost: 1500.0, IdleCost: 320.5, AppCount: 3},
+		{Namespace: "production", TotalCost: 1500.0, IdleCost: &idle, AppCount: 3},
 		{Namespace: "staging", TotalCost: 500.0, AppCount: 2},
 	}
 	store := &mockStorage{
@@ -945,6 +946,9 @@ func TestHandleListNamespaces_Success(t *testing.T) {
 	assert.InDelta(t, 1500.0, first["totalCost"].(float64), 1e-9)
 	assert.InDelta(t, 320.5, first["idleCost"].(float64), 1e-9)
 	assert.InDelta(t, 3.0, first["appCount"].(float64), 1e-9)
+	second := nsList[1].(map[string]any)
+	assert.Contains(t, second, "idleCost")
+	assert.Nil(t, second["idleCost"], "a namespace whose idle cost was not measured has none, not zero")
 }
 
 func TestHandleListNamespaces_Empty(t *testing.T) {

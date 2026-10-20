@@ -147,9 +147,10 @@ export interface AppContext {
 
 export interface NamespaceSummary {
   namespace: string;
-  // totalCost and idleCost come from the namespace's most recent measurement, counted once.
+  // totalCost and idleCost come from the namespace's most recent measurement, counted once. idleCost
+  // is null when that measurement predates it, until an application in the namespace syncs again.
   totalCost: number;
-  idleCost: number;
+  idleCost: number | null;
   appCount: number;
   measuredAt: string;
 }

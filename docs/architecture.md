@@ -45,8 +45,9 @@ Measures and stores an application's cost after a sync.
 4. Wait for metrics to be recorded. The delay is passed to `hook.NewSyncHook` in `cmd/main.go` (5 seconds); there is no environment variable.
 5. Query OpenCost for the deployment namespace: cost, efficiency summary and per-pod breakdown. The cost query must succeed; the other two only log a warning and leave their fields empty.
 6. Project the 24-hour cost onto a month (see *Monthly figures*).
-7. If the webhook carried the application's `resources`, compute the application's own share from the pods (`PodAllocations.ForApplication`) and store it as `app_json`.
-8. Save the record.
+7. Measure the namespace's idle cost from its pods (`PodAllocations.Efficiency`, see *Idle cost*) and store it as `idle_monthly_cost` and in the efficiency's idle fields. Without the pod breakdown it stays unmeasured.
+8. If the webhook carried the application's `resources`, compute the application's own share from the pods (`PodAllocations.ForApplication`) and store it as `app_json`.
+9. Save the record.
 
 ### Measuring at install (`pkg/backfill/`)
 
@@ -69,7 +70,7 @@ Queries OpenCost and turns its responses into the service's models. Each method 
 `CostStorage` (`interface.go`) is the only thing the rest of the code depends on; `postgres.go` implements it and `instrumented.go` wraps any implementation with timing and counters. A missing record is `storage.ErrNotFound`, not a generic error. Schema changes are numbered migrations in `pkg/storage/migrations/`, applied at startup (`migrate.go`).
 
 Tables:
-- **`cost_actuals`**: one row per sync measurement, primary key a random 32-hex ID. `application_namespace` + `application_name` identify the application; `deployment_namespace` is where it deploys and what OpenCost was asked about. `measured_on` is `sync`, or `install` for a record measured when the service started (migration 009). An install record follows no sync: its `sync_timestamp` holds its measurement time, so the column stays `NOT NULL` for older replicas, and the storage layer reads it back as no sync timestamp. The record's own cost columns cover that whole namespace; `app_json` holds the application's share. Breakdowns are JSONB (`resources_json`, `opencost_output_json`, `efficiency_json`, `pods_json`, `app_json`). Indexed on `(application_namespace, application_name, measured_at DESC)` and `(deployment_namespace, measured_at DESC)`.
+- **`cost_actuals`**: one row per sync measurement, primary key a random 32-hex ID. `application_namespace` + `application_name` identify the application; `deployment_namespace` is where it deploys and what OpenCost was asked about. `measured_on` is `sync`, or `install` for a record measured when the service started (migration 009). `idle_monthly_cost` is the namespace's idle cost (migration 010); it is NULL for records measured before it, or without the pod breakdown, and the Namespaces page shows those as not measured rather than $0. An install record follows no sync: its `sync_timestamp` holds its measurement time, so the column stays `NOT NULL` for older replicas, and the storage layer reads it back as no sync timestamp. The record's own cost columns cover that whole namespace; `app_json` holds the application's share. Breakdowns are JSONB (`resources_json`, `opencost_output_json`, `efficiency_json`, `pods_json`, `app_json`). Indexed on `(application_namespace, application_name, measured_at DESC)` and `(deployment_namespace, measured_at DESC)`.
 - **`cloud_estimates`**: one row per `(app_namespace, app_name, source)`, upserted on every CI push. Separate from `cost_actuals` because estimates arrive at a different cadence, and keyed by source so Infracost and a future tool coexist.
 - **`cost_daily`**: one row per `(application_namespace, application_name, day)` with the day's cost, its `deployment_namespace` and its `scope`.
 - **`cost_daily_progress`**: the last day recorded per application and its scope. It exists because a day without cost leaves no `cost_daily` row.
@@ -140,6 +141,10 @@ New namespace:  $1 over 6 h       ->  $1 x 720 / 6  = $120 per month
 OpenCost reports a namespace only from when its first pod ran, so a fixed x 30 would put a young namespace's monthly cost far too low. Pods share their response's period, so they still add up to the namespace. Never multiply an OpenCost cost by a fixed 30.
 
 The 24-hour window itself is a trade-off: long enough to include off-peak hours and smooth short spikes, short enough that a sync's effect shows within a day.
+
+### Idle cost
+
+Idle cost is the part of a CPU or memory cost paid for requested capacity that went unused: `cost x (request - usage) / request` per pod, nothing for a pod using at least its request, weighted by the minutes each pod ran and projected like every other cost (see *Monthly figures*). It is measured from the per-pod allocation for both scopes: an application's from its own pods (`ForApplication`), a namespace's from all of them (`PodAllocations.Efficiency`), so the applications in a namespace add up to the namespace. OpenCost's own `cpuCostIdle` / `ramCostIdle` are never used: up to 1.121.3 OpenCost only copies and sums them, so they are always zero.
 
 ### Namespace scope and application scope
 

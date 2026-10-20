@@ -17,8 +17,15 @@ Then turn the pages on with that application's <namespace>:<name>:
   helm upgrade {{ .Release.Name }} <chart> -n {{ .Release.Namespace }} --reuse-values \
     --set costIntelligence.clusterScopeApp=<namespace>:<name>
 
-Viewers also need permission to invoke the extension, for example in argocd-rbac-cm:
+To see them, people also need `get` on that application, for example in argocd-rbac-cm:
 
   p, role:platform, applications, get, <project>/<name>, allow
-  p, role:platform, extensions, invoke, cost-intel, allow
 {{- end }}
+
+Argo CD denies the extension to everyone until argocd-rbac-cm allows it, the
+built-in admin included. Append this line to the policy.csv already there:
+
+  p, role:admin, extensions, invoke, cost-intel, allow
+
+Other roles need their own line. Without it the tab shows
+"401: Unauthorized extension request".

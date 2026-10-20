@@ -5,21 +5,25 @@ import (
 )
 
 type CostActual struct {
-	ID                   string                `json:"id"`
-	ApplicationName      string                `json:"applicationName"`
-	ApplicationNamespace string                `json:"applicationNamespace"`
-	DeploymentNamespace  string                `json:"deploymentNamespace"`
-	SyncTimestamp        time.Time             `json:"syncTimestamp"`
-	MeasuredAt           time.Time             `json:"measuredAt"`
-	TotalMonthlyCost     float64               `json:"totalMonthlyCost"`
-	Resources            []ResourceCostActual  `json:"resources"`
-	EstimateAccuracy     float64               `json:"estimateAccuracy"`
-	EstimateVsActual     float64               `json:"estimateVsActual"`
-	OpenCostOutput       OpenCostMetrics       `json:"opencostOutput"`
-	Efficiency           *EfficiencyMetrics    `json:"efficiency,omitempty"`
-	Pods                 []PodCost             `json:"pods,omitempty"`
-	Anomaly              *CostAnomaly          `json:"anomaly,omitempty"`
-	CloudEstimate        *CloudServiceEstimate `json:"cloudEstimate,omitempty"`
+	ID                   string `json:"id"`
+	ApplicationName      string `json:"applicationName"`
+	ApplicationNamespace string `json:"applicationNamespace"`
+	DeploymentNamespace  string `json:"deploymentNamespace"`
+	// SyncTimestamp is when the sync that triggered the measurement finished. Zero for a measurement
+	// taken at install, which follows no sync.
+	SyncTimestamp time.Time `json:"syncTimestamp,omitzero"`
+	MeasuredAt    time.Time `json:"measuredAt"`
+	// MeasuredOn says what took the measurement: MeasuredOnSync or MeasuredOnInstall.
+	MeasuredOn       string                `json:"measuredOn"`
+	TotalMonthlyCost float64               `json:"totalMonthlyCost"`
+	Resources        []ResourceCostActual  `json:"resources"`
+	EstimateAccuracy float64               `json:"estimateAccuracy"`
+	EstimateVsActual float64               `json:"estimateVsActual"`
+	OpenCostOutput   OpenCostMetrics       `json:"opencostOutput"`
+	Efficiency       *EfficiencyMetrics    `json:"efficiency,omitempty"`
+	Pods             []PodCost             `json:"pods,omitempty"`
+	Anomaly          *CostAnomaly          `json:"anomaly,omitempty"`
+	CloudEstimate    *CloudServiceEstimate `json:"cloudEstimate,omitempty"`
 	// App is the application's own share of the measurement above, which covers its whole deployment
 	// namespace. Nil for records stored before applications were measured on their own, or synced by a
 	// notifications template that does not send the application's resources. Stored, never sent: the
@@ -29,6 +33,14 @@ type CostActual struct {
 	// ForApplication.
 	Scope string `json:"scope,omitempty"`
 }
+
+const (
+	// MeasuredOnSync marks a measurement the sync webhook took after a sync.
+	MeasuredOnSync = "sync"
+	// MeasuredOnInstall marks a measurement the startup backfill took for an application that had no
+	// record. It follows no sync, so it is never the baseline of a change since the last sync.
+	MeasuredOnInstall = "install"
+)
 
 const (
 	// ScopeApplication marks figures that cover only the pods the application's controllers own.

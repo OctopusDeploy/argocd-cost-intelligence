@@ -24,6 +24,11 @@ type Config struct {
 	// can reach further back than OpenCost's Prometheus. 0 turns recording off.
 	DailyHistoryDays int `envconfig:"DAILY_HISTORY_DAYS" default:"400"`
 
+	// BackfillConcurrency is how many namespaces the startup backfill measures with OpenCost at once.
+	// The backfill measures each Argo CD Application with no cost record yet when the service starts.
+	// 0 turns it off.
+	BackfillConcurrency int `envconfig:"BACKFILL_CONCURRENCY" default:"4"`
+
 	// VPAEnabled reads VerticalPodAutoscaler recommendations (from Goldilocks or any VPA) for the
 	// rightsizing advice. It needs the service to run in the cluster with permission to list them.
 	VPAEnabled bool `envconfig:"VPA_ENABLED" default:"true"`
@@ -119,6 +124,9 @@ func (c *Config) Validate() error {
 	}
 	if c.DailyHistoryDays < 0 {
 		return errors.New("DAILY_HISTORY_DAYS must not be negative; 0 turns daily cost history off")
+	}
+	if c.BackfillConcurrency < 0 {
+		return errors.New("BACKFILL_CONCURRENCY must not be negative; 0 turns the startup backfill off")
 	}
 	if len(c.WebhookSecret) < minWebhookSecretLength {
 		return fmt.Errorf("WEBHOOK_SECRET is required and must be at least %d characters: it authenticates Argo CD Notifications to POST /on-sync", minWebhookSecretLength)

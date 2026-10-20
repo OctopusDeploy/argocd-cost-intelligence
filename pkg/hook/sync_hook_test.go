@@ -106,6 +106,12 @@ func (m *mockStorage) SetDailyProgress(context.Context, models.AppRef, models.Da
 
 func (m *mockStorage) PruneDailyCosts(context.Context, string) error { return nil }
 
+func (m *mockStorage) SaveFirstActual(context.Context, *models.CostActual) (bool, error) {
+	return true, nil
+}
+
+func (m *mockStorage) Lock(context.Context, string) (func(), error) { return func() {}, nil }
+
 // newOpenCostTestServer returns an httptest.Server that serves valid OpenCost
 // allocation and summary responses. Caller must call Close() when done.
 func newOpenCostTestServer(t *testing.T) *httptest.Server {
@@ -307,6 +313,8 @@ func TestOnApplicationSync_Success_StoresCostAndEfficiency(t *testing.T) {
 
 	assert.Equal(t, "my-app", saved.ApplicationName)
 	assert.Equal(t, "argocd", saved.ApplicationNamespace)
+	assert.Equal(t, models.MeasuredOnSync, saved.MeasuredOn)
+	assert.False(t, saved.SyncTimestamp.IsZero())
 	assert.InDelta(t, 450.0, saved.TotalMonthlyCost, 1e-9) // (10+5) * 30
 
 	require.NotNil(t, saved.Efficiency, "efficiency should be populated")

@@ -86,6 +86,33 @@ func (h *SyncHook) OnApplicationSync(ctx context.Context, notification *models.S
 }
 
 func (h *SyncHook) measureActualCosts(ctx context.Context, notification *models.SyncNotification) (*models.CostActual, error) {
+	measured, err := MeasureNamespace(ctx, h.opencostCli, notification.Namespace, h.logger)
+	if err != nil {
+		return nil, err
+	}
+	// Without the application's resources (an older notifications template), the application is
+	// known only as its whole namespace.
+	var owners models.ManagedResources
+	if notification.Resources != nil {
+		owners = models.ManagedResources(notification.Resources).PodOwners()
+	}
+	app := models.AppRef{Namespace: notification.ApplicationNamespace, Name: notification.ApplicationName}
+	return measured.Record(app, owners, notification.SyncTimestamp, models.MeasuredOnSync), nil
+}
+
+// Namespace is a deployment namespace as OpenCost measured it over the last 24 hours, from which each
+// application deployed to it gets its cost record.
+type Namespace struct {
+	name       string
+	measuredAt time.Time
+	metrics    *models.OpenCostMetrics
+	efficiency *models.EfficiencyMetrics
+	pods       *opencost.PodAllocations
+}
+
+// MeasureNamespace queries OpenCost for a namespace's cost, efficiency and pods at once. Only the cost
+// is required; without the other two a record has no efficiency or no pods.
+func MeasureNamespace(ctx context.Context, client *opencost.Client, namespace string, logger *log.Logger) (*Namespace, error) {
 	type metricsResult struct {
 		v   *models.OpenCostMetrics
 		err error
@@ -104,75 +131,84 @@ func (h *SyncHook) measureActualCosts(ctx context.Context, notification *models.
 	podCh := make(chan podResult, 1)
 
 	go func() {
-		v, err := h.opencostCli.GetNamespaceCost(ctx, notification.Namespace)
+		v, err := client.GetNamespaceCost(ctx, namespace)
 		metricsCh <- metricsResult{v, err}
 	}()
 	go func() {
-		v, err := h.opencostCli.GetNamespaceSummary(ctx, notification.Namespace)
+		v, err := client.GetNamespaceSummary(ctx, namespace)
 		efficiencyCh <- efficiencyResult{v, err}
 	}()
 	go func() {
-		v, err := h.opencostCli.GetPodAllocations(ctx, notification.Namespace)
+		v, err := client.GetPodAllocations(ctx, namespace)
 		podCh <- podResult{v, err}
 	}()
 
 	mr := <-metricsCh
+	er := <-efficiencyCh
+	pr := <-podCh
 	if mr.err != nil {
 		return nil, fmt.Errorf("failed to query OpenCost: %w", mr.err)
 	}
-
-	er := <-efficiencyCh
 	if er.err != nil {
-		h.logger.Printf("Warning: failed to query OpenCost efficiency for %s: %v\n", notification.Namespace, er.err)
+		logger.Printf("Warning: failed to query OpenCost efficiency for %s: %v\n", namespace, er.err)
 	}
-
-	pr := <-podCh
 	if pr.err != nil {
-		h.logger.Printf("Warning: failed to query OpenCost pod breakdown for %s: %v\n", notification.Namespace, pr.err)
+		logger.Printf("Warning: failed to query OpenCost pod breakdown for %s: %v\n", namespace, pr.err)
 	}
 
-	actual := &models.CostActual{
-		ID:                   newRecordID(),
-		ApplicationName:      notification.ApplicationName,
-		ApplicationNamespace: notification.ApplicationNamespace,
-		DeploymentNamespace:  notification.Namespace,
-		SyncTimestamp:        notification.SyncTimestamp,
-		MeasuredAt:           time.Now(),
-		TotalMonthlyCost:     mr.v.AllocationTotals.TotalCost,
-		OpenCostOutput:       *mr.v,
-		Efficiency:           er.v,
-	}
-	if pr.v != nil {
-		actual.Pods = pr.v.Pods()
-		// Without the application's resources (an older notifications template) or its pods, the
-		// application is known only as its whole namespace.
-		if notification.Resources != nil {
-			actual.App = pr.v.ForApplication(models.ManagedResources(notification.Resources).PodOwners())
-		}
-	}
-
-	// Copy peak usage from allocation into efficiency metrics
-	if actual.Efficiency != nil && mr.v.PeakCPUCores > 0 {
-		actual.Efficiency.CPUCoresUsedMax = mr.v.PeakCPUCores
-		actual.Efficiency.RAMBytesUsedMax = mr.v.PeakRAMBytes
-	}
-
-	h.logger.Printf("Measured costs - CPU: $%.2f, Memory: $%.2f, Storage: $%.2f, GPU: $%.2f, Total: $%.2f\n",
+	logger.Printf("Measured costs - CPU: $%.2f, Memory: $%.2f, Storage: $%.2f, GPU: $%.2f, Total: $%.2f\n",
 		mr.v.AllocationTotals.CPUCost,
 		mr.v.AllocationTotals.MemoryCost,
 		mr.v.AllocationTotals.StorageCost,
 		mr.v.AllocationTotals.GPUCost,
 		mr.v.AllocationTotals.TotalCost,
 	)
-	if actual.Efficiency != nil {
-		h.logger.Printf("Measured efficiency - CPU: %.1f%%, RAM: %.1f%%, Total: %.1f%%\n",
-			actual.Efficiency.CPUEfficiency*100,
-			actual.Efficiency.RAMEfficiency*100,
-			actual.Efficiency.TotalEfficiency*100,
+	if er.v != nil {
+		logger.Printf("Measured efficiency - CPU: %.1f%%, RAM: %.1f%%, Total: %.1f%%\n",
+			er.v.CPUEfficiency*100,
+			er.v.RAMEfficiency*100,
+			er.v.TotalEfficiency*100,
 		)
 	}
 
-	return actual, nil
+	return &Namespace{name: namespace, measuredAt: time.Now(), metrics: mr.v, efficiency: er.v, pods: pr.v}, nil
+}
+
+// HasData reports whether OpenCost had any data for the namespace. Without it, the namespace's cost is
+// unknown rather than zero.
+func (n *Namespace) HasData() bool { return n.metrics.MeasuredHours > 0 }
+
+// Record is app's cost record from the namespace's measurement. owners are the pod-owning resources
+// the application manages; with nil, the application is known only as its whole namespace. A
+// measurement not taken after a sync has a zero syncTimestamp.
+func (n *Namespace) Record(app models.AppRef, owners models.ManagedResources, syncTimestamp time.Time, measuredOn string) *models.CostActual {
+	actual := &models.CostActual{
+		ID:                   newRecordID(),
+		ApplicationName:      app.Name,
+		ApplicationNamespace: app.Namespace,
+		DeploymentNamespace:  n.name,
+		SyncTimestamp:        syncTimestamp,
+		MeasuredAt:           n.measuredAt,
+		MeasuredOn:           measuredOn,
+		TotalMonthlyCost:     n.metrics.AllocationTotals.TotalCost,
+		OpenCostOutput:       *n.metrics,
+	}
+	if n.efficiency != nil {
+		// A copy each, as the applications of one namespace share its measurement.
+		efficiency := *n.efficiency
+		if n.metrics.PeakCPUCores > 0 {
+			efficiency.CPUCoresUsedMax = n.metrics.PeakCPUCores
+			efficiency.RAMBytesUsedMax = n.metrics.PeakRAMBytes
+		}
+		actual.Efficiency = &efficiency
+	}
+	if n.pods != nil {
+		actual.Pods = n.pods.Pods()
+		if owners != nil {
+			actual.App = n.pods.ForApplication(owners)
+		}
+	}
+	return actual
 }
 
 // ValidateNotification checks that a notification identifies its Application and names valid

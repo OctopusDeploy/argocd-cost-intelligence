@@ -16,8 +16,30 @@ import (
 // Application is an Argo CD Application and the workloads it manages now.
 type Application struct {
 	Ref models.AppRef
+	// Destination is where the Application deploys.
+	Destination Destination
 	// Workloads are the pod-owning resources in the Application's status, each with its namespace.
 	Workloads models.ManagedResources
+}
+
+// Destination is an Application's spec.destination: a cluster, by server URL or by name, and the
+// namespace its resources go to by default.
+type Destination struct {
+	Server    string `json:"server"`
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+}
+
+// The local cluster's server URL and name in Argo CD, the cluster Argo CD runs in.
+const (
+	LocalServer = "https://kubernetes.default.svc"
+	LocalName   = "in-cluster"
+)
+
+// Local reports whether the destination is the cluster Argo CD runs in, the only one the OpenCost
+// this service queries measures.
+func (d Destination) Local() bool {
+	return (d.Server == "" || d.Server == LocalServer) && (d.Name == "" || d.Name == LocalName)
 }
 
 // ApplicationLister lists every Argo CD Application in the cluster.
@@ -79,9 +101,7 @@ type applicationObject struct {
 		Name      string `json:"name"`
 	} `json:"metadata"`
 	Spec struct {
-		Destination struct {
-			Namespace string `json:"namespace"`
-		} `json:"destination"`
+		Destination Destination `json:"destination"`
 	} `json:"spec"`
 	Status struct {
 		Resources models.ManagedResources `json:"resources"`
@@ -116,7 +136,8 @@ func parseApplication(object map[string]any) (Application, error) {
 		workloads = append(workloads, w)
 	}
 	return Application{
-		Ref:       models.AppRef{Namespace: obj.Metadata.Namespace, Name: obj.Metadata.Name},
-		Workloads: workloads,
+		Ref:         models.AppRef{Namespace: obj.Metadata.Namespace, Name: obj.Metadata.Name},
+		Destination: obj.Spec.Destination,
+		Workloads:   workloads,
 	}, nil
 }

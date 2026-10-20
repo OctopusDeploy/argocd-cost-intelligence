@@ -46,6 +46,17 @@ func (s *instrumented) SaveActual(ctx context.Context, actual *models.CostActual
 	return s.next.SaveActual(ctx, actual)
 }
 
+func (s *instrumented) SaveFirstActual(ctx context.Context, actual *models.CostActual) (_ bool, err error) {
+	done := s.track("SaveFirstActual")
+	defer func() { done(err) }()
+	return s.next.SaveFirstActual(ctx, actual)
+}
+
+// Lock is not timed: it waits for another replica, not for the database.
+func (s *instrumented) Lock(ctx context.Context, name string) (func(), error) {
+	return s.next.Lock(ctx, name)
+}
+
 func (s *instrumented) GetLatestActual(ctx context.Context, app models.AppRef) (_ *models.CostActual, err error) {
 	done := s.track("GetLatestActual")
 	defer func() { done(err) }()

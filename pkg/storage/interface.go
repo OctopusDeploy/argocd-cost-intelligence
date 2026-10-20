@@ -23,6 +23,15 @@ type CostStorage interface {
 	// SaveActual stores an actual cost record
 	SaveActual(ctx context.Context, actual *models.CostActual) error
 
+	// SaveFirstActual stores actual only when its application has no committed cost record, and
+	// reports whether it did. It never replaces a record; a sync saved in the same instant may be
+	// stored beside it, and the later measurement is then the latest.
+	SaveFirstActual(ctx context.Context, actual *models.CostActual) (bool, error)
+
+	// Lock waits until this process holds the named lock, shared by every replica using the same
+	// database, and returns the function that releases it. The lock is released if the process dies.
+	Lock(ctx context.Context, name string) (unlock func(), err error)
+
 	// GetLatestActual retrieves the most recent cost measurement for an application
 	GetLatestActual(ctx context.Context, app models.AppRef) (*models.CostActual, error)
 

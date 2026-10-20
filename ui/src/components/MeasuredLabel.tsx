@@ -7,13 +7,15 @@ interface Props {
   measuredAt: string;
   // measuredHours is how much data OpenCost had for the measurement; less than a day is flagged.
   measuredHours?: number;
+  // atInstall says the data was measured when the service started, before the application synced.
+  atInstall?: boolean;
   title?: string;
 }
 
 // MeasuredLabel says how long ago data was measured. It flags it as stale after STALE_AFTER_DAYS, and as
 // partial when OpenCost had less than a day of data, since monthly figures are then projected from a few
 // hours and change once a full day is measured.
-export const MeasuredLabel: React.FC<Props> = ({ measuredAt, measuredHours, title }) => {
+export const MeasuredLabel: React.FC<Props> = ({ measuredAt, measuredHours, atInstall, title }) => {
   const t = useTokens();
   const measured = formatRelativeTime(measuredAt);
   if (!measured) return null;
@@ -36,7 +38,7 @@ export const MeasuredLabel: React.FC<Props> = ({ measuredAt, measuredHours, titl
           <span aria-hidden="true">·</span>
         </React.Fragment>
       ))}
-      <span>Measured {measured}</span>
+      <span>{atInstall ? `Measured at install ${measured}` : `Measured ${measured}`}</span>
     </span>
   );
 };

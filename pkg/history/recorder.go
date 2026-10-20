@@ -49,11 +49,22 @@ type Recorder struct {
 	now      func() time.Time
 	// observe, when set, is told when each run finishes and with what error.
 	observe func(at time.Time, err error)
+	// wake asks Run for a run before the next tick.
+	wake chan struct{}
 }
 
 // NewRecorder returns a recorder that keeps keepDays days of history.
 func NewRecorder(store Store, source Source, keepDays int, logger *log.Logger) *Recorder {
-	return &Recorder{store: store, source: source, keepDays: keepDays, logger: logger, now: time.Now}
+	return &Recorder{store: store, source: source, keepDays: keepDays, logger: logger, now: time.Now, wake: make(chan struct{}, 1)}
+}
+
+// RecordSoon asks Run to record again as soon as its current run, if any, is over, for applications
+// that got their first record outside a sync. Several calls before that run ask for one run.
+func (r *Recorder) RecordSoon() {
+	select {
+	case r.wake <- struct{}{}:
+	default:
+	}
 }
 
 // OnRun has observe told when each run finishes and with what error, for metrics.
@@ -62,7 +73,7 @@ func (r *Recorder) OnRun(observe func(at time.Time, err error)) *Recorder {
 	return r
 }
 
-// Run records at once and then every Interval until ctx is done.
+// Run records at once and then every Interval, or sooner when RecordSoon asks, until ctx is done.
 func (r *Recorder) Run(ctx context.Context) {
 	ticker := time.NewTicker(Interval)
 	defer ticker.Stop()
@@ -81,6 +92,7 @@ func (r *Recorder) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+		case <-r.wake:
 		}
 	}
 }

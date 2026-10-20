@@ -8,13 +8,19 @@ export interface CostChange {
   fraction: number;
 }
 
-// previousMeasurement finds the most recent measurement taken before `latest`. The API returns
-// history newest first and it can include the latest record itself, so the lookup goes by timestamp.
+// measuredAtInstall reports whether a record was measured when the service started rather than after a
+// sync. Such a record is never the baseline of a change since the last sync.
+export const measuredAtInstall = (record: CostData) => record.measuredOn === 'install';
+
+// previousMeasurement finds the most recent measurement taken after a sync before `latest`. The API
+// returns history newest first and it can include the latest record itself, so the lookup goes by
+// timestamp. Measurements taken at install are skipped: they are not a sync to compare with.
 export function previousMeasurement(latest: CostData, history: CostData[]): CostData | null {
   const latestTime = Date.parse(latest.measuredAt);
   let previous: CostData | null = null;
   let previousTime = -Infinity;
   for (const record of history) {
+    if (measuredAtInstall(record)) continue;
     const time = Date.parse(record.measuredAt);
     if (time < latestTime && time > previousTime) {
       previous = record;
@@ -25,14 +31,15 @@ export function previousMeasurement(latest: CostData, history: CostData[]): Cost
 }
 
 // changeSinceLastSync compares the latest measurement with the previous one. Returns null without an
-// earlier, non-zero measurement.
+// earlier, non-zero measurement taken after a sync, or when the latest was taken at install.
 export function changeSinceLastSync(latest: CostData, history: CostData[]): CostChange | null {
   return costChange(latest, previousMeasurement(latest, history));
 }
 
-// costChange compares two measurements. Returns null without a previous, non-zero measurement.
+// costChange compares two measurements. Returns null without a previous, non-zero measurement, or when
+// either was taken at install rather than after a sync.
 export function costChange(latest: CostData, previous: CostData | null): CostChange | null {
-  if (!previous || previous.totalMonthlyCost <= 0) return null;
+  if (!previous || previous.totalMonthlyCost <= 0 || measuredAtInstall(latest) || measuredAtInstall(previous)) return null;
   return {
     previous: previous.totalMonthlyCost,
     fraction: (latest.totalMonthlyCost - previous.totalMonthlyCost) / previous.totalMonthlyCost,

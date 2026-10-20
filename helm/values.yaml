@@ -33,6 +33,11 @@ costIntelligence:
   # tab show 6 months or a year. About one row per application per day. 0 turns recording off.
   dailyHistoryDays: 400
 
+  # Applications measured at once when the service starts and finds Applications without a cost
+  # record, so a fresh install shows costs before every application syncs (BACKFILL_CONCURRENCY).
+  # Replicas take turns, so OpenCost sees this many queries at most. 0 turns the backfill off.
+  backfillConcurrency: 4
+
   # PostgreSQL connection pool per replica (DB_MAX_OPEN_CONNS, DB_MAX_IDLE_CONNS). Keep
   # replicas x maxOpenConns below PostgreSQL's max_connections.
   database:

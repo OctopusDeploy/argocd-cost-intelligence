@@ -42,7 +42,11 @@ var _ storage.CostStorage = (*mockStorage)(nil)
 
 func (m *mockStorage) InitializeSchema(_ context.Context) error                 { return nil }
 func (m *mockStorage) SaveActual(_ context.Context, _ *models.CostActual) error { return nil }
-func (m *mockStorage) Close() error                                             { return nil }
+func (m *mockStorage) SaveFirstActual(context.Context, *models.CostActual) (bool, error) {
+	return true, nil
+}
+func (m *mockStorage) Lock(context.Context, string) (func(), error) { return func() {}, nil }
+func (m *mockStorage) Close() error                                 { return nil }
 
 func (m *mockStorage) GetLatestActual(ctx context.Context, app models.AppRef) (*models.CostActual, error) {
 	if m.getLatestActualFn != nil {

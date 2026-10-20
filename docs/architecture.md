@@ -47,6 +47,18 @@ Measures and stores an application's cost after a sync.
 6. If the webhook carried the application's `resources`, compute the application's own share from the pods (`PodAllocations.ForApplication`) and store it as `app_json`.
 7. Save the record.
 
+### Measuring at install (`pkg/backfill/`)
+
+Only the sync hook writes cost records, so without this a fresh install would show nothing until every application synced. When an API replica starts (unless `BACKFILL_CONCURRENCY=0`, or outside a cluster), `runBackfill` in `cmd/main.go` lists the Argo CD Applications and measures each one that has no record yet:
+
+1. Take a PostgreSQL advisory lock (`CostStorage.Lock`), so replicas run one at a time. A replica that waited finds the records the first one saved and measures only what is still missing; OpenCost is never queried once per replica. The lock lives on one database session and is released when the run ends or the session drops.
+2. Skip Applications that already have a record, that deploy to another cluster (a destination other than `https://kubernetes.default.svc` / `in-cluster`, since OpenCost measures only its own cluster), or that have no valid destination namespace.
+3. Group the rest by destination namespace and measure each namespace once with the sync hook's queries (`hook.MeasureNamespace`), at most `BACKFILL_CONCURRENCY` at a time.
+4. Build each Application's record as the sync hook would, its share taken from the controllers in its `status.resources`, but with no sync timestamp and `measured_on = 'install'`. A namespace with no OpenCost data, or one whose measurement failed, is tried again after 1, 2, 4 and 8 minutes (OpenCost may start alongside the service), then left for the next sync or start. Each run, the wait for the lock included, is cut off after 15 minutes so a hung dependency cannot keep the lock.
+5. Save it only if the Application still has no record (`SaveFirstActual`, a conditional insert), so a sync that lands during the run is never overwritten. Any record saved wakes the history recorder (`Recorder.RecordSoon`), which then records those applications' days.
+
+A record measured at install is never the baseline of a change since the last sync, and the UI labels it "Measured at install". The Application lister is the exporter's, reading the same ClusterRole rule.
+
 ### OpenCost client (`pkg/opencost/client.go`)
 
 Queries OpenCost and turns its responses into the service's models. Each method is one use case (the doc comment on each says which OpenCost endpoint and aggregation it uses): the namespace measurement, efficiency summary, per-pod and per-container allocations, orphaned pods, chargeback by label, label keys, daily time series, pricing source and control-plane overhead. Calls go through an instrumented `http.RoundTripper` so they are counted per path and status.
@@ -56,7 +68,7 @@ Queries OpenCost and turns its responses into the service's models. Each method 
 `CostStorage` (`interface.go`) is the only thing the rest of the code depends on; `postgres.go` implements it and `instrumented.go` wraps any implementation with timing and counters. A missing record is `storage.ErrNotFound`, not a generic error. Schema changes are numbered migrations in `pkg/storage/migrations/`, applied at startup (`migrate.go`).
 
 Tables:
-- **`cost_actuals`**: one row per sync measurement, primary key a random 32-hex ID. `application_namespace` + `application_name` identify the application; `deployment_namespace` is where it deploys and what OpenCost was asked about. The record's own cost columns cover that whole namespace; `app_json` holds the application's share. Breakdowns are JSONB (`resources_json`, `opencost_output_json`, `efficiency_json`, `pods_json`, `app_json`). Indexed on `(application_namespace, application_name, measured_at DESC)` and `(deployment_namespace, measured_at DESC)`.
+- **`cost_actuals`**: one row per sync measurement, primary key a random 32-hex ID. `application_namespace` + `application_name` identify the application; `deployment_namespace` is where it deploys and what OpenCost was asked about. `measured_on` is `sync`, or `install` for a record measured when the service started (migration 009). An install record follows no sync: its `sync_timestamp` holds its measurement time, so the column stays `NOT NULL` for older replicas, and the storage layer reads it back as no sync timestamp. The record's own cost columns cover that whole namespace; `app_json` holds the application's share. Breakdowns are JSONB (`resources_json`, `opencost_output_json`, `efficiency_json`, `pods_json`, `app_json`). Indexed on `(application_namespace, application_name, measured_at DESC)` and `(deployment_namespace, measured_at DESC)`.
 - **`cloud_estimates`**: one row per `(app_namespace, app_name, source)`, upserted on every CI push. Separate from `cost_actuals` because estimates arrive at a different cadence, and keyed by source so Infracost and a future tool coexist.
 - **`cost_daily`**: one row per `(application_namespace, application_name, day)` with the day's cost, its `deployment_namespace` and its `scope`.
 - **`cost_daily_progress`**: the last day recorded per application and its scope. It exists because a day without cost leaves no `cost_daily` row.
@@ -171,6 +183,7 @@ The Helm chart ([helm/README.md](../helm/README.md), [configuration.md](configur
 1. **Records are per namespace.** An application's stored namespace figures cover everything in its namespace; per-app figures exist only when the webhook carried `resources`.
 2. **IaC estimates are pushed, not pulled.** Cloud-service costs need a CI step that posts the Infracost output. `pushed_at` is the only freshness signal; the UI warns after 7 days.
 3. **24-hour window.** A sync's effect shows fully only after a day. A namespace younger than that is projected from the hours it has existed, which is noisier the shorter it is: a sync measured minutes after a first deploy finds little or no data.
-4. **A missed webhook is a missed measurement.** There is no periodic re-measure of `cost_actuals`, so an app that does not sync is not measured again (daily history and the exporter still read OpenCost, so cost over time keeps flowing).
-5. **Re-measuring is not replaying.** Calling the webhook again measures the last 24 hours as of now, not as of the original sync, and OpenCost history cannot be rebuilt after its retention window.
-6. **No backup.** Nothing in the chart backs up PostgreSQL; use your platform's backup tooling.
+4. **A missed webhook is a missed measurement.** There is no periodic re-measure of `cost_actuals`, so an app that does not sync is not measured again (daily history and the exporter still read OpenCost, so cost over time keeps flowing). Measuring at install fills in only applications with no record at all.
+5. **Applications on other clusters are not measured at install.** OpenCost measures the cluster it runs in, so the startup measurement skips applications deploying elsewhere rather than measure a same-named namespace here.
+6. **Re-measuring is not replaying.** Calling the webhook again measures the last 24 hours as of now, not as of the original sync, and OpenCost history cannot be rebuilt after its retention window.
+7. **No backup.** Nothing in the chart backs up PostgreSQL; use your platform's backup tooling.

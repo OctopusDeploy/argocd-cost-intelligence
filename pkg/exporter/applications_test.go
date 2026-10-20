@@ -58,6 +58,7 @@ func TestParseApplication_KeepsPodOwnersInTheirNamespaces(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, models.AppRef{Namespace: "argocd", Name: "shop"}, app.Ref)
+	assert.Equal(t, Destination{Server: LocalServer, Namespace: "shop"}, app.Destination)
 	assert.Equal(t, models.ManagedResources{
 		{Kind: "Deployment", Name: "web", Namespace: "shop"},
 		{Kind: "Rollout", Name: "api", Namespace: "shop"},
@@ -87,6 +88,29 @@ func TestParseApplication_WithoutResources(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, app.Workloads)
 	assert.Empty(t, app.Workloads)
+}
+
+func TestDestination_Local(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name string
+		dest Destination
+		want bool
+	}{
+		{"local server", Destination{Server: LocalServer, Namespace: "shop"}, true},
+		{"local name", Destination{Name: LocalName, Namespace: "shop"}, true},
+		{"both local", Destination{Server: LocalServer, Name: LocalName}, true},
+		{"neither set", Destination{Namespace: "shop"}, true},
+		{"remote server", Destination{Server: "https://prod.example.com", Namespace: "shop"}, false},
+		{"remote name", Destination{Name: "prod", Namespace: "shop"}, false},
+		{"local server, remote name", Destination{Server: LocalServer, Name: "prod"}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tc.want, tc.dest.Local())
+		})
+	}
 }
 
 func TestKubeApplicationLister_ListsEveryNamespaceSorted(t *testing.T) {

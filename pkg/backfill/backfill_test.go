@@ -107,8 +107,10 @@ type fakeStore struct {
 	records map[models.AppRef]*models.CostActual
 	listed  []models.CostActual
 	lockErr error
-	locked  []string
-	held    bool
+	// deleteErr fails every DeleteMeasurements.
+	deleteErr error
+	locked    []string
+	held      bool
 }
 
 func newFakeStore(records ...*models.CostActual) *fakeStore {
@@ -149,6 +151,20 @@ func (s *fakeStore) SaveFirstActual(_ context.Context, actual *models.CostActual
 	return true, nil
 }
 
+func (s *fakeStore) DeleteMeasurements(_ context.Context, app models.AppRef) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.held {
+		return false, errors.New("deleted without the lock")
+	}
+	if s.deleteErr != nil {
+		return false, s.deleteErr
+	}
+	_, ok := s.records[app]
+	delete(s.records, app)
+	return ok, nil
+}
+
 func (s *fakeStore) Lock(_ context.Context, name string) (func(), error) {
 	if s.lockErr != nil {
 		return nil, s.lockErr
@@ -176,9 +192,24 @@ func deployment(ns, name string) models.ManagedResource {
 
 func run(t *testing.T, oc *fakeOpenCost, store *fakeStore, concurrency int, apps ...exporter.Application) Result {
 	t.Helper()
+	return runBackfill(t, newBackfill(t, oc, store, concurrency, apps...))
+}
+
+// runPruning runs a backfill that deletes the stored cost of Applications on another cluster.
+func runPruning(t *testing.T, oc *fakeOpenCost, store *fakeStore, apps ...exporter.Application) Result {
+	t.Helper()
+	return runBackfill(t, newBackfill(t, oc, store, 1, apps...).PruneRemote())
+}
+
+func newBackfill(t *testing.T, oc *fakeOpenCost, store *fakeStore, concurrency int, apps ...exporter.Application) *Backfill {
+	t.Helper()
 	srv := httptest.NewServer(oc)
 	t.Cleanup(srv.Close)
-	b := New(fakeApps(apps), store, opencost.NewClient(srv.URL, 5*time.Second, nil), concurrency, log.New(io.Discard, "", 0))
+	return New(fakeApps(apps), store, opencost.NewClient(srv.URL, 5*time.Second, nil), concurrency, log.New(io.Discard, "", 0))
+}
+
+func runBackfill(t *testing.T, b *Backfill) Result {
+	t.Helper()
 	result, err := b.Run(context.Background())
 	require.NoError(t, err)
 	return result
@@ -217,6 +248,45 @@ func TestRun_MeasuresOnlyLocalApplicationsWithoutARecord(t *testing.T) {
 		"only the namespaces of local applications without a record are measured")
 	assert.Equal(t, []string{lockName}, store.locked)
 	assert.False(t, store.held, "the lock is released")
+}
+
+func TestRun_DeletesTheStoredCostOfApplicationsOnAnotherCluster(t *testing.T) {
+	t.Parallel()
+
+	stale := &models.CostActual{ID: "stale", ApplicationNamespace: "argocd", ApplicationName: "prod-web", MeasuredOn: models.MeasuredOnSync}
+	sameName := &models.CostActual{ID: "kept", ApplicationNamespace: "team-b", ApplicationName: "prod-web", MeasuredOn: models.MeasuredOnSync}
+	store := newFakeStore(stale, sameName)
+
+	result := runPruning(t, &fakeOpenCost{}, store,
+		app("prod-web", exporter.Destination{Server: "https://prod.example.com", Namespace: "shop"}),
+		app("prod-api", exporter.Destination{Name: "prod", Namespace: "payments"}),
+	)
+
+	assert.Equal(t, Result{Remote: 2, Removed: 1}, result, "only an application with stored cost is counted as removed")
+	assert.Equal(t, []models.AppRef{{Namespace: "team-b", Name: "prod-web"}}, refs(store),
+		"a same-named application in another namespace keeps its cost")
+}
+
+func TestRun_AFailedDeleteIsRetried(t *testing.T) {
+	t.Parallel()
+
+	store := newFakeStore(&models.CostActual{ID: "stale", ApplicationNamespace: "argocd", ApplicationName: "prod-web"})
+	store.deleteErr = errors.New("connection reset")
+
+	result := runPruning(t, &fakeOpenCost{}, store, app("prod-web", exporter.Destination{Name: "prod", Namespace: "shop"}))
+
+	assert.Equal(t, Result{Remote: 1, Failed: 1}, result, "a failure has the run retried")
+}
+
+func TestRun_KeepsTheStoredCostOfApplicationsOnAnotherClusterUnlessPruning(t *testing.T) {
+	t.Parallel()
+
+	store := newFakeStore(&models.CostActual{ID: "stale", ApplicationNamespace: "argocd", ApplicationName: "prod-web"})
+
+	result := run(t, &fakeOpenCost{}, store, 1, app("prod-web", exporter.Destination{Name: "prod", Namespace: "shop"}))
+
+	assert.Equal(t, Result{Remote: 1}, result)
+	assert.Equal(t, []models.AppRef{{Namespace: "argocd", Name: "prod-web"}}, refs(store))
 }
 
 func TestRun_StoresTheSyncHooksRecordMarkedAsMeasuredAtInstall(t *testing.T) {

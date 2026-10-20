@@ -7,6 +7,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/exporter"
 	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
 	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/validation"
 )
@@ -27,6 +28,7 @@ type Store interface {
 	SaveDailyCosts(ctx context.Context, app models.AppRef, namespace, scope string, days []models.DailyCost) error
 	SetDailyProgress(ctx context.Context, app models.AppRef, progress models.DailyProgress) error
 	PruneDailyCosts(ctx context.Context, before string) error
+	DeleteMeasurements(ctx context.Context, app models.AppRef) (bool, error)
 }
 
 // Recorder stores each application's cost per UTC day once the day is over, for every application
@@ -39,6 +41,10 @@ type Store interface {
 // time until a chunk has no cost, which is where OpenCost's data or the application begins. Days
 // older than keepDays are neither asked for nor kept.
 //
+// With an Application lister, an application that deploys to another cluster is not recorded and
+// its cost records and history are deleted: OpenCost measures only this cluster, so what was stored
+// for it measured a same-named namespace here.
+//
 // Several replicas may run recorders at once: they store the same figures for the same days, so the
 // only cost is duplicate OpenCost queries, about one per application per day once history is in.
 type Recorder struct {
@@ -47,6 +53,10 @@ type Recorder struct {
 	keepDays int
 	logger   *log.Logger
 	now      func() time.Time
+	// applications, when set, lists the Applications so those deploying elsewhere are skipped.
+	applications exporter.ApplicationLister
+	// pruneRemote deletes the stored cost of the Applications deploying elsewhere.
+	pruneRemote bool
 	// observe, when set, is told when each run finishes and with what error.
 	observe func(at time.Time, err error)
 	// wake asks Run for a run before the next tick.
@@ -70,6 +80,20 @@ func (r *Recorder) RecordSoon() {
 // OnRun has observe told when each run finishes and with what error, for metrics.
 func (r *Recorder) OnRun(observe func(at time.Time, err error)) *Recorder {
 	r.observe = observe
+	return r
+}
+
+// WithApplications has each run list the Applications and skip those that deploy to another cluster.
+// A run whose list fails records every application, as without a lister, and deletes nothing.
+func (r *Recorder) WithApplications(applications exporter.ApplicationLister) *Recorder {
+	r.applications = applications
+	return r
+}
+
+// PruneRemote has each run also delete the cost records and history of the Applications that
+// WithApplications finds on another cluster. It can't be undone, so it is off unless asked for.
+func (r *Recorder) PruneRemote() *Recorder {
+	r.pruneRemote = true
 	return r
 }
 
@@ -105,17 +129,35 @@ func (r *Recorder) RecordOnce(ctx context.Context) error {
 	last := utcDay(now.Add(-settle)).AddDate(0, 0, -1)
 	earliest := utcDay(now).AddDate(0, 0, -r.keepDays)
 
+	var errs []error
+	remote, err := r.remoteApplications(ctx)
+	if err != nil {
+		// History keeps being recorded without the list, as before Applications were listed; only
+		// the deletes wait for a run that can list.
+		errs = append(errs, err)
+	}
 	records, err := r.store.ListLatestActuals(ctx)
 	if err != nil {
-		return err
+		return errors.Join(append(errs, err)...)
 	}
-	var errs []error
+	// Deleting before the measuring, which can take minutes, keeps the list fresh for the deletes.
+	for i := range records {
+		app := models.AppRef{Namespace: records[i].ApplicationNamespace, Name: records[i].ApplicationName}
+		if r.pruneRemote && remote[app] {
+			if err := r.forget(ctx, app); err != nil {
+				errs = append(errs, fmt.Errorf("%s: %w", app, err))
+			}
+		}
+	}
 	for i := range records {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
+		app := models.AppRef{Namespace: records[i].ApplicationNamespace, Name: records[i].ApplicationName}
+		if remote[app] {
+			continue
+		}
 		if err := r.recordApp(ctx, &records[i], earliest, last); err != nil {
-			app := models.AppRef{Namespace: records[i].ApplicationNamespace, Name: records[i].ApplicationName}
 			errs = append(errs, fmt.Errorf("%s: %w", app, err))
 		}
 	}
@@ -123,6 +165,37 @@ func (r *Recorder) RecordOnce(ctx context.Context) error {
 		errs = append(errs, err)
 	}
 	return errors.Join(errs...)
+}
+
+// remoteApplications returns the Applications that deploy to another cluster, or none without a
+// lister. An Application missing from the list, one deleted since its last record, is not among them.
+func (r *Recorder) remoteApplications(ctx context.Context) (map[models.AppRef]bool, error) {
+	remote := map[models.AppRef]bool{}
+	if r.applications == nil {
+		return remote, nil
+	}
+	apps, err := r.applications.List(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list applications: %w", err)
+	}
+	for _, app := range apps {
+		if !app.Destination.Local() {
+			remote[app.Ref] = true
+		}
+	}
+	return remote, nil
+}
+
+// forget deletes the cost records and history of an application that deploys to another cluster.
+func (r *Recorder) forget(ctx context.Context, app models.AppRef) error {
+	deleted, err := r.store.DeleteMeasurements(ctx, app)
+	if err != nil {
+		return err
+	}
+	if deleted {
+		r.logger.Printf("Deleted the stored cost of %s: it deploys to another cluster, which is not measured", app)
+	}
+	return nil
 }
 
 // recordApp records one application's days from earliest through last.

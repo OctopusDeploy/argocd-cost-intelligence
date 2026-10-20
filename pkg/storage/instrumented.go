@@ -147,5 +147,11 @@ func (s *instrumented) PruneDailyCosts(ctx context.Context, before string) (err 
 	return s.next.PruneDailyCosts(ctx, before)
 }
 
+func (s *instrumented) DeleteMeasurements(ctx context.Context, app models.AppRef) (_ bool, err error) {
+	done := s.track("DeleteMeasurements")
+	defer func() { done(err) }()
+	return s.next.DeleteMeasurements(ctx, app)
+}
+
 // Close is not a query, so it is not observed.
 func (s *instrumented) Close() error { return s.next.Close() }

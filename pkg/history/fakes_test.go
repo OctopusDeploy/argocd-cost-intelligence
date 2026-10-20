@@ -5,6 +5,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/exporter"
 	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
 )
 
@@ -16,6 +17,8 @@ type fakeStore struct {
 	prunedTo string
 	// progressErr fails GetDailyProgress for every application.
 	progressErr error
+	// deleteErr fails DeleteMeasurements.
+	deleteErr error
 }
 
 type storedDay struct {
@@ -83,6 +86,43 @@ func (s *fakeStore) PruneDailyCosts(_ context.Context, before string) error {
 		}
 	}
 	return nil
+}
+
+func (s *fakeStore) DeleteMeasurements(_ context.Context, app models.AppRef) (bool, error) {
+	if s.deleteErr != nil {
+		return false, s.deleteErr
+	}
+	found := false
+	latest := []models.CostActual{}
+	for _, record := range s.latest {
+		if record.ApplicationNamespace == app.Namespace && record.ApplicationName == app.Name {
+			found = true
+			continue
+		}
+		latest = append(latest, record)
+	}
+	s.latest = latest
+	if _, ok := s.days[app]; ok {
+		found = true
+		delete(s.days, app)
+	}
+	if _, ok := s.progress[app]; ok {
+		found = true
+		delete(s.progress, app)
+	}
+	return found, nil
+}
+
+// fakeApps is an Application lister; err, when set, fails every list.
+type fakeApps struct {
+	apps []exporter.Application
+	err  error
+}
+
+func (a fakeApps) List(context.Context) ([]exporter.Application, error) { return a.apps, a.err }
+
+func application(app models.AppRef, server, name string) exporter.Application {
+	return exporter.Application{Ref: app, Destination: exporter.Destination{Server: server, Name: name, Namespace: "shop"}}
 }
 
 // storedDates lists an application's stored days, oldest first.

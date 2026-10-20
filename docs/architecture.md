@@ -135,7 +135,7 @@ OpenCost is queried by namespace, so **a record's own columns hold the cost of t
 - Application routes serve `CostActual.ForApplication()`, which marks `scope: "application"`, or `"namespace"` for records without `app_json` (stored before migration 007, or synced by a notifications template that does not send `resources`). Namespace routes serve the namespace columns.
 - Never compare figures of different scopes (see `comparableHistory` in `api.go`; the recorder stores a scope with each day).
 - The UI attributes cost per app on the Namespaces page by matching pods to controllers (`ui/src/utils/namespaceApps.ts`). For old `namespace` records the app page narrows the figures itself (`asApplication` / `scopeToApp` in `ui/src/utils/costInsights.ts`) and labels the rest as the namespace's.
-- The notifications template must send `{{.app.spec.destination.namespace}}` (where the app deploys, not `.app.metadata.namespace`, where the Application object lives) and the app's `resources`. See `deploy/argocd-notifications-patch.yaml`. The Helm chart escapes the braces.
+- The notifications template must send `{{.app.spec.destination.namespace}}` (where the app deploys, not `.app.metadata.namespace`, where the Application object lives) and the app's `resources`. See `deploy/argocd-notifications-patch.yaml`. The Helm chart reads the same template from `helm/files/argocd/` unrendered, so the braces need no escaping.
 
 ### Application identity
 

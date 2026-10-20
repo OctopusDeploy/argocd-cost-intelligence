@@ -27,7 +27,7 @@ The chart also runs a post-install/post-upgrade hook Job that changes Argo CD it
 | `argocd-server` Deployment | An init container, `cost-intel-extension`, and a volume that fetch the UI bundle from the UI Service |
 | ClusterRole and binding `argocd-notifications-controller` | Applied so the notifications controller can read Applications in every namespace. If you already have a ClusterRole with that name, its rules are overwritten. |
 
-The hook only writes keys of its own, named after `cost-intel`. Your triggers, templates and `policy.csv` stay as they are. `subscriptions` is a single key shared by every subscription, so the hook adds its entry to the list and keeps the others. It changes that key only when its entry is missing or is the one 0.1.0 wrote, and the rewritten list keeps your comments but may change the indentation and quoting.
+The hook only writes keys of its own, named after `cost-intel`. Your triggers, templates and `policy.csv` stay as they are. `subscriptions` is a single key shared by every subscription, so the hook adds its entry to the list and keeps the others. It changes that key only when its entry is missing or 0.1.0's entry is still there. The rewritten list keeps your entries and comments, but its formatting may change: indentation, quoting and blank lines between entries. If `argocd-notifications-cm` or `argocd-rbac-cm` doesn't exist, the hook skips it and says so in its log.
 
 The hook then restarts `argocd-notifications-controller`, the UI Deployment and `argocd-server`, so the Argo CD UI reloads during an install or upgrade. When the hook succeeds it deletes its own ServiceAccount, ClusterRole and Job.
 
@@ -71,7 +71,7 @@ The chart's NetworkPolicies only limit incoming traffic. The backend accepts `ar
 
 ### Images
 
-The images are public on GHCR, so you don't need a pull secret: `ghcr.io/octopusdeploy/argocd-cost-intelligence:v0.1.0` and `ghcr.io/octopusdeploy/argocd-cost-intelligence-ui:v0.1.0`. The hook Job (`postInstallHook.image`, `alpine/k8s`) and the `argocd-server` init container (`postInstallHook.extensionInitImage`, `busybox:1.37.0`) pull images too. Mirror those if your cluster can't reach public registries. A replacement for the hook image needs `kubectl`, `jq` and `yq` (v4); one for the init container needs `sh` and `wget`.
+The images are public on GHCR, so you don't need a pull secret: `ghcr.io/octopusdeploy/argocd-cost-intelligence:v0.1.0` and `ghcr.io/octopusdeploy/argocd-cost-intelligence-ui:v0.1.0`. The hook Job (`postInstallHook.image`, `alpine/k8s`) and the `argocd-server` init container (`postInstallHook.extensionInitImage`, `busybox:1.37.0`) pull images too. Mirror those if your cluster can't reach public registries. A replacement for the hook image needs `kubectl`, `jq` and `yq` (mikefarah/yq v4); one for the init container needs `sh` and `wget`.
 
 ## Install
 

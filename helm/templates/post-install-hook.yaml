@@ -53,11 +53,13 @@ spec:
           for tool in kubectl jq yq; do
             command -v "$tool" >/dev/null || { echo "postInstallHook.image needs $tool"; exit 1; }
           done
+          yq --version 2>&1 | grep -q mikefarah || { echo "postInstallHook.image needs yq v4 (mikefarah/yq), not the Python yq"; exit 1; }
 
           # remove_if_unchanged CONFIGMAP KEY VALUE removes KEY when it holds exactly VALUE. The
           # test op makes the API server compare again, so a value changed in between is kept.
           remove_if_unchanged() {
-            json=$(kubectl get cm "$1" -n "$ARGOCD_NAMESPACE" -o json)
+            json=$(kubectl get cm "$1" -n "$ARGOCD_NAMESPACE" -o json --ignore-not-found)
+            [ -n "$json" ] || return 0
             if ! printf '%s' "$json" | jq -e --arg k "$2" '(.data // {}) | has($k)' >/dev/null; then
               return 0
             fi
@@ -95,82 +97,109 @@ spec:
           kubectl patch cm argocd-cmd-params-cm -n {{ .Values.argoCd.namespace }} --type merge \
             -p '{"data":{"server.enable.proxy.extension":"true"}}' || true
 
-          # Not "|| true": without the token every webhook is refused, so a failure here must fail
-          # the hook. The token is passed base64-encoded and never printed.
-          echo "Sharing the webhook token with Argo CD Notifications..."
-          TOKEN_B64=$(printf '%s' "$WEBHOOK_TOKEN" | base64 | tr -d '\n')
-          kubectl get secret argocd-notifications-secret -n {{ .Values.argoCd.namespace }} >/dev/null 2>&1 || \
-            kubectl create secret generic argocd-notifications-secret -n {{ .Values.argoCd.namespace }}
-          kubectl patch secret argocd-notifications-secret -n {{ .Values.argoCd.namespace }} --type merge \
-            -p "{\"data\":{\"cost-intel-webhook-token\":\"${TOKEN_B64}\"}}"
+          # The UI goes first, so a failure in the notifications or RBAC steps below cannot leave
+          # it unregistered.
+          {{- if and .Values.features.deployUI .Values.ui.enabled .Values.ui.autoRegister }}
+          echo "Restarting Cost Intelligence UI to pick up new image..."
+          kubectl rollout restart deployment/{{ include "argocd-cost-intelligence.fullname" . }}-ui -n {{ .Values.namespace.name }} || true
+          kubectl rollout status deployment/{{ include "argocd-cost-intelligence.fullname" . }}-ui -n {{ .Values.namespace.name }} --timeout=120s || true
+
+          echo "Injecting Cost Intelligence UI extension into Argo CD server..."
+          kubectl patch deployment argocd-server -n {{ .Values.argoCd.namespace }} --type strategic -p '{"spec":{"template":{"spec":{"initContainers":[{"name":"cost-intel-extension","image":{{ .Values.postInstallHook.extensionInitImage | default "busybox:1.37.0" | toJson }},"securityContext":{"runAsUser":1000,"runAsNonRoot":true,"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}},"command":["sh","-c","for i in 1 2 3 4 5; do wget -qO /ext/extension-cost-intel.js http://{{ include "argocd-cost-intelligence.fullname" . }}-ui.{{ .Values.namespace.name }}.svc.cluster.local:{{ .Values.ui.port }}/index.js && echo OK && exit 0; sleep 10; done; echo Warning: extension download failed; exit 0"],"volumeMounts":[{"name":"cost-intel-ext-js","mountPath":"/ext"}]}],"containers":[{"name":"argocd-server","volumeMounts":[{"name":"cost-intel-ext-js","mountPath":"/tmp/extensions"}]}],"volumes":[{"name":"cost-intel-ext-js","emptyDir":{}}]}}}}' || true
+
+          echo "Restarting Argo CD server to pick up new UI extension..."
+          kubectl rollout restart deployment/argocd-server -n {{ .Values.argoCd.namespace }} || true
+          kubectl rollout status deployment/argocd-server -n {{ .Values.argoCd.namespace }} --timeout=300s || true
+          {{- end }}
 
           # Every key below is this chart's own (named cost-intel), except `subscriptions`, a single
           # key shared with whatever else uses Argo CD Notifications. The hook adds its entry to that
           # list and leaves the other entries alone. Running it again changes nothing.
-          echo "Configuring Argo CD notifications..."
-          kubectl patch cm argocd-notifications-cm -n "$ARGOCD_NAMESPACE" --type merge -p "$NOTIFICATIONS_PATCH"
+          # Empty when it doesn't exist; any other error stops the hook.
+          NOTIFICATIONS_CM=$(kubectl get cm argocd-notifications-cm -n "$ARGOCD_NAMESPACE" --ignore-not-found -o name)
+          if [ -n "$NOTIFICATIONS_CM" ]; then
+            # Not "|| true": without the token every webhook is refused, so a failure here must fail
+            # the hook. The token is passed base64-encoded and never printed.
+            echo "Sharing the webhook token with Argo CD Notifications..."
+            TOKEN_B64=$(printf '%s' "$WEBHOOK_TOKEN" | base64 | tr -d '\n')
+            kubectl get secret argocd-notifications-secret -n {{ .Values.argoCd.namespace }} >/dev/null 2>&1 || \
+              kubectl create secret generic argocd-notifications-secret -n {{ .Values.argoCd.namespace }}
+            kubectl patch secret argocd-notifications-secret -n {{ .Values.argoCd.namespace }} --type merge \
+              -p "{\"data\":{\"cost-intel-webhook-token\":\"${TOKEN_B64}\"}}"
 
-          # An entry is ours if it sends our trigger to our webhook. 0.1.0 wrote one that sends
-          # on-sync-succeeded to it instead; that one is replaced.
-          OURS='(.recipients // [] | any_c(. == "cost-intel")) and (.triggers // [] | any_c(. == "cost-intel-on-sync-succeeded"))'
-          LEGACY='(keys | length) == 2 and (.recipients // [] | length) == 1 and .recipients[0] == "cost-intel" and (.triggers // [] | length) == 1 and .triggers[0] == "on-sync-succeeded"'
-          ENTRY='{"recipients": ["cost-intel"], "triggers": ["cost-intel-on-sync-succeeded"]}'
-          CM_JSON=$(kubectl get cm argocd-notifications-cm -n "$ARGOCD_NAMESPACE" -o json)
-          SUBS=$(printf '%s' "$CM_JSON" | jq -r '.data.subscriptions // ""')
-          if ! printf '%s\n' "$SUBS" | yq -e '(. // []) | tag == "!!seq"' >/dev/null 2>&1; then
-            echo "subscriptions in argocd-notifications-cm is not a YAML list, so the hook can't add its entry."
-            echo "Fix it, or set features.autoPatchArgoCd=false and add the entry yourself (see deploy/argocd-notifications-patch.yaml)."
-            exit 1
-          fi
-          HAS_OURS=$(printf '%s\n' "$SUBS" | yq "(. // []) | [.[] | select($OURS)] | length")
-          HAS_LEGACY=$(printf '%s\n' "$SUBS" | yq "(. // []) | [.[] | select($LEGACY)] | length")
-          if [ "$HAS_OURS" -gt 0 ] && [ "$HAS_LEGACY" -eq 0 ]; then
-            echo "  subscriptions already has the cost-intel entry"
-          else
-            EDIT="(. // []) | del(.[] | select($LEGACY))"
-            if [ "$HAS_OURS" -eq 0 ]; then
-              EDIT="$EDIT | . += [$ENTRY] | . style=\"\" | .[-1] style=\"\" | .[-1][] style=\"\""
+            echo "Configuring Argo CD notifications..."
+            kubectl patch cm argocd-notifications-cm -n "$ARGOCD_NAMESPACE" --type merge -p "$NOTIFICATIONS_PATCH"
+
+            # An entry is ours if it sends our trigger to our webhook. 0.1.0 wrote one that sends
+            # on-sync-succeeded to it instead; that one is replaced.
+            OURS='(.recipients // [] | any_c(. == "cost-intel")) and (.triggers // [] | any_c(. == "cost-intel-on-sync-succeeded"))'
+            LEGACY='(keys | length) == 2 and (.recipients // [] | length) == 1 and .recipients[0] == "cost-intel" and (.triggers // [] | length) == 1 and .triggers[0] == "on-sync-succeeded"'
+            ENTRY='{"recipients": ["cost-intel"], "triggers": ["cost-intel-on-sync-succeeded"]}'
+            CM_JSON=$(kubectl get cm argocd-notifications-cm -n "$ARGOCD_NAMESPACE" -o json)
+            SUBS=$(printf '%s' "$CM_JSON" | jq -r '.data.subscriptions // ""')
+            if ! printf '%s\n' "$SUBS" | yq -e '(. // []) | tag == "!!seq"' >/dev/null; then
+              echo "subscriptions in argocd-notifications-cm is not a YAML list, so the hook can't add its entry."
+              echo "Fix it, or set features.autoPatchArgoCd=false and add the entry yourself (see deploy/argocd-notifications-patch.yaml)."
+              exit 1
             fi
-            NEW=$(printf '%s\n' "$SUBS" | yq "$EDIT")
-            # The test op makes this a compare-and-swap: if someone changed subscriptions since it
-            # was read, the patch fails and the Job retries from the top.
-            OLD=$(printf '%s' "$CM_JSON" | jq -c '.data.subscriptions')
-            if [ "$OLD" = "null" ]; then
-              PATCH=$(jq -nc --arg v "$NEW" '[{op: "add", path: "/data/subscriptions", value: ($v + "\n")}]')
+            HAS_OURS=$(printf '%s\n' "$SUBS" | yq "(. // []) | [.[] | select($OURS)] | length")
+            HAS_LEGACY=$(printf '%s\n' "$SUBS" | yq "(. // []) | [.[] | select($LEGACY)] | length")
+            if [ "$HAS_OURS" -gt 0 ] && [ "$HAS_LEGACY" -eq 0 ]; then
+              echo "  subscriptions already has the cost-intel entry"
             else
-              PATCH=$(jq -nc --argjson old "$OLD" --arg v "$NEW" \
-                '[{op: "test", path: "/data/subscriptions", value: $old}, {op: "replace", path: "/data/subscriptions", value: ($v + "\n")}]')
+              EDIT="(. // []) | del(.[] | select($LEGACY))"
+              if [ "$HAS_OURS" -eq 0 ]; then
+                EDIT="$EDIT | . += [$ENTRY] | . style=\"\" | .[-1] style=\"\" | .[-1][] style=\"\""
+              fi
+              NEW=$(printf '%s\n' "$SUBS" | yq "$EDIT")
+              # The test op makes this a compare-and-swap: if someone changed subscriptions since it
+              # was read, the patch fails and the Job retries from the top.
+              OLD=$(printf '%s' "$CM_JSON" | jq -c '.data.subscriptions')
+              if [ "$OLD" = "null" ]; then
+                PATCH=$(jq -nc --arg v "$NEW" '[{op: "add", path: "/data/subscriptions", value: ($v + "\n")}]')
+              else
+                PATCH=$(jq -nc --argjson old "$OLD" --arg v "$NEW" \
+                  '[{op: "test", path: "/data/subscriptions", value: $old}, {op: "replace", path: "/data/subscriptions", value: ($v + "\n")}]')
+              fi
+              kubectl patch cm argocd-notifications-cm -n "$ARGOCD_NAMESPACE" --type json -p "$PATCH"
+              echo "  added the cost-intel entry to subscriptions"
             fi
-            kubectl patch cm argocd-notifications-cm -n "$ARGOCD_NAMESPACE" --type json -p "$PATCH"
-            echo "  added the cost-intel entry to subscriptions"
-          fi
 
-          # 0.1.0 wrote these two under names from Argo CD's notifications catalog. Remove them only
-          # if they still hold exactly what it wrote; anything else is the user's.
-          # The trigger stays while a subscription or defaultTriggers still names it, and the
-          # template stays while a trigger still sends it, such as a kept trigger.
-          CM_JSON=$(kubectl get cm argocd-notifications-cm -n "$ARGOCD_NAMESPACE" -o json)
-          if printf '%s' "$CM_JSON" | jq -e \
-            '[.data.subscriptions // "", .data.defaultTriggers // ""] | any(test("(^|[^A-Za-z0-9-])on-sync-succeeded"))' >/dev/null; then
-            echo "  kept trigger.on-sync-succeeded in argocd-notifications-cm: a subscription or defaultTriggers still names it"
+            # 0.1.0 wrote these two under names from Argo CD's notifications catalog. Remove them only
+            # if they still hold exactly what it wrote; anything else is the user's.
+            # The trigger stays while a subscription or defaultTriggers still names it, and the
+            # template stays while a trigger still sends it, such as a kept trigger.
+            CM_JSON=$(kubectl get cm argocd-notifications-cm -n "$ARGOCD_NAMESPACE" -o json)
+            if printf '%s' "$CM_JSON" | jq -e \
+              '[.data.subscriptions // "", .data.defaultTriggers // ""] | any(test("(^|[^A-Za-z0-9-])on-sync-succeeded"))' >/dev/null; then
+              echo "  kept trigger.on-sync-succeeded in argocd-notifications-cm: a subscription or defaultTriggers still names it"
+            else
+              remove_if_unchanged argocd-notifications-cm trigger.on-sync-succeeded "$LEGACY_TRIGGER"
+            fi
+            CM_JSON=$(kubectl get cm argocd-notifications-cm -n "$ARGOCD_NAMESPACE" -o json)
+            if printf '%s' "$CM_JSON" | jq -e \
+              '[.data // {} | to_entries[] | select(.key | startswith("trigger.")) | .value | contains("app-sync-succeeded")] | any' >/dev/null; then
+              echo "  kept template.app-sync-succeeded in argocd-notifications-cm: a trigger still sends it"
+            else
+              remove_if_unchanged argocd-notifications-cm template.app-sync-succeeded "$LEGACY_TEMPLATE"
+            fi
           else
-            remove_if_unchanged argocd-notifications-cm trigger.on-sync-succeeded "$LEGACY_TRIGGER"
-          fi
-          CM_JSON=$(kubectl get cm argocd-notifications-cm -n "$ARGOCD_NAMESPACE" -o json)
-          if printf '%s' "$CM_JSON" | jq -e \
-            '[.data // {} | to_entries[] | select(.key | startswith("trigger.")) | .value | contains("app-sync-succeeded")] | any' >/dev/null; then
-            echo "  kept template.app-sync-succeeded in argocd-notifications-cm: a trigger still sends it"
-          else
-            remove_if_unchanged argocd-notifications-cm template.app-sync-succeeded "$LEGACY_TEMPLATE"
+            echo "argocd-notifications-cm not found in $ARGOCD_NAMESPACE: skipped notifications, so syncs will not be measured"
           fi
 
           # Argo CD 3.5 denies extensions to everyone, admin included, until a policy allows them.
           # It appends every policy.<name>.csv key to policy.csv, so this key is ours alone and
           # policy.csv is never touched.
-          {{- if .Values.argoCd.rbac.grantAdmin }}
+          {{- if dig "rbac" "grantAdmin" true .Values.argoCd }}
           echo "Allowing role:admin to open the extension (policy.cost-intel.csv in argocd-rbac-cm)..."
-          kubectl patch cm argocd-rbac-cm -n "$ARGOCD_NAMESPACE" --type merge \
-            -p "$(jq -nc --arg v "$RBAC_POLICY" '{data: {"policy.cost-intel.csv": $v}}')"
+          # Empty when it doesn't exist; any other error stops the hook.
+          RBAC_CM=$(kubectl get cm argocd-rbac-cm -n "$ARGOCD_NAMESPACE" --ignore-not-found -o name)
+          if [ -n "$RBAC_CM" ]; then
+            kubectl patch cm argocd-rbac-cm -n "$ARGOCD_NAMESPACE" --type merge \
+              -p "$(jq -nc --arg v "$RBAC_POLICY" '{data: {"policy.cost-intel.csv": $v}}')"
+          else
+            echo "argocd-rbac-cm not found in $ARGOCD_NAMESPACE: skipped, add the rule yourself"
+          fi
           {{- else }}
           remove_if_unchanged argocd-rbac-cm policy.cost-intel.csv "$RBAC_POLICY"
           {{- end }}
@@ -179,18 +208,6 @@ spec:
           kubectl rollout restart deployment/argocd-notifications-controller -n {{ .Values.argoCd.namespace }} || true
           kubectl rollout status deployment/argocd-notifications-controller -n {{ .Values.argoCd.namespace }} --timeout=300s || true
 
-          {{- if and .Values.features.deployUI .Values.ui.enabled .Values.ui.autoRegister }}
-          echo "Restarting Cost Intelligence UI to pick up new image..."
-          kubectl rollout restart deployment/{{ include "argocd-cost-intelligence.fullname" . }}-ui -n {{ .Values.namespace.name }} || true
-          kubectl rollout status deployment/{{ include "argocd-cost-intelligence.fullname" . }}-ui -n {{ .Values.namespace.name }} --timeout=120s || true
-
-          echo "Injecting Cost Intelligence UI extension into Argo CD server..."
-          kubectl patch deployment argocd-server -n {{ .Values.argoCd.namespace }} --type strategic -p '{"spec":{"template":{"spec":{"initContainers":[{"name":"cost-intel-extension","image":{{ .Values.postInstallHook.extensionInitImage | toJson }},"securityContext":{"runAsUser":1000,"runAsNonRoot":true,"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}},"command":["sh","-c","for i in 1 2 3 4 5; do wget -qO /ext/extension-cost-intel.js http://{{ include "argocd-cost-intelligence.fullname" . }}-ui.{{ .Values.namespace.name }}.svc.cluster.local:{{ .Values.ui.port }}/index.js && echo OK && exit 0; sleep 10; done; echo Warning: extension download failed; exit 0"],"volumeMounts":[{"name":"cost-intel-ext-js","mountPath":"/ext"}]}],"containers":[{"name":"argocd-server","volumeMounts":[{"name":"cost-intel-ext-js","mountPath":"/tmp/extensions"}]}],"volumes":[{"name":"cost-intel-ext-js","emptyDir":{}}]}}}}' || true
-
-          echo "Restarting Argo CD server to pick up new UI extension..."
-          kubectl rollout restart deployment/argocd-server -n {{ .Values.argoCd.namespace }} || true
-          kubectl rollout status deployment/argocd-server -n {{ .Values.argoCd.namespace }} --timeout=300s || true
-          {{- end }}
 
           echo "Post-install hook completed successfully!"
 

@@ -17,7 +17,7 @@ export const NamespaceList: React.FC<Props> = ({ namespaces, selected, onSelect,
   return (
     <nav aria-label="Namespaces" style={{ ...cardStyle(t), padding: '8px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '8px 12px 10px' }}>
-        <span style={{ color: t.textMuted, fontSize: '12px', fontWeight: 500, textTransform: 'uppercase' }}>Namespaces</span>
+        <span style={{ color: t.textStrong, fontSize: '13px', fontWeight: 600 }}>Namespaces</span>
         <span style={{ color: t.textMuted, fontSize: '12px' }}>By monthly cost</span>
       </div>
       <ul style={{ display: 'flex', flexDirection: 'column', gap: '2px', margin: 0, padding: 0, listStyle: 'none' }}>

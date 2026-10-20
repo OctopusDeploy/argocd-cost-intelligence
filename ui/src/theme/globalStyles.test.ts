@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ensureGlobalStyles, PLUGIN_CLASS, pluginRootStyle } from './globalStyles';
+import { FONT_FAMILY } from './font';
 import { getTokens } from './tokens';
 
 function sheets(): HTMLStyleElement[] {
@@ -41,6 +42,33 @@ describe('ensureGlobalStyles', () => {
     for (const selector of selectors) {
       expect(selector.includes(`.${PLUGIN_CLASS}`)).toBe(true);
     }
+  });
+});
+
+describe('the bundled font', () => {
+  beforeEach(() => {
+    document.head.innerHTML = '';
+  });
+
+  // Argo CD's page does not load Inter, so the stylesheet has to register the bundled copy under the
+  // family name the plugin asks for.
+  it('registers the family the plugin roots use', () => {
+    ensureGlobalStyles();
+
+    const css = sheets()[0].textContent ?? '';
+    const family = FONT_FAMILY.slice(0, FONT_FAMILY.indexOf(','));
+    expect(css).toContain('@font-face');
+    expect(css).toContain(`font-family: ${family};`);
+    expect(pluginRootStyle(getTokens('light')).fontFamily).toBe(FONT_FAMILY);
+  });
+
+  // The SIL Open Font License asks for the copyright and licence to travel with the font.
+  it('carries the font licence next to the font', () => {
+    ensureGlobalStyles();
+
+    const css = sheets()[0].textContent ?? '';
+    expect(css).toContain('Copyright 2016 The Inter Project Authors');
+    expect(css).toContain('SIL Open Font License, Version 1.1');
   });
 });
 

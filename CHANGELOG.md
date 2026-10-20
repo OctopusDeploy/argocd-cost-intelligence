@@ -8,6 +8,10 @@ All notable changes to this project are listed here. The format follows [Keep a 
 
 - Building from source needs Go 1.27 or newer. The images and the Helm chart are unaffected.
 
+### Changed
+
+- The UI plugin has a new look. Both the application tab and the Namespaces / Chargeback page sit in a panel headed "Cost Intelligence", with "by Octopus Deploy" under it linking to the Octopus Deploy website. They use Octopus Deploy's colours and the Inter font, which is bundled into the plugin so it works without internet access. Labels are in sentence case and the Reload button is labelled.
+
 ### Security
 
 - `golang.org/x/net` is updated from 0.57.0 to 0.60.0 to fix GO-2026-6603, GO-2026-6610, GO-2026-6611, GO-2026-6612 and GO-2026-6617 in its HTTP/2 transport, which the Kubernetes client (rightsizing and the exporter) uses.

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { WarningIcon } from './icons';
+import { CardHeader } from './CardHeader';
+import { SlidersIcon, WarningIcon } from './icons';
 import { cardStyle, Tokens, useTokens, visuallyHidden } from '../theme/tokens';
 import { ContainerRightsizing, Rightsizing, WorkloadRightsizing } from '../utils/api';
 import { pluralize } from '../utils/format';
@@ -32,14 +33,19 @@ export const RightsizingSection: React.FC<{ rightsizing: Rightsizing | null }> =
 
   return (
     <section aria-labelledby="cost-intel-rightsizing" style={{ ...cardStyle(t), marginTop: '16px' }}>
-      <div style={{ padding: '16px 20px 4px' }}>
-        <h3 id="cost-intel-rightsizing" style={{ margin: 0, color: t.textStrong, fontSize: '14px', fontWeight: 500 }}>
-          Rightsizing
-        </h3>
-        <p style={{ margin: '2px 0 0', color: t.textMuted, fontSize: '12px' }}>
-          Requests the Vertical Pod Autoscaler recommends, per container. On each bar, the shaded band is the VPA&apos;s
-          range, the tick its target and the line today&apos;s request.
-        </p>
+      <div style={{ padding: '18px 20px 6px' }}>
+        <CardHeader
+          as="h3"
+          id="cost-intel-rightsizing"
+          icon={<SlidersIcon />}
+          title="Rightsizing"
+          detail={
+            <>
+              Requests the Vertical Pod Autoscaler recommends, per container. On each bar, the shaded band is the
+              VPA&apos;s range, the tick its target and the line today&apos;s request.
+            </>
+          }
+        />
       </div>
       {rightsizing.workloads.map(workload => (
         <Workload key={`${workload.kind}/${workload.name}`} workload={workload} t={t} />

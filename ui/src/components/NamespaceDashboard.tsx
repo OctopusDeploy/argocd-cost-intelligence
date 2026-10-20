@@ -9,6 +9,7 @@ import { NamespaceList } from './NamespaceList';
 import { ErrorNotice, Notice } from './Notice';
 import { OrphanedPodsNotice } from './OrphanedPodsNotice';
 import { RecommendationCard } from './RecommendationCard';
+import { framePanelStyle, PluginFrame } from './PluginFrame';
 import { ReloadButton } from './ReloadButton';
 import { Stat, StatStrip } from './StatStrip';
 import { panelId, Tab, TabBar, tabId } from './TabBar';
@@ -18,7 +19,6 @@ import { useContainerWidth } from '../hooks/useContainerWidth';
 import { useDataQuality } from '../hooks/useDataQuality';
 import { UseNamespaceDataResult, useNamespaceData } from '../hooks/useNamespaceData';
 import { UrlWrite, useUrlState } from '../hooks/useUrlState';
-import { PLUGIN_CLASS, pluginRootStyle, useGlobalStyles } from '../theme/globalStyles';
 import { Tokens, useTokens } from '../theme/tokens';
 import { ClusterOverhead, CostData, NamespaceSummary } from '../utils/api';
 import { efficiencyLevel, recommendCpuRequest } from '../utils/costInsights';
@@ -42,12 +42,10 @@ const PROVIDER_LABELS: Record<string, string> = { AWS: 'EKS', GCP: 'GKE', Azure:
 // NamespaceDashboard is the plugin's system-level page: cluster costs by namespace and application,
 // and chargeback by Kubernetes label.
 export const NamespaceDashboard: React.FC = () => {
-  const t = useTokens();
   // The open view and the selected namespace live in the URL, so this page can be linked to.
   const [view, setView] = useUrlState<View>('costTab', 'namespaces', VIEW_IDS);
   const [urlNamespace, setUrlNamespace] = useUrlState<string>('costNs', '');
   const namespaceData = useNamespaceData(urlNamespace || null);
-  useGlobalStyles();
 
   const latestMeasuredAt = namespaceData.namespaces.reduce<string | null>(
     (latest, ns) => (!latest || Date.parse(ns.measuredAt) > Date.parse(latest) ? ns.measuredAt : latest),
@@ -55,20 +53,25 @@ export const NamespaceDashboard: React.FC = () => {
   );
 
   return (
-    <div className={PLUGIN_CLASS} style={{ ...pluginRootStyle(t), padding: '24px', color: t.text }}>
-      <TabBar tabs={VIEWS} active={view} onChange={setView} idPrefix={ID_PREFIX} label="Cost Intelligence overview">
-        {latestMeasuredAt && <MeasuredLabel measuredAt={latestMeasuredAt} />}
-        <ReloadButton onReload={namespaceData.reload} />
-      </TabBar>
+    <PluginFrame
+      page
+      status={
+        <>
+          {latestMeasuredAt && <MeasuredLabel measuredAt={latestMeasuredAt} />}
+          <ReloadButton onReload={namespaceData.reload} />
+        </>
+      }
+    >
+      <TabBar tabs={VIEWS} active={view} onChange={setView} idPrefix={ID_PREFIX} label="Cost Intelligence overview" />
 
-      <div id={panelId(ID_PREFIX, view)} role="tabpanel" aria-labelledby={tabId(ID_PREFIX, view)}>
+      <div id={panelId(ID_PREFIX, view)} role="tabpanel" aria-labelledby={tabId(ID_PREFIX, view)} style={framePanelStyle}>
         {view === 'namespaces' ? (
           <NamespacesView data={namespaceData} urlNamespace={urlNamespace} onSelectNamespace={setUrlNamespace} />
         ) : (
           <ChargebackView namespaces={namespaceData.namespaces} />
         )}
       </div>
-    </div>
+    </PluginFrame>
   );
 };
 

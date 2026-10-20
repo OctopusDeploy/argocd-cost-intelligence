@@ -57,10 +57,9 @@ export const ControllerCostTable: React.FC<Props> = ({ groups }) => {
                 ...row,
                 height: '18px',
                 margin: '8px 0',
-                color: t.textMuted,
-                fontSize: '12px',
-                fontWeight: 500,
-                textTransform: 'uppercase',
+                color: t.textStrong,
+                fontSize: '12.8px',
+                fontWeight: 600,
                 whiteSpace: 'nowrap',
               }}
             >

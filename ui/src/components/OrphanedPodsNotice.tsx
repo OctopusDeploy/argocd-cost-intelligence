@@ -24,11 +24,10 @@ export const OrphanedPodsNotice: React.FC<{ namespace: string; appName?: string;
   const headStyle: React.CSSProperties = {
     padding: '8px 12px 8px 0',
     borderBottom: `1px solid ${t.border}`,
-    color: t.textMuted,
-    fontSize: '12px',
-    fontWeight: 500,
+    color: t.textStrong,
+    fontSize: '12.8px',
+    fontWeight: 600,
     textAlign: 'left',
-    textTransform: 'uppercase',
   };
   const cellStyle: React.CSSProperties = {
     padding: '8px 12px 8px 0',

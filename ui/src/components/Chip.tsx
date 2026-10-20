@@ -17,9 +17,10 @@ export const Chip: React.FC<Props> = ({ pressed, children, ...rest }) => {
       style={{
         padding: '4px 11px',
         border: `1px solid ${pressed ? t.accent : t.border}`,
-        borderRadius: '12px',
+        borderRadius: '999px',
         backgroundColor: pressed ? t.accentWash : 'transparent',
-        color: pressed ? t.textStrong : t.textMuted,
+        color: pressed ? t.accentText : t.textMuted,
+        fontWeight: pressed ? 600 : 400,
         fontFamily: 'inherit',
         fontSize: '12px',
         cursor: 'pointer',

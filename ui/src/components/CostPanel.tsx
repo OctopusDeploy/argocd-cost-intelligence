@@ -2,6 +2,7 @@ import React from 'react';
 import { CostActual } from './CostActual';
 import { CostTrendComponent } from './CostTrend';
 import { MeasuredLabel } from './MeasuredLabel';
+import { framePanelStyle, PluginFrame } from './PluginFrame';
 import { ReloadButton } from './ReloadButton';
 import { ResourcesTab } from './ResourcesTab';
 import { panelId, Tab, TabBar, tabId } from './TabBar';
@@ -10,7 +11,6 @@ import { useDailyRange } from '../hooks/useDailyRange';
 import { useRightsizing } from '../hooks/useRightsizing';
 import { useTrendRange } from '../hooks/useTrendRange';
 import { useUrlState } from '../hooks/useUrlState';
-import { PLUGIN_CLASS, pluginRootStyle, useGlobalStyles } from '../theme/globalStyles';
 import { useTokens } from '../theme/tokens';
 import { AppContext, CostData, DailyCost } from '../utils/api';
 import { sharedNamespace } from '../utils/costInsights';
@@ -47,9 +47,6 @@ export const CostPanel: React.FC<CostPanelProps> = ({ appName, appCtx, managedCo
   const fetchRange = activeTab === 'trends' && trendRange.id !== '30d' ? queryRange(trendRange.range, today) : null;
   const rangeData = useDailyRange(appName, appCtx, fetchRange, today);
   const { rightsizing, refetch: refetchRightsizing } = useRightsizing(appName, appCtx);
-  const t = useTokens();
-  useGlobalStyles();
-
   const showResources = () => {
     // The button that asked for this disappears with the view, so keep focus in the tab bar.
     setActiveTab('resources');
@@ -57,13 +54,22 @@ export const CostPanel: React.FC<CostPanelProps> = ({ appName, appCtx, managedCo
   };
 
   return (
-    <div className={PLUGIN_CLASS} style={{ ...pluginRootStyle(t), marginBottom: '20px', color: t.text }}>
-      <TabBar tabs={TABS} active={activeTab} onChange={setActiveTab} idPrefix={ID_PREFIX} label="Cost Intelligence views">
-        <Freshness tab={activeTab} data={data} dailyCosts={dailyCosts} />
-        <ReloadButton onReload={() => Promise.all([refetch(), rangeData.refetch(), refetchRightsizing()])} />
-      </TabBar>
+    <PluginFrame
+      status={
+        <>
+          <Freshness tab={activeTab} data={data} dailyCosts={dailyCosts} />
+          <ReloadButton onReload={() => Promise.all([refetch(), rangeData.refetch(), refetchRightsizing()])} />
+        </>
+      }
+    >
+      <TabBar tabs={TABS} active={activeTab} onChange={setActiveTab} idPrefix={ID_PREFIX} label="Cost Intelligence views" />
 
-      <div id={panelId(ID_PREFIX, activeTab)} role="tabpanel" aria-labelledby={tabId(ID_PREFIX, activeTab)}>
+      <div
+        id={panelId(ID_PREFIX, activeTab)}
+        role="tabpanel"
+        aria-labelledby={tabId(ID_PREFIX, activeTab)}
+        style={framePanelStyle}
+      >
         {activeTab === 'actual' && (
           <CostActual
             data={data}
@@ -96,7 +102,7 @@ export const CostPanel: React.FC<CostPanelProps> = ({ appName, appCtx, managedCo
           />
         )}
       </div>
-    </div>
+    </PluginFrame>
   );
 };
 

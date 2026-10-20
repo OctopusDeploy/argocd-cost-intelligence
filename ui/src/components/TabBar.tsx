@@ -13,16 +13,14 @@ interface TabBarProps<T extends string> {
   // idPrefix keeps tab and panel ids unique on the page; see tabId and panelId.
   idPrefix: string;
   label: string;
-  // children render at the end of the bar, such as a freshness note and a reload button.
-  children?: React.ReactNode;
 }
 
 export const tabId = (idPrefix: string, id: string) => `${idPrefix}-tab-${id}`;
 export const panelId = (idPrefix: string, id: string) => `${idPrefix}-panel-${id}`;
 
-// TabBar is the plugin's Argo CD-styled tab strip. It follows the WAI-ARIA tabs pattern: arrow keys,
+// TabBar is the plugin's tab strip, under the header of PluginFrame. It follows the WAI-ARIA tabs pattern: arrow keys,
 // Home and End move between tabs, and focus follows the selection.
-export function TabBar<T extends string>({ tabs, active, onChange, idPrefix, label, children }: TabBarProps<T>) {
+export function TabBar<T extends string>({ tabs, active, onChange, idPrefix, label }: TabBarProps<T>) {
   const t = useTokens();
   const refs = useRef<Array<HTMLButtonElement | null>>([]);
 
@@ -51,20 +49,8 @@ export function TabBar<T extends string>({ tabs, active, onChange, idPrefix, lab
   };
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        // When the tabs and the status beside them don't fit on one line, wrap-reverse moves the
-        // status onto a line above, so the tabs stay on the bottom border they underline.
-        flexWrap: 'wrap-reverse',
-        alignItems: 'flex-end',
-        justifyContent: 'space-between',
-        columnGap: '16px',
-        marginBottom: '20px',
-        borderBottom: `1px solid ${t.border}`,
-      }}
-    >
-      <div role="tablist" aria-label={label} style={{ display: 'flex', gap: '24px' }}>
+    <div style={{ padding: '0 20px', borderBottom: `1px solid ${t.border}` }}>
+      <div role="tablist" aria-label={label} style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
         {tabs.map((tab, index) => {
           const selected = tab.id === active;
           return (
@@ -82,13 +68,13 @@ export function TabBar<T extends string>({ tabs, active, onChange, idPrefix, lab
               onClick={() => onChange(tab.id)}
               onKeyDown={event => onKeyDown(event, index)}
               style={{
-                height: '44px',
-                padding: '0 2px',
+                height: '46px',
+                padding: '0 14px',
                 marginBottom: '-1px',
                 border: 'none',
                 borderBottom: `2px solid ${selected ? t.accent : 'transparent'}`,
                 backgroundColor: 'transparent',
-                color: selected ? t.textStrong : t.textMuted,
+                color: selected ? t.accentText : t.textMuted,
                 fontFamily: 'inherit',
                 fontSize: '14px',
                 fontWeight: 500,
@@ -100,11 +86,6 @@ export function TabBar<T extends string>({ tabs, active, onChange, idPrefix, lab
           );
         })}
       </div>
-      {children && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minHeight: '44px', marginLeft: 'auto' }}>
-          {children}
-        </div>
-      )}
     </div>
   );
 }

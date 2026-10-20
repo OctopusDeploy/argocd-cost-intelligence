@@ -19,6 +19,11 @@ module.exports = {
         test: /\.css$/,
         use: ['style-loader', 'css-loader'],
       },
+      {
+        // Argo CD serves the extension as one JavaScript file, so fonts travel inside it.
+        test: /\.woff2$/,
+        type: 'asset/inline',
+      },
     ],
   },
   resolve: {

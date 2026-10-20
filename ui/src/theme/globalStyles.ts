@@ -1,9 +1,11 @@
 import { useLayoutEffect } from 'react';
 import type { CSSProperties } from 'react';
+import { FONT_FACE, FONT_FAMILY } from './font';
 import { Tokens } from './tokens';
 
 // PLUGIN_CLASS marks the plugin's two root elements. Every rule below is scoped to it so the
-// stylesheet can never reach the rest of Argo CD's UI.
+// stylesheet can never reach the rest of Argo CD's UI. The one exception, @font-face, cannot be
+// scoped; it registers a family name only the plugin uses (see font.ts).
 export const PLUGIN_CLASS = 'cost-intel';
 
 const STYLE_ID = 'cost-intel-styles';
@@ -12,7 +14,7 @@ const STYLE_ID = 'cost-intel-styles';
 //   body button, body a, body span, body input { outline: none !important; }
 // An !important author rule also beats a plain inline style, so inline `outline` is not an option:
 // these rules have to be !important themselves, and more specific than two type selectors.
-const CSS = `
+const CSS = `${FONT_FACE}
 .${PLUGIN_CLASS} :focus-visible {
   outline: 2px solid var(--cost-intel-accent) !important;
   outline-offset: 2px;
@@ -46,10 +48,11 @@ export function useGlobalStyles(): void {
   }, []);
 }
 
-// pluginRootStyle exposes the tokens the stylesheet needs as custom properties. They are inherited,
-// so the rules above work anywhere inside a root element.
+// pluginRootStyle sets the plugin's font and exposes the tokens the stylesheet needs as custom
+// properties. Both are inherited, so they apply anywhere inside a root element.
 export function pluginRootStyle(t: Tokens): CSSProperties {
   return {
+    fontFamily: FONT_FAMILY,
     '--cost-intel-accent': t.accent,
     '--cost-intel-hover': t.hover,
   } as CSSProperties;

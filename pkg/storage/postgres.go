@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -33,6 +34,41 @@ func WithPool(maxOpen, maxIdle int) Option {
 	}
 }
 
+const (
+	// connectTimeout is how long a starting service waits for the database. Pods of a new
+	// install start at the same time as PostgreSQL, whose Service name does not resolve yet.
+	connectTimeout  = 60 * time.Second
+	connectInterval = 2 * time.Second
+)
+
+type pinger interface {
+	PingContext(ctx context.Context) error
+}
+
+// pingUntilReady pings every interval until the database answers or ctx ends. It returns the
+// last error that was not caused by ctx ending, so a ping cut short by the deadline does not
+// hide why the database was unreachable.
+func pingUntilReady(ctx context.Context, db pinger, interval time.Duration) error {
+	var last error
+	for attempt := 1; ; attempt++ {
+		err := db.PingContext(ctx)
+		if err == nil {
+			return nil
+		}
+		if ctx.Err() == nil || last == nil {
+			last = err
+		}
+		if attempt == 1 {
+			log.Printf("Waiting for the database: %v", err)
+		}
+		select {
+		case <-ctx.Done():
+			return last
+		case <-time.After(interval):
+		}
+	}
+}
+
 func NewPostgresCostStorage(dsn string, opts ...Option) (*PostgresCostStorage, error) {
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
@@ -42,7 +78,10 @@ func NewPostgresCostStorage(dsn string, opts ...Option) (*PostgresCostStorage, e
 		opt(db)
 	}
 
-	if err := db.PingContext(context.Background()); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), connectTimeout)
+	defer cancel()
+	if err := pingUntilReady(ctx, db, connectInterval); err != nil {
+		_ = db.Close()
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 

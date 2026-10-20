@@ -44,7 +44,7 @@ type CostStorage interface {
 
 	// ListNamespaces returns each deployment namespace's cost and idle cost from its most recent
 	// measurement, with the number of applications currently deploying to it. A namespace shared by
-	// several applications is counted once.
+	// several applications is counted once. The idle cost is nil when that measurement did not measure it.
 	ListNamespaces(ctx context.Context) ([]models.NamespaceSummary, error)
 
 	// GetLatestActualsForNamespace returns the most recent CostActual for each

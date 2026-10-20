@@ -132,6 +132,8 @@ func newOpenCostTestServer(t *testing.T) *httptest.Server {
 						{
 							"redis-0": {
 								CPUCost: 6.0, RAMCost: 3.0, TotalCost: 9.0,
+								CPUCoreRequestAverage: 1, CPUCoreUsageAverage: 0.25,
+								RAMByteRequestAverage: 100, RAMByteUsageAverage: 50,
 								Properties: opencost.AllocationProperties{Pod: "redis-0", Namespace: "test-ns", ControllerKind: "statefulset", Controller: "redis"},
 							},
 							"nginx-abc": {
@@ -379,6 +381,11 @@ func TestOnApplicationSync_Success_StoresCostAndEfficiency(t *testing.T) {
 	assert.InDelta(t, 0.4, saved.Efficiency.CPUEfficiency, 1e-9)
 	assert.InDelta(t, 0.55, saved.Efficiency.TotalEfficiency, 1e-9)
 	assert.InDelta(t, 0.8, saved.Efficiency.CPUCoresUsedMax, 1e-9, "peak CPU should be merged")
+	// The summary has no idle cost; the namespace's is its pods' unused requests.
+	assert.InDelta(t, 135.0, saved.Efficiency.CPUIdleCost, 1e-9) // 6 * 0.75 * 30
+	assert.InDelta(t, 45.0, saved.Efficiency.RAMIdleCost, 1e-9)  // 3 * 0.5 * 30
+	require.NotNil(t, saved.IdleMonthlyCost)
+	assert.InDelta(t, 180.0, *saved.IdleMonthlyCost, 1e-9)
 
 	assert.Len(t, saved.Pods, 2, "pod breakdown should be populated")
 	var totalPodCost float64
@@ -555,6 +562,7 @@ func TestOnApplicationSync_PodFailure_IsNonFatal(t *testing.T) {
 	require.NoError(t, err, "pod failure should not abort the sync")
 	require.NotNil(t, saved)
 	assert.Empty(t, saved.Pods, "pods should be nil/empty when pod call fails")
+	assert.Nil(t, saved.IdleMonthlyCost, "without its pods the namespace's idle cost is not measured")
 }
 
 func TestOnApplicationSync_EfficiencyFailure_IsNonFatal(t *testing.T) {
@@ -595,6 +603,8 @@ func TestOnApplicationSync_EfficiencyFailure_IsNonFatal(t *testing.T) {
 	require.NoError(t, err, "efficiency failure should not abort the sync")
 	require.NotNil(t, saved)
 	assert.Nil(t, saved.Efficiency, "efficiency should be nil when summary call fails")
+	require.NotNil(t, saved.IdleMonthlyCost, "the idle cost comes from the pods, not the summary")
+	assert.Zero(t, *saved.IdleMonthlyCost)
 }
 
 // ---- GetLatestCostForApplication ----
@@ -713,4 +723,50 @@ func TestOnApplicationSync_RecordID_NotDerivedFromAppName(t *testing.T) {
 	assert.NotContains(t, savedActual.ID, "billing-service",
 		"record ID must not contain the application name")
 	assert.Len(t, savedActual.ID, 32, "record ID must be a 32-char hex string")
+}
+
+func TestOnApplicationSync_NoPods_IdleCost(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		namespace opencost.AllocationData
+		want      *float64
+	}{
+		{name: "pods missing from a namespace with CPU and memory cost", namespace: opencost.AllocationData{CPUCost: 10, RAMCost: 5}},
+		{name: "namespace without CPU or memory cost", namespace: opencost.AllocationData{PVCost: 2, TotalCost: 2}, want: new(float64)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				data := map[string]opencost.AllocationData{"test-ns": tt.namespace}
+				if r.URL.Query().Get("aggregate") == "pod" {
+					data = map[string]opencost.AllocationData{"__idle__": {CPUCost: 3}}
+				}
+				_ = json.NewEncoder(w).Encode(opencost.AllocationResponse{Code: 200, Data: []map[string]opencost.AllocationData{data}})
+			}))
+			defer srv.Close()
+
+			var saved *models.CostActual
+			store := &mockStorage{
+				saveActualFn: func(_ context.Context, actual *models.CostActual) error {
+					saved = actual
+					return nil
+				},
+			}
+
+			err := newTestHook(t, srv, store).OnApplicationSync(context.Background(), &models.SyncNotification{
+				ApplicationName:      "my-app",
+				ApplicationNamespace: "argocd",
+				Namespace:            "test-ns",
+				SyncResult:           "Succeeded",
+			})
+			require.NoError(t, err)
+			require.NotNil(t, saved)
+			assert.Equal(t, tt.want, saved.IdleMonthlyCost)
+		})
+	}
 }

@@ -210,6 +210,20 @@ func (n *Namespace) Record(app models.AppRef, owners models.ManagedResources, sy
 		actual.Efficiency = &efficiency
 	}
 	if n.pods != nil {
+		// OpenCost's summary has no idle cost, so the namespace's is measured from its pods. A
+		// namespace without pods has nothing idle, unless it still has CPU or memory cost: then
+		// its pods are missing from the answer and the idle cost is not measured.
+		if pods := n.pods.Efficiency(); pods != nil {
+			idle := pods.CPUIdleCost + pods.RAMIdleCost
+			actual.IdleMonthlyCost = &idle
+			if actual.Efficiency != nil {
+				actual.Efficiency.CPUIdleCost = pods.CPUIdleCost
+				actual.Efficiency.RAMIdleCost = pods.RAMIdleCost
+			}
+		} else if totals := n.metrics.AllocationTotals; totals.CPUCost+totals.MemoryCost == 0 {
+			idle := 0.0
+			actual.IdleMonthlyCost = &idle
+		}
 		actual.Pods = n.pods.Pods()
 		if owners != nil {
 			actual.App = n.pods.ForApplication(owners)

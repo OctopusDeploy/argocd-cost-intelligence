@@ -7,6 +7,13 @@ rule_files:
 
 evaluation_interval: 10m
 
+# The alert reads the recording rule from the other group. promtool otherwise evaluates the groups
+# in a random order, and when the alerts go first the newest recorded sample is 10m old, past the
+# 5m lookback, so the alert sees nothing and its 2h never completes.
+group_eval_order:
+  - argocd-cost-intelligence.rules
+  - argocd-cost-intelligence.alerts
+
 tests:
   # A week at one cost, then a jump: only the Application above the floor alerts, and only after 2h.
   - interval: 10m

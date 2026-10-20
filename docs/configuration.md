@@ -72,7 +72,9 @@ The chart can't keep the PVC on uninstall, and it has no switch to run without o
 | `ui.autoRegister` | `true` | Have the hook add the init container that loads the bundle into `argocd-server`. Needs `features.autoPatchArgoCd`. |
 | `ui.port` / `ui.replicas` | `3000` / `1` | |
 | `ui.image.tag` | chart `appVersion` | |
-| `postInstallHook.image` | `alpine/k8s:1.32.3` | An image with `kubectl`, for the hook Job. Pick a tag close to your cluster's Kubernetes minor version. |
+| `postInstallHook.image` | `alpine/k8s:1.32.3` | An image with `kubectl`, `jq` and `yq` (mikefarah/yq v4), for the hook Job. Pick a tag close to your cluster's Kubernetes minor version. |
+| `postInstallHook.extensionInitImage` | `busybox:1.37.0` | The image of the `argocd-server` init container that downloads the UI bundle. It needs `sh` and `wget`. |
+| `argoCd.rbac.grantAdmin` | `true` | Have the hook write `policy.cost-intel.csv` in `argocd-rbac-cm`, so `role:admin` can open the extension. With `false` the hook removes that key, unless you changed it. It never touches `policy.csv`. |
 
 ### Metrics
 

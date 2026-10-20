@@ -21,10 +21,13 @@ The chart also runs a post-install/post-upgrade hook Job that changes Argo CD it
 |---|---|
 | `argocd-cm` | `extension.config`: the extension proxy, pointing at the backend Service |
 | `argocd-cmd-params-cm` | `server.enable.proxy.extension: "true"` |
-| `argocd-notifications-cm` | `service.webhook.cost-intel`, `trigger.on-sync-succeeded`, `template.app-sync-succeeded` and `subscriptions` |
+| `argocd-notifications-cm` | `service.webhook.cost-intel`, `trigger.cost-intel-on-sync-succeeded` and `template.cost-intel-sync-succeeded`, and one entry in `subscriptions` |
+| `argocd-rbac-cm` | `policy.cost-intel.csv`, which lets `role:admin` open the extension (see [Grant access in Argo CD](#grant-access-in-argo-cd)) |
 | `argocd-notifications-secret` | The key `cost-intel-webhook-token`, the bearer token the webhook sends |
 | `argocd-server` Deployment | An init container, `cost-intel-extension`, and a volume that fetch the UI bundle from the UI Service |
 | ClusterRole and binding `argocd-notifications-controller` | Applied so the notifications controller can read Applications in every namespace. If you already have a ClusterRole with that name, its rules are overwritten. |
+
+The hook only writes keys of its own, named after `cost-intel`. Your triggers, templates and `policy.csv` stay as they are. `subscriptions` is a single key shared by every subscription, so the hook adds its entry to the list and keeps the others. It changes that key only when its entry is missing or 0.1.0's entry is still there. The rewritten list keeps your entries and comments, but its formatting may change: indentation, quoting and blank lines between entries. If `argocd-notifications-cm` or `argocd-rbac-cm` doesn't exist, the hook skips it and says so in its log.
 
 The hook then restarts `argocd-notifications-controller`, the UI Deployment and `argocd-server`, so the Argo CD UI reloads during an install or upgrade. When the hook succeeds it deletes its own ServiceAccount, ClusterRole and Job.
 
@@ -68,7 +71,7 @@ The chart's NetworkPolicies only limit incoming traffic. The backend accepts `ar
 
 ### Images
 
-The images are public on GHCR, so you don't need a pull secret: `ghcr.io/octopusdeploy/argocd-cost-intelligence:v0.1.0` and `ghcr.io/octopusdeploy/argocd-cost-intelligence-ui:v0.1.0`. The hook Job (`postInstallHook.image`) and the `argocd-server` init container (`busybox`) pull images too. Mirror those if your cluster can't reach public registries.
+The images are public on GHCR, so you don't need a pull secret: `ghcr.io/octopusdeploy/argocd-cost-intelligence:v0.1.0` and `ghcr.io/octopusdeploy/argocd-cost-intelligence-ui:v0.1.0`. The hook Job (`postInstallHook.image`, `alpine/k8s`) and the `argocd-server` init container (`postInstallHook.extensionInitImage`, `busybox:1.37.0`) pull images too. Mirror those if your cluster can't reach public registries. A replacement for the hook image needs `kubectl`, `jq` and `yq` (mikefarah/yq v4); one for the init container needs `sh` and `wget`.
 
 ## Install
 
@@ -116,21 +119,33 @@ helm install argocd-cost-intelligence \
 
 Before you run it, know what the hook does to your existing configuration:
 
-> **Warning:** The hook replaces `trigger.on-sync-succeeded` and `subscriptions` in `argocd-notifications-cm`. If you already use Argo CD Notifications with those keys, back the ConfigMap up first and merge your entries back in afterwards. Also, if something reconciles `argocd-cm`, `argocd-notifications-cm` or the `argocd-server` Deployment (Argo CD managing itself, for example), it will revert the hook's patches. In that case set `features.autoPatchArgoCd=false` and make the changes in your own source of truth. [`deploy/argocd-notifications-patch.yaml`](../deploy/argocd-notifications-patch.yaml) has the notifications part, and the rest is in [`helm/templates/post-install-hook.yaml`](../helm/templates/post-install-hook.yaml).
+> **Warning:** If something reconciles `argocd-cm`, `argocd-notifications-cm`, `argocd-rbac-cm` or the `argocd-server` Deployment (Argo CD managing itself, for example), it will revert the hook's patches. In that case set `features.autoPatchArgoCd=false` and make the changes in your own source of truth. [`deploy/argocd-notifications-patch.yaml`](../deploy/argocd-notifications-patch.yaml) has the notifications part, and the rest is in [`helm/templates/post-install-hook.yaml`](../helm/templates/post-install-hook.yaml).
 
 ### Grant access in Argo CD
 
-Append these lines to the `policy.csv` in `argocd-rbac-cm`. It is a single key, so edit the ConfigMap (`kubectl edit configmap argocd-rbac-cm -n argocd`) and keep what is already there; a patch that sets only these lines replaces your rules. If Argo CD's own Helm chart or GitOps manages the ConfigMap, add them there.
+Viewers need permission to invoke the extension, and `get` on an Application to see its tab (they usually have that already). On Argo CD 3.5 the extension is denied to everyone until a policy allows it, `admin` included. Without a rule the tab shows "401: Unauthorized extension request".
+
+The hook allows the built-in `admin` role. It writes this line to `policy.cost-intel.csv`, a key of its own in `argocd-rbac-cm`:
 
 ```
-# the built-in admin role; every other role needs its own line
 p, role:admin, extensions, invoke, cost-intel, allow
-p, role:cost-viewer, extensions, invoke, cost-intel, allow
-# only for the people who may see cluster-wide costs (the gate from above):
+```
+
+Argo CD appends every `policy.<name>.csv` key to `policy.csv`, so your own rules aren't touched. To manage the rule yourself, install with `--set argoCd.rbac.grantAdmin=false`. The hook then removes its key, unless you've changed it.
+
+Every other role needs its own rule. Don't add it to `policy.cost-intel.csv`, because the hook rewrites that key on every upgrade. Use a key of your own instead, such as `policy.cost-intel-viewers.csv`, or `policy.csv`. A merge patch that sets a new key leaves the others alone:
+
+```bash
+kubectl patch configmap argocd-rbac-cm -n argocd --type merge -p '{"data":{"policy.cost-intel-viewers.csv":"p, role:cost-viewer, extensions, invoke, cost-intel, allow\n"}}'
+```
+
+The people who may see cluster-wide costs also need `get` on the gate Application from above:
+
+```
 p, role:platform, applications, get, <project>/<app-name>, allow
 ```
 
-Viewers need permission to invoke the extension, and `get` on an Application to see its tab (they usually have that already). On Argo CD 3.5 the extension is denied to everyone until a policy allows it, `admin` included. Without a rule the tab shows "401: Unauthorized extension request".
+If Argo CD's own Helm chart or GitOps manages `argocd-rbac-cm`, add your rules there.
 
 Then assign the roles to your groups as you normally do.
 
@@ -162,6 +177,7 @@ kubectl get pods -n argocd-cost-intel      # backend, exporter, ui, postgres-0: 
 kubectl get cm argocd-cm -n argocd -o jsonpath='{.data.extension\.config}'
 kubectl get cm argocd-cmd-params-cm -n argocd -o jsonpath='{.data.server\.enable\.proxy\.extension}'
 kubectl get cm argocd-notifications-cm -n argocd -o jsonpath='{.data.service\.webhook\.cost-intel}'
+kubectl get cm argocd-rbac-cm -n argocd -o jsonpath='{.data.policy\.cost-intel\.csv}'
 kubectl get deploy argocd-server -n argocd \
   -o jsonpath='{.spec.template.spec.initContainers[*].name}'      # includes cost-intel-extension
 
@@ -257,26 +273,30 @@ kubectl patch cm argocd-cm -n argocd \
 kubectl patch cm argocd-cmd-params-cm -n argocd \
   --type json -p '[{"op":"remove","path":"/data/server.enable.proxy.extension"}]'
 
-# 2. Notifications entries. This removes `subscriptions` and the trigger entirely,
-#    so restore your own from the backup you took at install, if you had any.
+# 2. Notifications entries. Then delete the cost-intel entry from `subscriptions`
+#    with `kubectl edit cm argocd-notifications-cm -n argocd`, and the key itself
+#    if that was its only entry.
 kubectl patch cm argocd-notifications-cm -n argocd \
   --type json -p '[
     {"op":"remove","path":"/data/service.webhook.cost-intel"},
-    {"op":"remove","path":"/data/trigger.on-sync-succeeded"},
-    {"op":"remove","path":"/data/template.app-sync-succeeded"},
-    {"op":"remove","path":"/data/subscriptions"}
+    {"op":"remove","path":"/data/trigger.cost-intel-on-sync-succeeded"},
+    {"op":"remove","path":"/data/template.cost-intel-sync-succeeded"}
   ]'
 
 # 3. The webhook token
 kubectl patch secret argocd-notifications-secret -n argocd \
   --type json -p '[{"op":"remove","path":"/data/cost-intel-webhook-token"}]'
 
-# 4. The UI init container and volume on argocd-server
+# 4. The admin rule
+kubectl patch cm argocd-rbac-cm -n argocd \
+  --type json -p '[{"op":"remove","path":"/data/policy.cost-intel.csv"}]'
+
+# 5. The UI init container and volume on argocd-server
 #    (one patch: the volume mount must go together with the volume)
 kubectl patch deployment argocd-server -n argocd --type strategic \
   -p '{"spec":{"template":{"spec":{"initContainers":[{"name":"cost-intel-extension","$patch":"delete"}],"containers":[{"name":"argocd-server","volumeMounts":[{"mountPath":"/tmp/extensions","$patch":"delete"}]}],"volumes":[{"name":"cost-intel-ext-js","$patch":"delete"}]}}}}'
 
-# 5. Restart so the changes apply
+# 6. Restart so the changes apply
 kubectl rollout restart deployment/argocd-server -n argocd
 kubectl rollout restart deployment/argocd-notifications-controller -n argocd
 ```

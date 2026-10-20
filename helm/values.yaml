@@ -155,9 +155,12 @@ argoCd:
   # Namespace where Argo CD is installed
   namespace: argocd
 
-  # Enable automatic patching of Argo CD notifications
-  notificationsIntegration:
-    enabled: true
+  rbac:
+    # Have the hook write policy.cost-intel.csv in argocd-rbac-cm, which lets role:admin open the
+    # extension. Argo CD 3.5 denies extensions to everyone until a policy allows them. The hook
+    # never changes policy.csv. Set false to manage the rule yourself; the hook then removes the
+    # key if it still holds what the hook wrote.
+    grantAdmin: true
 
 # Security Configuration
 security:
@@ -343,9 +346,12 @@ metrics:
 
 # Post-install hook configuration
 postInstallHook:
-  # kubectl image for the ArgoCD registration job.
-  # alpine/k8s provides stable versioned tags matching Kubernetes releases.
+  # Image for the Argo CD registration job. It needs kubectl, jq and yq (v4); alpine/k8s has all
+  # three, with versioned tags that follow Kubernetes releases.
   image: alpine/k8s:1.32.3
+  # The argocd-server init container that downloads the UI bundle (ui.autoRegister). It needs
+  # sh and wget.
+  extensionInitImage: busybox:1.37.0
 
 # Feature flags
 features:

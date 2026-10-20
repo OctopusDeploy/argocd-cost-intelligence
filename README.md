@@ -53,13 +53,7 @@ helm install argocd-cost-intelligence \
 
 A post-install hook registers the extension and the notification webhook in Argo CD.
 
-Next, allow the extension. On Argo CD 3.5 it is denied to every user, the built-in `admin` included, until `argocd-rbac-cm` has a rule for it. Append this line to the `policy.csv` already in that ConfigMap (edit it, don't replace it):
-
-```
-p, role:admin, extensions, invoke, cost-intel, allow
-```
-
-Without it the tab shows "401: Unauthorized extension request". To give other roles access, see [Grant access in Argo CD](docs/installation.md#grant-access-in-argo-cd).
+On Argo CD 3.5 the extension is denied to every user until a policy allows it. The hook allows the built-in `admin` role in a key of its own, `policy.cost-intel.csv` in `argocd-rbac-cm`, and leaves your `policy.csv` alone. To give other roles access, see [Grant access in Argo CD](docs/installation.md#grant-access-in-argo-cd).
 
 Sync an application, wait a few seconds, and open its **Cost Intelligence** tab. Settings are in [docs/configuration.md](docs/configuration.md). The [installation guide](docs/installation.md) covers the prerequisites, the OpenCost URL, who sees cluster-wide costs, upgrading and troubleshooting.
 

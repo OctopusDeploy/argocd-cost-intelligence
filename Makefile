@@ -1,7 +1,7 @@
 .PHONY: help build run test test-integration test-opencost clean docker-build docker-build-ui docker-push \
         deploy-local deploy-local-down deploy-k8s helm-deploy helm-deploy-real helm-undeploy \
         lint lint-go lint-ui lint-helm lint-prometheus lint-actions lint-manifests lint-dockerfile \
-        lint-shell lint-mock sync-mock
+        lint-shell lint-mock lint-notifications sync-mock
 
 BINARY_NAME    = argocd-cost-intelligence
 IMAGE_NAME     = argocd-cost-intelligence
@@ -58,6 +58,7 @@ help:
 	@echo "  make lint-dockerfile - hadolint for the Dockerfiles"
 	@echo "  make lint-shell      - shellcheck for scripts/"
 	@echo "  make lint-mock       - check deploy/mock-opencost.yaml matches mock-opencost-server.js"
+	@echo "  make lint-notifications - check deploy/argocd-notifications-patch.yaml matches helm/files/argocd/"
 	@echo "  make sync-mock       - regenerate deploy/mock-opencost.yaml from mock-opencost-server.js"
 	@echo ""
 	@echo "Helm deploy overrides (e.g. make helm-deploy K3D_CLUSTER=mycluster):"
@@ -245,7 +246,7 @@ fmt:
 	@echo "Formatting code..."
 	go fmt ./...
 
-lint: lint-go lint-ui lint-helm lint-prometheus lint-actions lint-manifests lint-dockerfile lint-shell lint-mock
+lint: lint-go lint-ui lint-helm lint-prometheus lint-actions lint-manifests lint-dockerfile lint-shell lint-mock lint-notifications
 
 lint-go:
 	@echo "Running golangci-lint..."
@@ -286,6 +287,10 @@ lint-shell:
 lint-mock:
 	@echo "Checking the embedded mock OpenCost..."
 	scripts/mock-opencost-sync.sh check
+
+lint-notifications:
+	@echo "Checking the notifications patch against the chart..."
+	scripts/notifications-payload-check.sh
 
 sync-mock:
 	@echo "Regenerating deploy/mock-opencost.yaml..."

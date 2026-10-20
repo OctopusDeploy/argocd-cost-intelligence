@@ -47,8 +47,6 @@ openCost:
 
 argoCd:
   namespace: argocd
-  notificationsIntegration:
-    enabled: true
 
 security:
   podSecurityContext:

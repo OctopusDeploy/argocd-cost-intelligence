@@ -7,6 +7,14 @@ All notable changes to this project are listed here. The format follows [Keep a 
 ### Breaking
 
 - Building from source needs Go 1.27 or newer. The images and the Helm chart are unaffected.
+- The hook's notification trigger and template are now `trigger.cost-intel-on-sync-succeeded` and `template.cost-intel-sync-succeeded`. 0.1.0 wrote them as `trigger.on-sync-succeeded` and `template.app-sync-succeeded`, names that Argo CD's notifications catalog uses too, and replaced `subscriptions` with its own entry. On upgrade the hook removes the two old keys if they still hold exactly what 0.1.0 wrote, and replaces its old entry in `subscriptions` with the new one. It keeps anything you changed, and keeps the old trigger while a subscription or `defaultTriggers` still names it. Argo CD Notifications records what it has sent per trigger name, so after the upgrade each application whose last sync succeeded sends the webhook once more, all at once, and gets one extra cost record for that sync. If 0.1.0 overwrote your own trigger, template or subscriptions, restore them from your backup. If you applied `deploy/argocd-notifications-patch.yaml` by hand instead, apply the new version, add the new entry to `subscriptions` as its comment shows, and remove the old keys if nothing else uses them.
+- The hook image needs `jq` and `yq` (v4, mikefarah/yq, not the Python `yq`) as well as `kubectl`. The default `alpine/k8s` has them. If you set `postInstallHook.image`, check that yours does.
+- The hook now fails if it can't update `argocd-notifications-cm`, for example when `subscriptions` isn't a YAML list, where 0.1.0 carried on. It registers the UI first, so the tab still appears. A missing `argocd-notifications-cm` or `argocd-rbac-cm` is skipped, not an error.
+
+### Added
+
+- The hook lets `role:admin` open the extension, so a new install on Argo CD 3.5 no longer shows "401: Unauthorized extension request" until someone adds a rule. It writes the rule to a key of its own, `policy.cost-intel.csv` in `argocd-rbac-cm`, and never changes `policy.csv`. Turn it off with `argoCd.rbac.grantAdmin=false`. If you added the admin line to `policy.csv` after installing 0.1.0, you can keep it or remove it.
+- `postInstallHook.extensionInitImage` sets the image of the `argocd-server` init container that downloads the UI bundle, for clusters that mirror images.
 
 ### Added
 
@@ -15,6 +23,11 @@ All notable changes to this project are listed here. The format follows [Keep a 
 ### Changed
 
 - The UI plugin has a new look. Both the application tab and the Namespaces / Chargeback page sit in a panel headed "Cost Intelligence", with "by Octopus Deploy" under it linking to the Octopus Deploy website. They use Octopus Deploy's colours and the Inter font, which is bundled into the plugin so it works without internet access. Labels are in sentence case and the Reload button is labelled.
+- The `argocd-server` init container uses `busybox:1.37.0` instead of `busybox:latest`.
+
+### Fixed
+
+- The hook no longer overwrites Argo CD Notifications settings you already had. It adds its entry to `subscriptions` and keeps the others, and running it again on upgrade adds nothing twice.
 
 ### Security
 

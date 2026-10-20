@@ -26,7 +26,7 @@ func TestDSN(t *testing.T) {
 				Database: "mydb",
 				SSLMode:  "disable",
 			},
-			want: "host=localhost port=5432 user=postgres password=secret dbname=mydb sslmode=disable",
+			want: "host=localhost port=5432 user=postgres password=secret dbname=mydb sslmode=disable connect_timeout=5",
 		},
 		{
 			name: "custom host and port",
@@ -38,7 +38,7 @@ func TestDSN(t *testing.T) {
 				Database: "production",
 				SSLMode:  "require",
 			},
-			want: "host=db.example.com port=5433 user=admin password=p@ssw0rd dbname=production sslmode=require",
+			want: "host=db.example.com port=5433 user=admin password=p@ssw0rd dbname=production sslmode=require connect_timeout=5",
 		},
 	}
 

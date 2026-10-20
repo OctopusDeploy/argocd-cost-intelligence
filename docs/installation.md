@@ -72,6 +72,16 @@ The images are public on GHCR, so you don't need a pull secret: `ghcr.io/octopus
 
 ## Install
 
+### Try it without OpenCost
+
+To look at the plugin before you have an OpenCost, the repository has a mock that answers with fixed data. Use it to try things out; the amounts mean nothing.
+
+```bash
+kubectl apply -f https://raw.githubusercontent.com/OctopusDeploy/argocd-cost-intelligence/main/deploy/mock-opencost.yaml
+```
+
+It runs as `opencost` in the `opencost` namespace, so the default OpenCost URL works. The mock knows a few workloads: `nginx`, `redis-master`, `redis-replica`, `data-migration-job` and `frontend`. An application's own cost is the cost of the workloads it deploys, so an application with other names shows $0 (its namespace still shows the mock's amounts). To see numbers, deploy an application with a Deployment called `nginx`, in a namespace other than `production`. Remove the mock with `kubectl delete -f` on the same file, and install a real OpenCost before you rely on the numbers.
+
 ### Choose your settings
 
 **PostgreSQL password.** The chart stores it in a Secret called `postgres-credentials`. Don't commit it. To manage that Secret yourself, see [configuration.md](configuration.md#postgresql-credentials).
@@ -110,13 +120,17 @@ Before you run it, know what the hook does to your existing configuration:
 
 ### Grant access in Argo CD
 
-Viewers need permission to invoke the extension, and `get` on an Application to see its tab (they usually have that already). Add this to `argocd-rbac-cm`:
+Append these lines to the `policy.csv` in `argocd-rbac-cm`. It is a single key, so edit the ConfigMap (`kubectl edit configmap argocd-rbac-cm -n argocd`) and keep what is already there; a patch that sets only these lines replaces your rules. If Argo CD's own Helm chart or GitOps manages the ConfigMap, add them there.
 
 ```
+# the built-in admin role; every other role needs its own line
+p, role:admin, extensions, invoke, cost-intel, allow
 p, role:cost-viewer, extensions, invoke, cost-intel, allow
 # only for the people who may see cluster-wide costs (the gate from above):
 p, role:platform, applications, get, <project>/<app-name>, allow
 ```
+
+Viewers need permission to invoke the extension, and `get` on an Application to see its tab (they usually have that already). On Argo CD 3.5 the extension is denied to everyone until a policy allows it, `admin` included. Without a rule the tab shows "401: Unauthorized extension request".
 
 Then assign the roles to your groups as you normally do.
 

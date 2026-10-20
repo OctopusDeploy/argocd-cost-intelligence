@@ -119,6 +119,14 @@ spec:
         resources:
           {{- toYaml .Values.costIntelligence.resources | nindent 12 }}
         {{- end }}
+        {{- if .Values.healthChecks.startupProbe.enabled }}
+        startupProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: {{ .Values.healthChecks.startupProbe.periodSeconds }}
+          failureThreshold: {{ .Values.healthChecks.startupProbe.failureThreshold }}
+        {{- end }}
         {{- if .Values.healthChecks.livenessProbe.enabled }}
         livenessProbe:
           httpGet:

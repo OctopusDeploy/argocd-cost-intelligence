@@ -15,10 +15,9 @@ All notable changes to this project are listed here. The format follows [Keep a 
 
 - The hook lets `role:admin` open the extension, so a new install on Argo CD 3.5 no longer shows "401: Unauthorized extension request" until someone adds a rule. It writes the rule to a key of its own, `policy.cost-intel.csv` in `argocd-rbac-cm`, and never changes `policy.csv`. Turn it off with `argoCd.rbac.grantAdmin=false`. If you added the admin line to `policy.csv` after installing 0.1.0, you can keep it or remove it.
 - `postInstallHook.extensionInitImage` sets the image of the `argocd-server` init container that downloads the UI bundle, for clusters that mirror images.
-
-### Added
-
 - Costs show up right after install. When the service starts, it measures each Argo CD Application that deploys to this cluster and has no cost record yet, instead of waiting for the application's next sync. If OpenCost has no data for a namespace yet, it tries again a few times over the next quarter of an hour. These records say "Measured at install" in the UI and are never compared with a later sync in "Since last sync". Replicas take turns, and `BACKFILL_CONCURRENCY` (Helm `costIntelligence.backfillConcurrency`, 4 by default, `0` to turn it off) bounds how many namespaces are measured at once. It uses the existing permission to read Applications; no RBAC change is needed. In the API, these records have `measuredOn: "install"` and no `syncTimestamp`; every other record has `measuredOn: "sync"`.
+- `argocd_cost_intelligence_exporter_remote_applications`, the number of Applications the exporter leaves out because they deploy to another cluster.
+- The `remote` result on `argocd_cost_intelligence_sync_webhooks_total`, for a sync notification about an application on another cluster. The service answers it with 200 and measures nothing.
 
 ### Changed
 
@@ -27,6 +26,8 @@ All notable changes to this project are listed here. The format follows [Keep a 
 
 ### Fixed
 
+- An application that deploys to another cluster is no longer measured. OpenCost only sees the cluster it runs in, so the service used to price a namespace of the same name in its own cluster and store that as the application's cost. The exporter now leaves these applications out of the cost series, though their cloud estimates are still exported, and the sync webhook skips them. The webhook learns the cluster from two new fields in the notifications template, `destinationServer` and `destinationName`. The Helm chart adds them when it patches Argo CD. If you maintain the template yourself, add them as in `deploy/argocd-notifications-patch.yaml`. Until you do, every application is taken to deploy to this cluster, as before. An application counts as deploying here when its destination server is `https://kubernetes.default.svc` or its destination name is `in-cluster`; if you renamed the in-cluster entry in Argo CD, applications that target it by the new name are now taken to be on another cluster. Cost already recorded for such an application stays, and its daily history keeps being recorded from the local namespace.
+- The alert for refused webhooks no longer fires on a cluster whose syncs are all for other clusters.
 - The hook no longer overwrites Argo CD Notifications settings you already had. It adds its entry to `subscriptions` and keeps the others, and running it again on upgrade adds nothing twice.
 
 ### Security

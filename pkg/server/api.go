@@ -213,6 +213,17 @@ func (s *CostAPIServer) handleOnSync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// OpenCost measures only this cluster, so an application deploying elsewhere has nothing to
+	// measure here. Answered before the pool, as nothing runs in the background.
+	if !hook.DeploysHere(&notification) {
+		s.logger.Printf("Not measuring sync notification for %s/%s: the application deploys to another cluster (server %q, name %q)\n",
+			notification.ApplicationNamespace, notification.ApplicationName, notification.DestinationServer, notification.DestinationName)
+		s.metrics.ObserveWebhook(telemetry.WebhookRemote)
+		render.Status(r, http.StatusOK)
+		render.JSON(w, r, map[string]string{"message": "not measured: the application deploys to another cluster"})
+		return
+	}
+
 	// Reject the request if the goroutine pool is full rather than queuing
 	// unbounded work that would exhaust DB connections and OpenCost sockets.
 	select {

@@ -270,6 +270,24 @@ func TestHandleOnSync_ValidBody_Returns202(t *testing.T) {
 	assert.Contains(t, body["message"], "accepted")
 }
 
+func TestHandleOnSync_OtherCluster_Returns200(t *testing.T) {
+	t.Parallel()
+
+	srv := newTestAPIServer(t, &mockStorage{})
+	payload, _ := json.Marshal(models.SyncNotification{
+		ApplicationName:      "redis",
+		ApplicationNamespace: "argocd",
+		Namespace:            "argocd",
+		SyncResult:           "Succeeded",
+		SyncTimestamp:        time.Now(),
+		DestinationName:      "prod",
+	})
+	rr := doRequest(t, srv, http.MethodPost, "/api/cost-analysis/on-sync", payload)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Contains(t, rr.Body.String(), "another cluster")
+}
+
 func TestHandleOnSync_MissingApplicationNamespace_Returns400(t *testing.T) {
 	t.Parallel()
 

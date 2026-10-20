@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"net/http"
 	"testing"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
 	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/telemetry"
 )
 
@@ -42,6 +44,8 @@ func TestMetrics_CountWebhooksByResultAndTheMeasurementsThatFollow(t *testing.T)
 	require.Equal(t, http.StatusAccepted, doRequest(t, srv, http.MethodPost, "/api/cost-analysis/on-sync", syncPayload(t)).Code)
 	require.Equal(t, http.StatusUnauthorized, doRequestWithHeaders(t, srv, http.MethodPost, "/api/cost-analysis/on-sync", syncPayload(t), nil).Code)
 	require.Equal(t, http.StatusBadRequest, doRequest(t, srv, http.MethodPost, "/api/cost-analysis/on-sync", []byte("not-json")).Code)
+	remote, _ := json.Marshal(models.SyncNotification{ApplicationName: "redis", ApplicationNamespace: "argocd", SyncResult: "Succeeded", DestinationServer: "https://prod.example.com"})
+	require.Equal(t, http.StatusOK, doRequest(t, srv, http.MethodPost, "/api/cost-analysis/on-sync", remote).Code)
 	require.Eventually(t, func() bool { return len(srv.syncSem) == 0 }, 5*time.Second, 10*time.Millisecond)
 	for range maxConcurrentSyncs {
 		srv.syncSem <- struct{}{}
@@ -51,10 +55,10 @@ func TestMetrics_CountWebhooksByResultAndTheMeasurementsThatFollow(t *testing.T)
 		<-srv.syncSem
 	}
 
-	assert.Equal(t, map[string]float64{"accepted": 1, "unauthorized": 1, "invalid": 1, "overloaded": 1},
+	assert.Equal(t, map[string]float64{"accepted": 1, "unauthorized": 1, "invalid": 1, "overloaded": 1, "remote": 1},
 		counterValues(t, reg, "argocd_cost_intelligence_sync_webhooks_total", "result"))
 	measured := counterValues(t, reg, "argocd_cost_intelligence_sync_measurements_total", "result")
-	assert.InDelta(t, 1, measured["success"]+measured["error"], 0, "one measurement, for the accepted webhook")
+	assert.InDelta(t, 1, measured["success"]+measured["error"], 0, "one measurement, for the accepted webhook only")
 }
 
 func TestMetrics_TimeRequestsByRoute(t *testing.T) {

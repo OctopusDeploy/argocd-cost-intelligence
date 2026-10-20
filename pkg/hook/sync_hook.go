@@ -9,6 +9,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/exporter"
 	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
 	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/opencost"
 	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/storage"
@@ -45,6 +46,12 @@ func (h *SyncHook) OnApplicationSync(ctx context.Context, notification *models.S
 
 	if err := ValidateNotification(notification); err != nil {
 		return err
+	}
+
+	if !DeploysHere(notification) {
+		h.logger.Printf("Not measuring %s/%s: it deploys to another cluster (%s), and OpenCost measures only this one\n",
+			notification.ApplicationNamespace, notification.ApplicationName, cluster(notification))
+		return nil
 	}
 
 	if notification.Namespace == "" {
@@ -231,6 +238,20 @@ func ValidateNotification(n *models.SyncNotification) error {
 		return fmt.Errorf("invalid namespace %q: must be a valid Kubernetes DNS label", n.Namespace)
 	}
 	return nil
+}
+
+// DeploysHere reports whether the notification's application deploys to the cluster this service
+// runs in, the only one its OpenCost measures. Elsewhere, a namespace of the same name here is not the
+// application's.
+func DeploysHere(n *models.SyncNotification) bool {
+	return exporter.Destination{Server: n.DestinationServer, Name: n.DestinationName}.Local()
+}
+
+func cluster(n *models.SyncNotification) string {
+	if n.DestinationName != "" {
+		return n.DestinationName
+	}
+	return n.DestinationServer
 }
 
 // GetLatestCostForApplication retrieves the most recent cost measurement

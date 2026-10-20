@@ -268,6 +268,12 @@ type SyncNotification struct {
 	Namespace            string    `json:"namespace"`
 	SyncTimestamp        time.Time `json:"syncTimestamp"`
 	SyncResult           string    `json:"syncResult"` // Succeeded, Failed, Unknown
+	// DestinationServer and DestinationName are the cluster the application deploys to
+	// ({{.app.spec.destination.server}} and {{.app.spec.destination.name}}; Argo CD sets one or the
+	// other). Both are empty when the notifications template does not send them, and the application
+	// is then taken to deploy to this cluster.
+	DestinationServer string `json:"destinationServer"`
+	DestinationName   string `json:"destinationName"`
 	// Resources are the resources Argo CD manages for the application ({{.app.status.resources}}).
 	// Nil when the notifications template does not send them, and the application is then measured
 	// only as its whole namespace; empty when it manages none.

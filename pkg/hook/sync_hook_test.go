@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -284,6 +285,59 @@ func TestOnApplicationSync_FailedSync_Skips(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.False(t, saved, "SaveActual should not be called for a failed sync")
+}
+
+func TestOnApplicationSync_OtherCluster_Skips(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name                string
+		server, clusterName string
+	}{
+		{"by server", "https://prod.example.com", ""},
+		{"by name", "", "prod"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			var queried atomic.Bool
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				queried.Store(true)
+				http.NotFound(w, nil)
+			}))
+			defer srv.Close()
+			saved := false
+			store := &mockStorage{
+				saveActualFn: func(_ context.Context, _ *models.CostActual) error {
+					saved = true
+					return nil
+				},
+			}
+
+			err := newTestHook(t, srv, store).OnApplicationSync(context.Background(), &models.SyncNotification{
+				ApplicationName:      "my-app",
+				ApplicationNamespace: "argocd",
+				Namespace:            "test-ns",
+				SyncResult:           "Succeeded",
+				DestinationServer:    tc.server,
+				DestinationName:      tc.clusterName,
+			})
+
+			require.NoError(t, err)
+			assert.False(t, queried.Load(), "OpenCost here does not measure another cluster's test-ns")
+			assert.False(t, saved)
+		})
+	}
+}
+
+func TestDeploysHere(t *testing.T) {
+	t.Parallel()
+
+	assert.True(t, DeploysHere(&models.SyncNotification{}), "an older template sends no destination")
+	assert.True(t, DeploysHere(&models.SyncNotification{DestinationServer: "https://kubernetes.default.svc"}))
+	assert.True(t, DeploysHere(&models.SyncNotification{DestinationName: "in-cluster"}))
+	assert.False(t, DeploysHere(&models.SyncNotification{DestinationServer: "https://prod.example.com"}))
+	assert.False(t, DeploysHere(&models.SyncNotification{DestinationName: "prod"}))
 }
 
 func TestOnApplicationSync_Success_StoresCostAndEfficiency(t *testing.T) {

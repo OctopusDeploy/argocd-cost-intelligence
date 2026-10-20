@@ -144,7 +144,7 @@ The 24-hour window itself is a trade-off: long enough to include off-peak hours 
 
 ### Idle cost
 
-Idle cost is the part of a CPU or memory cost paid for requested capacity that went unused: `cost x (request - usage) / request` per pod, nothing for a pod using at least its request, weighted by the minutes each pod ran and projected like every other cost (see *Monthly figures*). It is measured from the per-pod allocation for both scopes: an application's from its own pods (`ForApplication`), a namespace's from all of them (`PodAllocations.Efficiency`), so the applications in a namespace add up to the namespace. OpenCost's own `cpuCostIdle` / `ramCostIdle` are never used: up to 1.121.3 OpenCost only copies and sums them, so they are always zero.
+Idle cost is the part of a CPU or memory cost paid for requested capacity that went unused: `cost x (request - usage) / request` per pod, nothing for a pod using at least its request, weighted by the minutes each pod ran and projected like every other cost (see *Monthly figures*). It is measured from the per-pod allocation for both scopes: an application's from its own pods (`ForApplication`), a namespace's from all of them (`PodAllocations.Efficiency`), so the applications in a namespace add up to it when they own all its pods. A namespace whose pods are missing from the answer while it has CPU or memory cost has no idle cost measured. OpenCost's own `cpuCostIdle` / `ramCostIdle` are never used: up to 1.121.3 OpenCost only copies and sums them, so they are always zero.
 
 ### Namespace scope and application scope
 

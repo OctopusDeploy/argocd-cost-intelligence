@@ -720,3 +720,49 @@ func TestOnApplicationSync_RecordID_NotDerivedFromAppName(t *testing.T) {
 		"record ID must not contain the application name")
 	assert.Len(t, savedActual.ID, 32, "record ID must be a 32-char hex string")
 }
+
+func TestOnApplicationSync_NoPods_IdleCost(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		namespace opencost.AllocationData
+		want      *float64
+	}{
+		{name: "pods missing from a namespace with CPU and memory cost", namespace: opencost.AllocationData{CPUCost: 10, RAMCost: 5}},
+		{name: "namespace without CPU or memory cost", namespace: opencost.AllocationData{PVCost: 2, TotalCost: 2}, want: new(float64)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				data := map[string]opencost.AllocationData{"test-ns": tt.namespace}
+				if r.URL.Query().Get("aggregate") == "pod" {
+					data = map[string]opencost.AllocationData{"__idle__": {CPUCost: 3}}
+				}
+				_ = json.NewEncoder(w).Encode(opencost.AllocationResponse{Code: 200, Data: []map[string]opencost.AllocationData{data}})
+			}))
+			defer srv.Close()
+
+			var saved *models.CostActual
+			store := &mockStorage{
+				saveActualFn: func(_ context.Context, actual *models.CostActual) error {
+					saved = actual
+					return nil
+				},
+			}
+
+			err := newTestHook(t, srv, store).OnApplicationSync(context.Background(), &models.SyncNotification{
+				ApplicationName:      "my-app",
+				ApplicationNamespace: "argocd",
+				Namespace:            "test-ns",
+				SyncResult:           "Succeeded",
+			})
+			require.NoError(t, err)
+			require.NotNil(t, saved)
+			assert.Equal(t, tt.want, saved.IdleMonthlyCost)
+		})
+	}
+}

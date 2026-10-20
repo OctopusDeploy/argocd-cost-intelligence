@@ -160,8 +160,9 @@ const NamespacesView: React.FC<NamespacesViewProps> = ({ data, urlNamespace, onS
   );
 };
 
-// controlPlaneStat reports the managed control-plane fee, and says why when it cannot.
 const NOT_MEASURED_IDLE: Stat = { label: 'Idle spend', value: '—', detail: 'Not measured yet' };
+
+// controlPlaneStat reports the managed control-plane fee, and says why when it cannot.
 
 // clusterIdleStat sums the idle cost of the namespaces it was measured for, as a share of their cost
 // alone, so the two figures agree while records from before it was measured remain.

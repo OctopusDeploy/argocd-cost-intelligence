@@ -29,6 +29,10 @@ type Config struct {
 	// 0 turns it off.
 	BackfillConcurrency int `envconfig:"BACKFILL_CONCURRENCY" default:"4"`
 
+	// PruneRemoteCost deletes the cost records and daily history stored for Argo CD Applications that
+	// deploy to another cluster, at startup and on each daily history run. It can't be undone.
+	PruneRemoteCost bool `envconfig:"PRUNE_REMOTE_COST" default:"false"`
+
 	// VPAEnabled reads VerticalPodAutoscaler recommendations (from Goldilocks or any VPA) for the
 	// rightsizing advice. It needs the service to run in the cluster with permission to list them.
 	VPAEnabled bool `envconfig:"VPA_ENABLED" default:"true"`

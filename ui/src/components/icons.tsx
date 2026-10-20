@@ -199,3 +199,11 @@ export const AppsIcon: React.FC<{ size?: number }> = ({ size = 20 }) => (
     <path d="M4 7.5l8 4.5 8-4.5M12 12v9" />
   </Stroke>
 );
+
+export const ClusterIcon: React.FC<{ size?: number }> = ({ size = 20 }) => (
+  <Stroke size={size}>
+    <rect x="3" y="4" width="7" height="7" rx="1.5" />
+    <rect x="14" y="13" width="7" height="7" rx="1.5" />
+    <path d="M10 7.5h4.5a2 2 0 0 1 2 2V13" />
+  </Stroke>
+);

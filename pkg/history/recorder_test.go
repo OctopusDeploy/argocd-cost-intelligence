@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/exporter"
 	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
 )
 
@@ -190,6 +191,90 @@ func TestRecordOnce_SkipsRecordsWithoutAUsableNamespace(t *testing.T) {
 
 	assert.Empty(t, source.calls)
 	assert.Empty(t, store.progress)
+}
+
+func TestRecordOnce_SkipsAndForgetsApplicationsOnAnotherCluster(t *testing.T) {
+	t.Parallel()
+
+	otherWeb := models.AppRef{Namespace: "team-b", Name: "web"}
+	store := newFakeStore(record(web, "shop", webDeploy), record(otherWeb, "shop", webDeploy), record(worker, "shop", nil))
+	store.days[web] = map[string]storedDay{"2026-10-01": {cost: models.DailyCost{Date: "2026-10-01", TotalCost: 2}, namespace: "shop"}}
+	store.progress[web] = models.DailyProgress{Through: "2026-10-01", Scope: models.ScopeApplication}
+	source := &fakeOpenCost{costs: costsFrom("shop", "2026-10-01", "2026-10-02", 2)}
+	apps := fakeApps{apps: []exporter.Application{
+		application(web, "https://prod.example.com", ""),
+		application(otherWeb, exporter.LocalServer, ""),
+		// worker is not listed: an Application deleted since its last record is still recorded.
+	}}
+	recorder := newTestRecorder(store, source, "2026-10-03T12:00:00Z").WithApplications(apps).PruneRemote()
+
+	require.NoError(t, recorder.RecordOnce(context.Background()))
+
+	assert.Empty(t, store.storedDates(web), "a remote application's history is deleted")
+	assert.NotContains(t, store.progress, web)
+	for _, r := range store.latest {
+		assert.NotEqual(t, models.AppRef{Namespace: r.ApplicationNamespace, Name: r.ApplicationName}, web, "its cost record is deleted")
+	}
+	assert.NotEmpty(t, store.storedDates(otherWeb), "a same-named application in another namespace is recorded")
+	assert.NotEmpty(t, store.storedDates(worker))
+}
+
+func TestRecordOnce_SkipsButKeepsApplicationsOnAnotherClusterUnlessPruning(t *testing.T) {
+	t.Parallel()
+
+	store := newFakeStore(record(web, "shop", webDeploy))
+	store.days[web] = map[string]storedDay{"2026-10-01": {cost: models.DailyCost{Date: "2026-10-01", TotalCost: 2}, namespace: "shop"}}
+	source := &fakeOpenCost{costs: costsFrom("shop", "2026-10-01", "2026-10-02", 2)}
+	apps := fakeApps{apps: []exporter.Application{application(web, "https://prod.example.com", "")}}
+
+	require.NoError(t, newTestRecorder(store, source, "2026-10-03T12:00:00Z").WithApplications(apps).RecordOnce(context.Background()))
+
+	assert.Empty(t, source.calls, "a remote application is not measured")
+	assert.Len(t, store.latest, 1, "its cost record is kept")
+	assert.Equal(t, []string{"2026-10-01"}, store.storedDates(web), "its history is kept and not added to")
+}
+
+func TestRecordOnce_ADestinationNamedOtherThanInClusterIsRemote(t *testing.T) {
+	t.Parallel()
+
+	store := newFakeStore(record(web, "shop", webDeploy))
+	source := &fakeOpenCost{}
+	apps := fakeApps{apps: []exporter.Application{application(web, "", "prod")}}
+
+	require.NoError(t, newTestRecorder(store, source, "2026-10-03T12:00:00Z").WithApplications(apps).PruneRemote().RecordOnce(context.Background()))
+
+	assert.Empty(t, source.calls)
+	assert.Empty(t, store.latest)
+}
+
+func TestRecordOnce_RecordsEveryApplicationWhenTheApplicationsCannotBeListed(t *testing.T) {
+	t.Parallel()
+
+	store := newFakeStore(record(web, "shop", webDeploy))
+	source := &fakeOpenCost{costs: costsFrom("shop", "2026-10-01", "2026-10-02", 2)}
+	apps := fakeApps{err: errors.New("forbidden")}
+
+	err := newTestRecorder(store, source, "2026-10-03T12:00:00Z").WithApplications(apps).PruneRemote().RecordOnce(context.Background())
+
+	require.ErrorContains(t, err, "forbidden", "the run still reports the failed list")
+	assert.NotEmpty(t, store.storedDates(web), "history is recorded as without a lister")
+	assert.Len(t, store.latest, 1, "nothing is deleted on a failed list")
+	assert.NotEmpty(t, store.prunedTo)
+}
+
+func TestRecordOnce_AFailedDeleteIsReportedAndTheOthersAreRecorded(t *testing.T) {
+	t.Parallel()
+
+	store := newFakeStore(record(web, "shop", webDeploy), record(worker, "shop", nil))
+	store.deleteErr = errors.New("connection reset")
+	source := &fakeOpenCost{costs: costsFrom("shop", "2026-10-01", "2026-10-02", 2)}
+	apps := fakeApps{apps: []exporter.Application{application(web, "https://prod.example.com", "")}}
+
+	err := newTestRecorder(store, source, "2026-10-03T12:00:00Z").WithApplications(apps).PruneRemote().RecordOnce(context.Background())
+
+	require.ErrorContains(t, err, "connection reset")
+	assert.Empty(t, store.storedDates(web), "a remote application is not recorded even when its delete fails")
+	assert.NotEmpty(t, store.storedDates(worker))
 }
 
 func TestRecordOnce_StoresOnlyTheDaysItAskedFor(t *testing.T) {

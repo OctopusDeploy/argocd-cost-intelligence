@@ -107,6 +107,10 @@ func (m *mockStorage) SetDailyProgress(context.Context, models.AppRef, models.Da
 
 func (m *mockStorage) PruneDailyCosts(context.Context, string) error { return nil }
 
+func (m *mockStorage) DeleteMeasurements(context.Context, models.AppRef) (bool, error) {
+	return false, nil
+}
+
 func (m *mockStorage) SaveFirstActual(context.Context, *models.CostActual) (bool, error) {
 	return true, nil
 }

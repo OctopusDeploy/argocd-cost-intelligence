@@ -42,6 +42,7 @@ type Store interface {
 	ListLatestActuals(ctx context.Context) ([]models.CostActual, error)
 	SaveFirstActual(ctx context.Context, actual *models.CostActual) (bool, error)
 	Lock(ctx context.Context, name string) (unlock func(), err error)
+	DeleteMeasurements(ctx context.Context, app models.AppRef) (bool, error)
 }
 
 // Result counts the Applications a run saw, by what it did with them.
@@ -52,6 +53,9 @@ type Result struct {
 	Recorded int
 	// Remote deploy to a cluster other than the one OpenCost measures.
 	Remote int
+	// Removed are the Remote ones whose stored cost PruneRemote deleted: it measured a namespace of
+	// this cluster, not theirs.
+	Removed int
 	// NoNamespace have no valid destination namespace to measure.
 	NoNamespace int
 	// NoData deploy to a namespace OpenCost has no data for yet.
@@ -64,6 +68,7 @@ func (r *Result) add(o Result) {
 	r.Saved += o.Saved
 	r.Recorded += o.Recorded
 	r.Remote += o.Remote
+	r.Removed += o.Removed
 	r.NoNamespace += o.NoNamespace
 	r.NoData += o.NoData
 	r.Failed += o.Failed
@@ -76,6 +81,8 @@ type Backfill struct {
 	client      *opencost.Client
 	concurrency int
 	logger      *log.Logger
+	// pruneRemote deletes the stored cost of the Applications deploying to another cluster.
+	pruneRemote bool
 }
 
 // New returns a backfill measuring up to concurrency namespaces at once.
@@ -83,9 +90,17 @@ func New(apps exporter.ApplicationLister, store Store, client *opencost.Client, 
 	return &Backfill{apps: apps, store: store, client: client, concurrency: max(concurrency, 1), logger: logger}
 }
 
-// Run measures every Application without a cost record, once another replica's run, if any, is over.
-// A namespace that fails is counted in Result.Failed rather than returned; the error is for what stops
-// the whole run.
+// PruneRemote has each run also delete the stored cost of the Applications that deploy to another
+// cluster. It can't be undone, so it is off unless asked for.
+func (b *Backfill) PruneRemote() *Backfill {
+	b.pruneRemote = true
+	return b
+}
+
+// Run measures every Application without a cost record, and with PruneRemote deletes the stored cost
+// of those that deploy to another cluster, once another replica's run, if any, is over. A namespace
+// that fails is counted in Result.Failed rather than returned; the error is for what stops the
+// whole run.
 func (b *Backfill) Run(ctx context.Context) (Result, error) {
 	unlock, err := b.store.Lock(ctx, lockName)
 	if err != nil {
@@ -103,7 +118,23 @@ func (b *Backfill) Run(ctx context.Context) (Result, error) {
 	}
 
 	var result Result
-	byNamespace := pending(apps, recorded, &result)
+	byNamespace, stale := pending(apps, recorded, &result)
+	if !b.pruneRemote {
+		stale = nil
+	}
+	for _, app := range stale {
+		if ctx.Err() != nil {
+			return result, ctx.Err()
+		}
+		deleted, err := b.store.DeleteMeasurements(ctx, app)
+		switch {
+		case err != nil:
+			b.logger.Printf("Backfill: deleting the stored cost of %s, which deploys to another cluster: %v", app, err)
+			result.Failed++
+		case deleted:
+			result.Removed++
+		}
+	}
 	namespaces := make([]string, 0, len(byNamespace))
 	for ns := range byNamespace {
 		namespaces = append(namespaces, ns)
@@ -164,21 +195,25 @@ func (b *Backfill) RunWithRetries(ctx context.Context, delays []time.Duration, r
 }
 
 // pending groups the Applications to measure by the namespace they deploy to, and counts the others in
-// result by why they are left out.
-func pending(apps []exporter.Application, recorded []models.CostActual, result *Result) map[string][]exporter.Application {
+// result by why they are left out. stale are the Applications deploying to another cluster that have
+// a cost record anyway, stored before such Applications were skipped.
+func pending(apps []exporter.Application, recorded []models.CostActual, result *Result) (byNamespace map[string][]exporter.Application, stale []models.AppRef) {
 	has := make(map[models.AppRef]bool, len(recorded))
 	for _, r := range recorded {
 		has[models.AppRef{Namespace: r.ApplicationNamespace, Name: r.ApplicationName}] = true
 	}
-	byNamespace := map[string][]exporter.Application{}
+	byNamespace = map[string][]exporter.Application{}
 	for _, app := range apps {
 		switch ns := app.Destination.Namespace; {
-		case has[app.Ref]:
-			result.Recorded++
 		case !app.Destination.Local():
 			// OpenCost measures the cluster it runs in; another cluster's namespace of the same name
 			// would be measured here.
 			result.Remote++
+			if has[app.Ref] {
+				stale = append(stale, app.Ref)
+			}
+		case has[app.Ref]:
+			result.Recorded++
 		case ns == "" || !validation.IsValidNamespace(ns):
 			// The sync hook falls back to the Application's own namespace, where it does not deploy.
 			result.NoNamespace++
@@ -186,7 +221,7 @@ func pending(apps []exporter.Application, recorded []models.CostActual, result *
 			byNamespace[ns] = append(byNamespace[ns], app)
 		}
 	}
-	return byNamespace
+	return byNamespace, stale
 }
 
 // measure measures one namespace and saves the first record of each Application deploying there.

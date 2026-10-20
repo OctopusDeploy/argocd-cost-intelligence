@@ -85,6 +85,9 @@ spec:
         # record; 0 turns the backfill off. Uses the Application read rule in rbac.yaml.
         - name: BACKFILL_CONCURRENCY
           value: "4"
+        # Delete the stored cost of Applications that deploy to another cluster; can't be undone.
+        - name: PRUNE_REMOTE_COST
+          value: "false"
         # Rightsizing from Vertical Pod Autoscaler recommendations; needs the VPA rule in rbac.yaml.
         - name: VPA_ENABLED
           value: "true"

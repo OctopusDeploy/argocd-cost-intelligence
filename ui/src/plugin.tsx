@@ -1,6 +1,8 @@
 import React, { useMemo } from 'react';
 import { CostPanel } from './components/CostPanel';
+import { RemoteClusterPanel } from './components/RemoteClusterPanel';
 import { AppContext } from './utils/api';
+import { Destination, otherCluster } from './utils/destination';
 
 // Argo CD Plugin Interface
 export const plugin = {
@@ -22,9 +24,7 @@ export interface ApplicationDetailsTabProps {
     };
     spec?: {
       project?: string;
-      destination?: {
-        namespace: string;
-      };
+      destination?: Destination;
     };
     status?: {
       resources?: Array<{ kind: string; name: string; namespace?: string }>;
@@ -61,6 +61,13 @@ export const ArgoCDCostIntelligenceTab: React.FC<ApplicationDetailsTabProps> = (
 
   if (!appName) {
     return <div>Unable to determine application name</div>;
+  }
+
+  // OpenCost measures only the cluster the service runs in, so an application deploying elsewhere has
+  // no cost to show, and its views would fetch nothing useful.
+  const cluster = otherCluster(application.spec?.destination);
+  if (cluster) {
+    return <RemoteClusterPanel cluster={cluster} />;
   }
 
   return <CostPanel appName={appName} appCtx={appCtx} managedControllers={managedControllers} />;

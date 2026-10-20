@@ -65,7 +65,7 @@ These are the invariants most likely to be broken by a well-meant change.
 - App routes serve `CostActual.ForApplication()` (`scope: "application"`, or `"namespace"` for old records without `app_json`). Never mix the two scopes in one comparison (`comparableHistory`).
 - The notifications template must send `{{.app.spec.destination.namespace}}` (where the app deploys), the app's `resources` and its destination cluster (`destinationServer`, `destinationName`); see `deploy/argocd-notifications-patch.yaml`.
 
-**Only this cluster.** OpenCost measures the cluster it runs in. An Application deploying elsewhere (`exporter.Destination.Local`, `hook.DeploysHere`) is never measured, by the webhook, the exporter or the startup backfill: a same-named namespace here is not its namespace. It is expected, so it is never counted as an error.
+**Only this cluster.** OpenCost measures the cluster it runs in. An Application deploying elsewhere (`exporter.Destination.Local`, `hook.DeploysHere`) is never measured, by the webhook, the exporter or the startup backfill, and the history recorder never records it: a same-named namespace here is not its namespace. It is expected, so it is never counted as an error. With `PRUNE_REMOTE_COST` (off by default, as it can't be undone), cost already stored for one is deleted (`DeleteMeasurements`) by the backfill and the recorder, driven only by the live Application list, never by a webhook. The tab shows `RemoteClusterPanel` for it (`otherCluster` in `ui/src/utils/destination.ts`, the same rule).
 
 **Application identity.** An application is its `application_namespace` plus its name: with apps-in-any-namespace, `team-a:web` and `team-b:web` differ. Every per-app query filters on both, and anything grouped "per app" groups by both.
 
@@ -99,7 +99,7 @@ In the UI, app calls send `headers(ctx)` and cluster calls send `clusterHeaders(
 
 ## Configuration
 
-Required: `DB_PASSWORD`, `OPENCOST_BASE_URL`, `WEBHOOK_SECRET` (16+ characters). Optional: `CLUSTER_SCOPE_APP` (`<namespace>:<name>`), `DAILY_HISTORY_DAYS`, `BACKFILL_CONCURRENCY` (default 4, `0` = off), `VPA_ENABLED`, `METRICS_PORT` (default 9102; `0` = off in API mode; must differ from `SERVER_PORT`). `MODE=exporter` runs the exporter, which needs no `WEBHOOK_SECRET` and refreshes every `EXPORTER_INTERVAL` (default 5m, at least 1m). The full list with defaults is in [.env.example](.env.example) and [docs/configuration.md](docs/configuration.md#environment-variables).
+Required: `DB_PASSWORD`, `OPENCOST_BASE_URL`, `WEBHOOK_SECRET` (16+ characters). Optional: `CLUSTER_SCOPE_APP` (`<namespace>:<name>`), `DAILY_HISTORY_DAYS`, `BACKFILL_CONCURRENCY` (default 4, `0` = off), `PRUNE_REMOTE_COST` (default off), `VPA_ENABLED`, `METRICS_PORT` (default 9102; `0` = off in API mode; must differ from `SERVER_PORT`). `MODE=exporter` runs the exporter, which needs no `WEBHOOK_SECRET` and refreshes every `EXPORTER_INTERVAL` (default 5m, at least 1m). The full list with defaults is in [.env.example](.env.example) and [docs/configuration.md](docs/configuration.md#environment-variables).
 
 ## Go conventions
 

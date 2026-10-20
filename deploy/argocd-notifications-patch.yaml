@@ -6,6 +6,14 @@
 #   TOKEN_B64=$(kubectl get secret argocd-cost-intelligence-webhook -n argocd-cost-intel -o jsonpath='{.data.token}')
 #   kubectl patch secret argocd-notifications-secret -n argocd --type merge \
 #     -p "{\"data\":{\"cost-intel-webhook-token\":\"${TOKEN_B64}\"}}"
+#
+# Every key here is named after cost-intel, so the patch leaves your own triggers and templates
+# alone. It doesn't set `subscriptions`: that is one key for every subscription you have, and a
+# patch would replace it. Add this entry to the list in `subscriptions` yourself:
+#   - recipients:
+#     - cost-intel
+#     triggers:
+#     - cost-intel-on-sync-succeeded
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -21,15 +29,18 @@ data:
     - name: Authorization
       value: Bearer $cost-intel-webhook-token
 
-  trigger.on-sync-succeeded: |
-    - when: app.status.operationState.phase in ['Succeeded'] and app.status.operationState.finishedAt != ''
+  trigger.cost-intel-on-sync-succeeded: |
+    - when: app.status.operationState.phase in ["Succeeded"] and app.status.operationState.finishedAt != ""
       oncePer: app.status.operationState.finishedAt
-      send: [app-sync-succeeded]
+      send: [cost-intel-sync-succeeded]
 
-  template.app-sync-succeeded: |
+  template.cost-intel-sync-succeeded: |
     webhook:
       cost-intel:
         method: POST
+        headers:
+        - name: Content-Type
+          value: application/json
         body: |
           {
             "applicationName": "{{.app.metadata.name}}",

@@ -1,0 +1,15 @@
+webhook:
+  cost-intel:
+    method: POST
+    headers:
+    - name: Content-Type
+      value: application/json
+    body: |
+      {
+        "applicationName": "{{.app.metadata.name}}",
+        "applicationNamespace": "{{.app.metadata.namespace}}",
+        "namespace": "{{.app.spec.destination.namespace}}",
+        "resources": [{{range $i, $r := .app.status.resources}}{{if $i}}, {{end}}{"kind": "{{$r.kind}}", "name": "{{$r.name}}", "namespace": "{{with index $r "namespace"}}{{.}}{{end}}"}{{end}}],
+        "syncTimestamp": "{{.app.status.operationState.finishedAt}}",
+        "syncResult": "Succeeded"
+      }

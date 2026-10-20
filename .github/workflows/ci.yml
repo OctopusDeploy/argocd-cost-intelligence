@@ -170,6 +170,9 @@ jobs:
       - name: Embedded mock OpenCost
         run: make lint-mock
 
+      - name: Notifications patch matches the chart
+        run: make lint-notifications
+
   prometheus-rules:
     name: Prometheus rules — check & test
     runs-on: ubuntu-latest

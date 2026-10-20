@@ -38,10 +38,10 @@ Common causes:
     curl -s 'http://opencost.opencost:9003/allocation?window=24h' | head -c 200
   ```
   Use your `openCost.baseURL` if it differs. A new OpenCost needs time to collect metrics and reports $0 until it has a full window.
-- **The tab shows "401: Unauthorized extension request".** Argo CD refused the call before it reached the backend. The `argocd-server` log says `permission denied: extensions, invoke, cost-intel`. Add the rule from [Grant access in Argo CD](installation.md#grant-access-in-argo-cd), for the built-in `admin` as well.
+- **The tab shows "401: Unauthorized extension request".** Argo CD refused the call before it reached the backend. The `argocd-server` log says `permission denied: extensions, invoke, cost-intel`. The hook allows `role:admin` through `policy.cost-intel.csv` in `argocd-rbac-cm`, unless `argoCd.rbac.grantAdmin` is off. Every other role needs the rule from [Grant access in Argo CD](installation.md#grant-access-in-argo-cd).
 - **The webhook is refused.** The backend logs `Refused POST /on-sync` and answers 401. Argo CD Notifications sent no token or the wrong one. It sends the `cost-intel-webhook-token` key of `argocd-notifications-secret`, which has to equal the backend's token. `helm upgrade` copies it again. If something else manages that Secret (Argo CD's own Helm chart, say) and replaces it, add the key there.
 - **The webhook is accepted but nothing is stored.** `/on-sync` answers 202 as soon as it queues the work, and the OpenCost query and database write happen afterwards. Follow the backend log while you sync: `kubectl logs -f -n argocd-cost-intel deploy/argocd-cost-intelligence`.
-- **The webhook never arrives.** Run `kubectl logs -n argocd deploy/argocd-notifications-controller | grep cost-intel`, and check that the notifications ConfigMap still has the `subscriptions` entry. Restart the controller after you change the ConfigMap.
+- **The webhook never arrives.** Run `kubectl logs -n argocd deploy/argocd-notifications-controller | grep cost-intel`, and check that `subscriptions` in the notifications ConfigMap still has the entry that sends `cost-intel-on-sync-succeeded` to `cost-intel`. Restart the controller after you change the ConfigMap.
 
 ### Rightsizing doesn't show
 

@@ -134,7 +134,8 @@ const Freshness: React.FC<FreshnessProps> = ({ tab, data, dailyCosts }) => {
     <MeasuredLabel
       measuredAt={data.measuredAt}
       measuredHours={measuredHours}
-      title={`Measured with OpenCost after the latest sync, ${new Date(data.measuredAt).toLocaleString()}.${partial}`}
+      atInstall={data.measuredOn === 'install'}
+      title={`Measured with OpenCost ${data.measuredOn === 'install' ? 'at install, before the application synced' : 'after the latest sync'}, ${new Date(data.measuredAt).toLocaleString()}.${partial}`}
     />
   );
 };

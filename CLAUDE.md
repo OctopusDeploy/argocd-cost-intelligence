@@ -48,6 +48,7 @@ sync-succeeded event → Argo CD Notifications
 | `pkg/opencost` | OpenCost allocation client and cost transformation |
 | `pkg/cloudcost` | Normalises IaC cost JSON (Infracost) into `CloudServiceEstimate` |
 | `pkg/storage` | `CostStorage` interface and PostgreSQL implementation |
+| `pkg/backfill` | At startup, measures each local Application without a cost record (`measured_on = 'install'`), one replica at a time under an advisory lock |
 | `pkg/history` | Daily cost history: `Recorder` stores each app's cost per UTC day, `Daily` serves `/daily` |
 | `pkg/telemetry` | Each API replica's own Prometheus metrics (requests, webhooks, measurements, OpenCost and DB calls, history runs); nil-safe |
 | `pkg/exporter` | Singleton exporter: lists Applications live, measures each namespace over the last hour, exports each app's cost per hour |
@@ -69,6 +70,8 @@ These are the invariants most likely to be broken by a well-meant change.
 **Idempotent writes.** `cost_actuals` upserts with `ON CONFLICT (id) DO UPDATE`, so replayed webhooks are safe. Replicas of the history recorder may run at once for the same reason.
 
 **Storage behind an interface.** Depend on `storage.CostStorage`, never on the PostgreSQL type. Schema changes are numbered up/down migrations in `pkg/storage/migrations/`.
+
+**Measured at install.** Only a sync or the startup backfill writes `cost_actuals`. A backfilled record has `measured_on = 'install'` and no sync timestamp in the API (the column holds its measurement time, so older replicas can still read it during a rollout); it is only ever a first record (`SaveFirstActual`), and it is never the baseline of a change since the last sync (`measuredAtInstall` in the UI); anomalies may still use it.
 
 **Daily history.** OpenCost keeps only the days its Prometheus retains, so `history.Recorder` stores each app's cost per UTC day in `cost_daily` (progress in `cost_daily_progress`). Days are stored with their scope and never served in another. `DAILY_HISTORY_DAYS` (default 400, `0` = off) bounds retention.
 
@@ -94,7 +97,7 @@ In the UI, app calls send `headers(ctx)` and cluster calls send `clusterHeaders(
 
 ## Configuration
 
-Required: `DB_PASSWORD`, `OPENCOST_BASE_URL`, `WEBHOOK_SECRET` (16+ characters). Optional: `CLUSTER_SCOPE_APP` (`<namespace>:<name>`), `DAILY_HISTORY_DAYS`, `VPA_ENABLED`, `METRICS_PORT` (default 9102; `0` = off in API mode; must differ from `SERVER_PORT`). `MODE=exporter` runs the exporter, which needs no `WEBHOOK_SECRET` and refreshes every `EXPORTER_INTERVAL` (default 5m, at least 1m). The full list with defaults is in [.env.example](.env.example) and [docs/configuration.md](docs/configuration.md#environment-variables).
+Required: `DB_PASSWORD`, `OPENCOST_BASE_URL`, `WEBHOOK_SECRET` (16+ characters). Optional: `CLUSTER_SCOPE_APP` (`<namespace>:<name>`), `DAILY_HISTORY_DAYS`, `BACKFILL_CONCURRENCY` (default 4, `0` = off), `VPA_ENABLED`, `METRICS_PORT` (default 9102; `0` = off in API mode; must differ from `SERVER_PORT`). `MODE=exporter` runs the exporter, which needs no `WEBHOOK_SECRET` and refreshes every `EXPORTER_INTERVAL` (default 5m, at least 1m). The full list with defaults is in [.env.example](.env.example) and [docs/configuration.md](docs/configuration.md#environment-variables).
 
 ## Go conventions
 

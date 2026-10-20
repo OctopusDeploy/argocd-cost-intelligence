@@ -39,6 +39,18 @@ describe('changeSinceLastSync', () => {
   it('returns null when the previous measurement cost nothing', () => {
     expect(changeSinceLastSync(latest, [measurement('2026-08-31T00:00:00Z', 0)])).toBeNull();
   });
+
+  it('never compares with a measurement taken at install', () => {
+    const atInstall = { ...measurement('2026-08-31T00:00:00Z', 3525.9), measuredOn: 'install' as const };
+
+    expect(changeSinceLastSync(latest, [latest, atInstall])).toBeNull();
+  });
+
+  it('has no change when the latest measurement was taken at install', () => {
+    const atInstall = { ...latest, measuredOn: 'install' as const };
+
+    expect(changeSinceLastSync(atInstall, [atInstall, measurement('2026-08-31T00:00:00Z', 3525.9)])).toBeNull();
+  });
 });
 
 describe('sharedNamespace and scopeToApp', () => {
@@ -101,6 +113,14 @@ describe('previousMeasurement', () => {
 
     expect(previousMeasurement(latest, history)).toBe(previous);
     expect(previousMeasurement(latest, [latest])).toBeNull();
+  });
+
+  it('skips measurements taken at install for the sync before them', () => {
+    const latest = measurement('2026-09-01T14:57:05Z', 488.4);
+    const previous = measurement('2026-08-20T10:00:00Z', 100);
+    const atInstall = { ...measurement('2026-09-01T14:48:42Z', 3525.9), measuredOn: 'install' as const };
+
+    expect(previousMeasurement(latest, [latest, atInstall, previous])).toBe(previous);
   });
 });
 

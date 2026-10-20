@@ -81,6 +81,10 @@ spec:
         # Days of daily cost history to keep; 0 turns recording off.
         - name: DAILY_HISTORY_DAYS
           value: "400"
+        # Namespaces measured at once when the service starts and finds Applications without a cost
+        # record; 0 turns the backfill off. Uses the Application read rule in rbac.yaml.
+        - name: BACKFILL_CONCURRENCY
+          value: "4"
         # Rightsizing from Vertical Pod Autoscaler recommendations; needs the VPA rule in rbac.yaml.
         - name: VPA_ENABLED
           value: "true"

@@ -105,6 +105,8 @@ spec:
               key: token
         - name: DAILY_HISTORY_DAYS
           value: {{ .Values.costIntelligence.dailyHistoryDays | quote }}
+        - name: BACKFILL_CONCURRENCY
+          value: {{ .Values.costIntelligence.backfillConcurrency | quote }}
         - name: VPA_ENABLED
           value: {{ .Values.costIntelligence.vpa.enabled | quote }}
         {{- with .Values.costIntelligence.clusterScopeApp }}

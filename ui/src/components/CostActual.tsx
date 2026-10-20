@@ -19,6 +19,7 @@ import {
   CostChange,
   NOT_TIED_TO_A_POD,
   asApplication,
+  measuredAtInstall,
   previousMeasurement,
   recommendCpuRequest,
   SharedNamespace,
@@ -66,7 +67,9 @@ export const CostActual: React.FC<CostActualProps> = ({
   const measuredAlone = data.scope === 'application';
   const shared = measuredAlone ? null : sharedNamespace(data, managedControllers);
   const latest = asApplication(data, managedControllers) ?? data;
-  const earlier = previousMeasurement(data, trend?.trend ?? []);
+  // A measurement taken when the service started has no sync before it to compare with.
+  const atInstall = measuredAtInstall(data);
+  const earlier = atInstall ? null : previousMeasurement(data, trend?.trend ?? []);
   // An application's own cost is only compared with an earlier cost of its own, never its namespace's.
   const previous = earlier && (asApplication(earlier, managedControllers) ?? (measuredAlone ? null : earlier));
   const kubernetes = latest.totalMonthlyCost;
@@ -128,7 +131,7 @@ export const CostActual: React.FC<CostActualProps> = ({
           {
             label: 'Since last sync',
             value: change ? <ChangeValue change={change} t={t} /> : '—',
-            detail: change ? changeDetail(change, drivers) : 'No earlier measurement',
+            detail: change ? changeDetail(change, drivers) : atInstall ? 'Measured at install' : 'No earlier measurement',
           },
           {
             label: 'Idle spend',
@@ -160,7 +163,11 @@ export const CostActual: React.FC<CostActualProps> = ({
         {drivers && <ChangeDriversCard drivers={drivers} />}
       </div>
 
-      <p style={{ margin: '16px 0 0', color: t.textMuted, fontSize: '12px' }}>Costs are measured after each sync with OpenCost.</p>
+      <p style={{ margin: '16px 0 0', color: t.textMuted, fontSize: '12px' }}>
+        {atInstall
+          ? 'These costs were measured with OpenCost when the service started, before the application synced. They are measured again after each sync.'
+          : 'Costs are measured after each sync with OpenCost.'}
+      </p>
     </div>
   );
 };

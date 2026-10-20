@@ -970,3 +970,111 @@ func TestMigration008_AddsTheDailyHistoryTables(t *testing.T) {
 		"SELECT COUNT(*) FROM information_schema.tables WHERE table_name IN ('cost_daily', 'cost_daily_progress')").Scan(&tables))
 	assert.Zero(t, tables)
 }
+
+// ---- Measurements at install ----
+
+func installRecord(id string, measuredAt time.Time) *models.CostActual {
+	return &models.CostActual{
+		ID: id, ApplicationName: "my-app", ApplicationNamespace: "argocd", DeploymentNamespace: "shop",
+		MeasuredAt: measuredAt, MeasuredOn: models.MeasuredOnInstall, TotalMonthlyCost: 100,
+		App: &models.AppMeasurement{Controllers: models.ManagedResources{{Kind: "Deployment", Name: "web"}}},
+	}
+}
+
+func TestSaveFirstActual_StoresAMeasurementAtInstallWithoutASync(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Second)
+
+	saved, err := testStorage.SaveFirstActual(ctx, installRecord("install-1", now))
+	require.NoError(t, err)
+	assert.True(t, saved)
+
+	got, err := testStorage.GetLatestActual(ctx, myApp)
+	require.NoError(t, err)
+	assert.Equal(t, "install-1", got.ID)
+	assert.Equal(t, models.MeasuredOnInstall, got.MeasuredOn)
+	assert.True(t, got.SyncTimestamp.IsZero())
+	assert.Equal(t, now, got.MeasuredAt.UTC())
+	var stored time.Time
+	require.NoError(t, testStorage.db.QueryRowContext(ctx, "SELECT sync_timestamp FROM cost_actuals WHERE id = 'install-1'").Scan(&stored))
+	assert.Equal(t, now, stored.UTC(), "the measurement time is stored in place of a sync, so older replicas can read the row")
+	require.NotNil(t, got.App)
+	assert.Equal(t, models.ManagedResources{{Kind: "Deployment", Name: "web"}}, got.App.Controllers)
+
+	inRange, err := testStorage.GetActualsInDateRange(ctx, myApp, now.Add(-time.Hour), now.Add(time.Hour))
+	require.NoError(t, err)
+	require.Len(t, inRange, 1)
+	assert.Equal(t, models.MeasuredOnInstall, inRange[0].MeasuredOn)
+	assert.True(t, inRange[0].SyncTimestamp.IsZero())
+
+	inNamespace, err := testStorage.GetLatestActualsForNamespace(ctx, "shop")
+	require.NoError(t, err)
+	require.Len(t, inNamespace, 1)
+	assert.Equal(t, models.MeasuredOnInstall, inNamespace[0].MeasuredOn)
+}
+
+func TestSaveFirstActual_NeverReplacesARecord(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Second)
+	require.NoError(t, testStorage.SaveActual(ctx, &models.CostActual{
+		ID: "sync-1", ApplicationName: "my-app", ApplicationNamespace: "argocd", DeploymentNamespace: "shop",
+		SyncTimestamp: now.Add(-time.Hour), MeasuredAt: now.Add(-time.Hour), TotalMonthlyCost: 50,
+	}))
+
+	saved, err := testStorage.SaveFirstActual(ctx, installRecord("install-1", now))
+	require.NoError(t, err)
+	assert.False(t, saved)
+
+	got, err := testStorage.GetLatestActual(ctx, myApp)
+	require.NoError(t, err)
+	assert.Equal(t, "sync-1", got.ID)
+	assert.Equal(t, models.MeasuredOnSync, got.MeasuredOn, "a record saved without saying is a sync's")
+	assert.InDelta(t, 50.0, got.TotalMonthlyCost, 0.01)
+
+	// The same name in another namespace is another application.
+	other := installRecord("install-2", now)
+	other.ApplicationNamespace = "team-a"
+	saved, err = testStorage.SaveFirstActual(ctx, other)
+	require.NoError(t, err)
+	assert.True(t, saved)
+}
+
+func TestLock_IsHeldByOneSessionAtATime(t *testing.T) {
+	ctx := context.Background()
+	unlock, err := testStorage.Lock(ctx, "test-lock")
+	require.NoError(t, err)
+
+	waiting, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
+	defer cancel()
+	_, err = testStorage.Lock(waiting, "test-lock")
+	require.Error(t, err, "a second holder waits until its context ends")
+
+	other, err := testStorage.Lock(ctx, "another-lock")
+	require.NoError(t, err, "locks of other names are independent")
+	other()
+
+	unlock()
+	again, err := testStorage.Lock(ctx, "test-lock")
+	require.NoError(t, err)
+	again()
+}
+
+func TestMigration009_AddsMeasuredOn(t *testing.T) {
+	db, m := newDatabaseAt(t, 8)
+	exec(t, db, `INSERT INTO cost_actuals (id, application_name, application_namespace, sync_timestamp, measured_at, total_monthly_cost)
+		VALUES ('old', 'web', 'argocd', '2026-10-01 10:00:00', '2026-10-01 10:05:00', 1)`)
+
+	require.NoError(t, m.Migrate(9))
+	var measuredOn string
+	require.NoError(t, db.QueryRowContext(context.Background(), "SELECT measured_on FROM cost_actuals WHERE id = 'old'").Scan(&measuredOn))
+	assert.Equal(t, models.MeasuredOnSync, measuredOn, "existing records were measured on a sync")
+	exec(t, db, `INSERT INTO cost_actuals (id, application_name, application_namespace, sync_timestamp, measured_at, total_monthly_cost, measured_on)
+		VALUES ('install', 'api', 'argocd', '2026-10-02 10:00:00', '2026-10-02 10:00:00', 1, 'install')`)
+
+	require.NoError(t, m.Migrate(8))
+	var count int
+	require.NoError(t, db.QueryRowContext(context.Background(), "SELECT count(*) FROM cost_actuals").Scan(&count))
+	assert.Equal(t, 2, count, "down keeps every record")
+}

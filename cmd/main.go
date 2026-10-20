@@ -15,6 +15,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/backfill"
 	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/config"
 	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/exporter"
 	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/history"
@@ -123,17 +124,26 @@ func runAPI(cfg *config.Config, logger *log.Logger) {
 	)
 
 	// Record each application's daily cost, so long ranges do not depend on Prometheus retention.
-	recorderCtx, stopRecorder := context.WithCancel(context.Background())
-	defer stopRecorder()
+	background, stopBackground := context.WithCancel(context.Background())
+	defer stopBackground()
+	var recorder *history.Recorder
 	if cfg.DailyHistoryDays > 0 {
-		recorder := history.NewRecorder(costStorage, opencostClient, cfg.DailyHistoryDays, logger)
+		recorder = history.NewRecorder(costStorage, opencostClient, cfg.DailyHistoryDays, logger)
 		if metrics != nil {
 			recorder.OnRun(metrics.ObserveHistoryRun)
 		}
-		go recorder.Run(recorderCtx)
+		go recorder.Run(background)
 		logger.Printf("Recording daily cost history, keeping %d days\n", cfg.DailyHistoryDays)
 	} else {
 		logger.Print("Daily cost history disabled (DAILY_HISTORY_DAYS=0)")
+	}
+
+	// Measure the applications with no cost record yet, so a fresh install shows costs before each
+	// application syncs again.
+	if cfg.BackfillConcurrency > 0 {
+		go runBackfill(background, cfg.BackfillConcurrency, costStorage, opencostClient, recorder, logger)
+	} else {
+		logger.Print("Startup backfill disabled (BACKFILL_CONCURRENCY=0)")
 	}
 
 	servers := []*http.Server{{
@@ -152,7 +162,38 @@ func runAPI(cfg *config.Config, logger *log.Logger) {
 		logger.Print("Metrics disabled (METRICS_PORT=0)")
 	}
 
-	serveUntilSignal(logger, servers, stopRecorder)
+	serveUntilSignal(logger, servers, stopBackground)
+}
+
+// runBackfill measures every Argo CD Application without a cost record, after any other replica's run,
+// then has the recorder record their history. It runs again a few times while namespaces are left
+// unmeasured. Outside a cluster there are no Applications to list.
+func runBackfill(ctx context.Context, concurrency int, store storage.CostStorage, client *opencost.Client, recorder *history.Recorder, logger *log.Logger) {
+	kubeConfig, err := rest.InClusterConfig()
+	if err != nil {
+		logger.Printf("Startup backfill off: not running in a Kubernetes cluster (%v)\n", err)
+		return
+	}
+	kubeConfig.Timeout = 30 * time.Second
+	kubeClient, err := dynamic.NewForConfig(kubeConfig)
+	if err != nil {
+		logger.Printf("Startup backfill off: %v\n", err)
+		return
+	}
+
+	b := backfill.New(exporter.NewKubeApplicationLister(kubeClient), store, client, concurrency, logger)
+	b.RunWithRetries(ctx, backfill.RetryDelays, func(result backfill.Result, err error) {
+		if err != nil {
+			logger.Printf("Startup backfill: %v\n", err)
+			return
+		}
+		logger.Printf("Startup backfill: %d measured, %d already recorded, %d on other clusters, %d without a destination namespace, "+
+			"%d in namespaces OpenCost has no data for yet, %d failed\n",
+			result.Saved, result.Recorded, result.Remote, result.NoNamespace, result.NoData, result.Failed)
+		if result.Saved > 0 && recorder != nil {
+			recorder.RecordSoon()
+		}
+	})
 }
 
 // runExporter exports every Argo CD Application's cost to Prometheus. It runs as a single replica:

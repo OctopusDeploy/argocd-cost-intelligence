@@ -8,6 +8,10 @@ All notable changes to this project are listed here. The format follows [Keep a 
 
 - Building from source needs Go 1.27 or newer. The images and the Helm chart are unaffected.
 
+### Added
+
+- Costs show up right after install. When the service starts, it measures each Argo CD Application that deploys to this cluster and has no cost record yet, instead of waiting for the application's next sync. If OpenCost has no data for a namespace yet, it tries again a few times over the next quarter of an hour. These records say "Measured at install" in the UI and are never compared with a later sync in "Since last sync". Replicas take turns, and `BACKFILL_CONCURRENCY` (Helm `costIntelligence.backfillConcurrency`, 4 by default, `0` to turn it off) bounds how many namespaces are measured at once. It uses the existing permission to read Applications; no RBAC change is needed. In the API, these records have `measuredOn: "install"` and no `syncTimestamp`; every other record has `measuredOn: "sync"`.
+
 ### Changed
 
 - The UI plugin has a new look. Both the application tab and the Namespaces / Chargeback page sit in a panel headed "Cost Intelligence", with "by Octopus Deploy" under it linking to the Octopus Deploy website. They use Octopus Deploy's colours and the Inter font, which is bundled into the plugin so it works without internet access. Labels are in sentence case and the Reload button is labelled.

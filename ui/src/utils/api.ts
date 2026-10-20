@@ -84,6 +84,11 @@ export interface CostData {
   scope?: 'application' | 'namespace';
   totalMonthlyCost: number;
   measuredAt: string;
+  // measuredOn says what took the measurement: a sync ('sync'), or the service when it started and found
+  // the application had no record yet ('install'), in which case there is no syncTimestamp. Absent on
+  // records stored before it was, which were all taken after a sync.
+  measuredOn?: 'sync' | 'install';
+  syncTimestamp?: string;
   // measuredHours is how much of its 24-hour window OpenCost had data for; monthly costs are projected
   // from it. Absent on records measured before it was stored.
   opencostOutput?: { allocationTotals: CostBreakdown; measuredHours?: number };

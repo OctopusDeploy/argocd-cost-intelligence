@@ -156,6 +156,27 @@ describe('CostActual', () => {
     expect(screen.queryByRole('heading', { name: 'What changed' })).toBeNull();
   });
 
+  describe('measured at install', () => {
+    it('compares nothing with a measurement taken before the application synced', () => {
+      const data = fixture({ measuredOn: 'install' });
+      render(<CostActual data={data} trend={trendWithPrevious(data)} loading={false} error={null} />);
+
+      expect(stat('Since last sync')).toEqual({ value: '—', detail: 'Measured at install' });
+      expect(screen.queryByRole('heading', { name: 'What changed' })).toBeNull();
+      expect(screen.getByText(/measured with OpenCost when the service started/)).toBeTruthy();
+    });
+
+    it('does not compare the first sync with the measurement taken at install', () => {
+      const data = fixture({ measuredOn: 'sync' });
+      render(
+        <CostActual data={data} trend={trendWithPrevious(data, { measuredOn: 'install' })} loading={false} error={null} />,
+      );
+
+      expect(stat('Since last sync')).toEqual({ value: '—', detail: 'No earlier measurement' });
+      expect(screen.getByText('Costs are measured after each sync with OpenCost.')).toBeTruthy();
+    });
+  });
+
   describe('what changed since the last sync', () => {
     const data = fixture({
       totalMonthlyCost: 300,

@@ -264,6 +264,34 @@ func TestRun_TellsTheObserverWhenEachRunEnds(t *testing.T) {
 	}
 }
 
+func TestRun_RecordsAgainWhenAskedBeforeTheNextTick(t *testing.T) {
+	t.Parallel()
+
+	runs := make(chan struct{}, 3)
+	recorder := newTestRecorder(newFakeStore(record(web, "shop", webDeploy)), &fakeOpenCost{}, "2026-10-03T12:00:00Z").
+		OnRun(func(time.Time, error) { runs <- struct{}{} })
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	// Asked twice before Run's first run is over: one more run, not two.
+	recorder.RecordSoon()
+	recorder.RecordSoon()
+	go recorder.Run(ctx)
+
+	for _, why := range []string{"Run did not record at once", "Run did not record again when asked"} {
+		select {
+		case <-runs:
+		case <-time.After(5 * time.Second):
+			t.Fatal(why)
+		}
+	}
+	select {
+	case <-runs:
+		t.Fatal("two requests made two more runs")
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
 // failingSource fails every request.
 type failingSource struct{ err error }
 

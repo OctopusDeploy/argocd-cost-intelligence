@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -88,6 +89,32 @@ func NewPostgresCostStorage(dsn string, opts ...Option) (*PostgresCostStorage, e
 	return &PostgresCostStorage{db: db}, nil
 }
 
+// lockClass is the first key of every advisory lock this service takes. PostgreSQL keeps two-key
+// advisory locks apart from one-key ones, which is what the migrations take.
+const lockClass = 0x636f7374 // "cost"
+
+// Lock waits until this process holds the named lock, which every replica sharing the database
+// contends for, and returns the function that releases it. The lock lives in a database session of its
+// own, so it is released when the process dies too.
+func (p *PostgresCostStorage) Lock(ctx context.Context, name string) (func(), error) {
+	conn, err := p.db.Conn(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open a session for lock %q: %w", name, err)
+	}
+	if _, err := conn.ExecContext(ctx, `SELECT pg_advisory_lock($1, hashtext($2))`, lockClass, name); err != nil {
+		closeSession(conn)
+		return nil, fmt.Errorf("failed to take lock %q: %w", name, err)
+	}
+	return func() { closeSession(conn) }, nil
+}
+
+// closeSession closes the connection rather than returning it to the pool: ending the session releases
+// every lock it holds, including one a cancelled wait may have taken anyway.
+func closeSession(conn *sql.Conn) {
+	_ = conn.Raw(func(any) error { return driver.ErrBadConn })
+	_ = conn.Close()
+}
+
 func (p *PostgresCostStorage) InitializeSchema(_ context.Context) error {
 	if err := runMigrations(p.db); err != nil {
 		return fmt.Errorf("failed to run database migrations: %w", err)
@@ -96,37 +123,12 @@ func (p *PostgresCostStorage) InitializeSchema(_ context.Context) error {
 }
 
 func (p *PostgresCostStorage) SaveActual(ctx context.Context, actual *models.CostActual) error {
-	resourcesJSON, err := json.Marshal(actual.Resources)
-	if err != nil {
-		return fmt.Errorf("failed to encode resources: %w", err)
-	}
-	opencostJSON, err := json.Marshal(actual.OpenCostOutput)
-	if err != nil {
-		return fmt.Errorf("failed to encode OpenCost output: %w", err)
-	}
-	efficiencyJSON, err := json.Marshal(actual.Efficiency)
-	if err != nil {
-		return fmt.Errorf("failed to encode efficiency: %w", err)
-	}
-	podsJSON, err := json.Marshal(actual.Pods)
-	if err != nil {
-		return fmt.Errorf("failed to encode pods: %w", err)
-	}
-	var appJSON sql.NullString
-	if actual.App != nil {
-		encoded, err := json.Marshal(actual.App)
-		if err != nil {
-			return fmt.Errorf("failed to encode application measurement: %w", err)
-		}
-		appJSON = sql.NullString{String: string(encoded), Valid: true}
-	}
-
 	query := `
 	INSERT INTO cost_actuals
 	(id, application_name, application_namespace, deployment_namespace, sync_timestamp, measured_at,
 	 total_monthly_cost, estimate_accuracy, estimate_vs_actual,
-	 resources_json, opencost_output_json, efficiency_json, pods_json, app_json)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+	 resources_json, opencost_output_json, efficiency_json, pods_json, app_json, measured_on)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 	ON CONFLICT (id) DO UPDATE SET
 		total_monthly_cost = EXCLUDED.total_monthly_cost,
 		estimate_accuracy = EXCLUDED.estimate_accuracy,
@@ -140,12 +142,93 @@ func (p *PostgresCostStorage) SaveActual(ctx context.Context, actual *models.Cos
 		measured_at = EXCLUDED.measured_at
 	`
 
-	_, err = p.db.ExecContext(ctx, query,
+	args, err := actualColumns(actual)
+	if err != nil {
+		return err
+	}
+	if _, err := p.db.ExecContext(ctx, query, args...); err != nil {
+		return fmt.Errorf("failed to save actual cost: %w", err)
+	}
+
+	return nil
+}
+
+// SaveFirstActual stores actual only when its application has no committed cost record, checked and
+// inserted in one statement. It reports whether it stored it.
+func (p *PostgresCostStorage) SaveFirstActual(ctx context.Context, actual *models.CostActual) (bool, error) {
+	// Parameters in a SELECT list have no column to take their type from, so each is cast.
+	query := `
+	INSERT INTO cost_actuals
+	(id, application_name, application_namespace, deployment_namespace, sync_timestamp, measured_at,
+	 total_monthly_cost, estimate_accuracy, estimate_vs_actual,
+	 resources_json, opencost_output_json, efficiency_json, pods_json, app_json, measured_on)
+	SELECT $1::varchar, $2::varchar, $3::varchar, $4::varchar, $5::timestamp, $6::timestamp,
+	       $7::numeric, $8::numeric, $9::numeric,
+	       $10::jsonb, $11::jsonb, $12::jsonb, $13::jsonb, $14::jsonb, $15::varchar
+	WHERE NOT EXISTS (
+	    SELECT 1 FROM cost_actuals WHERE application_namespace = $3 AND application_name = $2
+	)
+	`
+
+	args, err := actualColumns(actual)
+	if err != nil {
+		return false, err
+	}
+	result, err := p.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return false, fmt.Errorf("failed to save first actual cost: %w", err)
+	}
+	stored, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("failed to save first actual cost: %w", err)
+	}
+	return stored == 1, nil
+}
+
+// actualColumns returns actual's values in the column order of the cost_actuals inserts. A record that
+// does not say what measured it was measured on a sync. A measurement taken at install has no sync
+// timestamp; its measurement time is stored in its place, so the column stays NOT NULL and a replica
+// that predates measured_on can still read the row during a rolling upgrade.
+func actualColumns(actual *models.CostActual) ([]any, error) {
+	resourcesJSON, err := json.Marshal(actual.Resources)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode resources: %w", err)
+	}
+	opencostJSON, err := json.Marshal(actual.OpenCostOutput)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode OpenCost output: %w", err)
+	}
+	efficiencyJSON, err := json.Marshal(actual.Efficiency)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode efficiency: %w", err)
+	}
+	podsJSON, err := json.Marshal(actual.Pods)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode pods: %w", err)
+	}
+	var appJSON sql.NullString
+	if actual.App != nil {
+		encoded, err := json.Marshal(actual.App)
+		if err != nil {
+			return nil, fmt.Errorf("failed to encode application measurement: %w", err)
+		}
+		appJSON = sql.NullString{String: string(encoded), Valid: true}
+	}
+	syncTimestamp := actual.SyncTimestamp
+	if syncTimestamp.IsZero() {
+		syncTimestamp = actual.MeasuredAt
+	}
+	measuredOn := actual.MeasuredOn
+	if measuredOn == "" {
+		measuredOn = models.MeasuredOnSync
+	}
+
+	return []any{
 		actual.ID,
 		actual.ApplicationName,
 		actual.ApplicationNamespace,
 		actual.DeploymentNamespace,
-		actual.SyncTimestamp,
+		syncTimestamp,
 		actual.MeasuredAt,
 		actual.TotalMonthlyCost,
 		actual.EstimateAccuracy,
@@ -155,17 +238,13 @@ func (p *PostgresCostStorage) SaveActual(ctx context.Context, actual *models.Cos
 		string(efficiencyJSON),
 		string(podsJSON),
 		appJSON,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to save actual cost: %w", err)
-	}
-
-	return nil
+		measuredOn,
+	}, nil
 }
 
 func (p *PostgresCostStorage) GetLatestActual(ctx context.Context, app models.AppRef) (*models.CostActual, error) {
 	query := `
-	SELECT id, application_name, application_namespace, deployment_namespace, sync_timestamp, measured_at,
+	SELECT id, application_name, application_namespace, deployment_namespace, sync_timestamp, measured_on, measured_at,
 		   total_monthly_cost, estimate_accuracy, estimate_vs_actual,
 		   resources_json, opencost_output_json, efficiency_json, pods_json, app_json
 	FROM cost_actuals
@@ -183,6 +262,7 @@ func (p *PostgresCostStorage) GetLatestActual(ctx context.Context, app models.Ap
 		&actual.ApplicationNamespace,
 		&actual.DeploymentNamespace,
 		&actual.SyncTimestamp,
+		&actual.MeasuredOn,
 		&actual.MeasuredAt,
 		&actual.TotalMonthlyCost,
 		&actual.EstimateAccuracy,
@@ -201,6 +281,7 @@ func (p *PostgresCostStorage) GetLatestActual(ctx context.Context, app models.Ap
 	if err != nil {
 		return nil, fmt.Errorf("failed to query cost actual: %w", err)
 	}
+	clearInstallSync(&actual)
 
 	if resourcesJSON.Valid {
 		if err := json.Unmarshal([]byte(resourcesJSON.String), &actual.Resources); err != nil {
@@ -230,6 +311,14 @@ func (p *PostgresCostStorage) GetLatestActual(ctx context.Context, app models.Ap
 	return &actual, nil
 }
 
+// clearInstallSync zeroes the sync timestamp of a measurement taken at install: the column holds its
+// measurement time, but it follows no sync.
+func clearInstallSync(actual *models.CostActual) {
+	if actual.MeasuredOn == models.MeasuredOnInstall {
+		actual.SyncTimestamp = time.Time{}
+	}
+}
+
 // decodeAppMeasurement sets actual.App from the app_json column, leaving it nil when the record has
 // none.
 func decodeAppMeasurement(appJSON sql.NullString, actual *models.CostActual) error {
@@ -245,7 +334,7 @@ func decodeAppMeasurement(appJSON sql.NullString, actual *models.CostActual) err
 
 func (p *PostgresCostStorage) GetActualsInDateRange(ctx context.Context, app models.AppRef, startTime, endTime time.Time) ([]models.CostActual, error) {
 	query := `
-	SELECT id, application_name, application_namespace, deployment_namespace, sync_timestamp, measured_at,
+	SELECT id, application_name, application_namespace, deployment_namespace, sync_timestamp, measured_on, measured_at,
 		   total_monthly_cost, estimate_accuracy, estimate_vs_actual,
 		   resources_json, opencost_output_json, efficiency_json, pods_json, app_json
 	FROM cost_actuals
@@ -270,6 +359,7 @@ func (p *PostgresCostStorage) GetActualsInDateRange(ctx context.Context, app mod
 			&actual.ApplicationNamespace,
 			&actual.DeploymentNamespace,
 			&actual.SyncTimestamp,
+			&actual.MeasuredOn,
 			&actual.MeasuredAt,
 			&actual.TotalMonthlyCost,
 			&actual.EstimateAccuracy,
@@ -282,6 +372,7 @@ func (p *PostgresCostStorage) GetActualsInDateRange(ctx context.Context, app mod
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan cost actual: %w", err)
 		}
+		clearInstallSync(&actual)
 
 		if resourcesJSON.Valid {
 			if err := json.Unmarshal([]byte(resourcesJSON.String), &actual.Resources); err != nil {
@@ -396,7 +487,7 @@ func (p *PostgresCostStorage) GetLatestActualsForNamespace(ctx context.Context, 
 	query := `
 	SELECT DISTINCT ON (application_namespace, application_name)
 	    id, application_name, application_namespace, deployment_namespace,
-	    sync_timestamp, measured_at, total_monthly_cost,
+	    sync_timestamp, measured_on, measured_at, total_monthly_cost,
 	    efficiency_json, pods_json, opencost_output_json
 	FROM cost_actuals
 	WHERE deployment_namespace = $1
@@ -420,6 +511,7 @@ func (p *PostgresCostStorage) GetLatestActualsForNamespace(ctx context.Context, 
 			&actual.ApplicationNamespace,
 			&actual.DeploymentNamespace,
 			&actual.SyncTimestamp,
+			&actual.MeasuredOn,
 			&actual.MeasuredAt,
 			&actual.TotalMonthlyCost,
 			&efficiencyJSON,
@@ -428,6 +520,7 @@ func (p *PostgresCostStorage) GetLatestActualsForNamespace(ctx context.Context, 
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan actual row: %w", err)
 		}
+		clearInstallSync(&actual)
 
 		if efficiencyJSON.Valid && efficiencyJSON.String != "null" {
 			actual.Efficiency = &models.EfficiencyMetrics{}

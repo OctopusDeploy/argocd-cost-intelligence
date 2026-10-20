@@ -81,6 +81,16 @@ func TestValidate(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "negative backfill concurrency",
+			cfg: Config{
+				Database:            DatabaseConfig{Password: "secret"},
+				WebhookSecret:       testWebhookSecret,
+				OpenCost:            OpenCostConfig{BaseURL: "http://opencost:9003"},
+				BackfillConcurrency: -1,
+			},
+			wantErr: true,
+		},
+		{
 			name: "missing database password",
 			cfg: Config{
 				Database:      DatabaseConfig{Password: ""},
@@ -275,6 +285,7 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	assert.Equal(t, ModeAPI, cfg.Mode)
 	assert.Equal(t, 9102, cfg.MetricsPort)
 	assert.Equal(t, 5*time.Minute, cfg.ExporterInterval)
+	assert.Equal(t, 4, cfg.BackfillConcurrency)
 }
 
 func TestLoadConfig_Overrides(t *testing.T) {
@@ -282,11 +293,13 @@ func TestLoadConfig_Overrides(t *testing.T) {
 	t.Setenv("SERVER_PORT", "9090")
 	t.Setenv("DB_HOST", "remote-db")
 	t.Setenv("OPENCOST_BASE_URL", "http://my-opencost:9003")
+	t.Setenv("BACKFILL_CONCURRENCY", "0")
 
 	cfg, err := LoadConfig()
 	require.NoError(t, err)
 
 	assert.Equal(t, 9090, cfg.Server.Port)
+	assert.Equal(t, 0, cfg.BackfillConcurrency)
 	assert.Equal(t, "remote-db", cfg.Database.Host)
 	assert.Equal(t, "http://my-opencost:9003", cfg.OpenCost.BaseURL)
 }

@@ -33,19 +33,20 @@ Receives the webhook and serves cost data. Every route except the webhook is cal
 
 The request parameters are in the API section of the [README](../README.md#api). `/actual` attaches the anomaly score and the latest cloud estimate at read time; neither is stored.
 
-The webhook is asynchronous. It validates, answers 202 and measures in a goroutine, so the notifications controller never waits. Each replica runs at most 20 measurements at once (`maxConcurrentSyncs`), and a webhook beyond that gets 429 instead of queuing unbounded work. Webhook bodies are capped at 64 KB and cloud-estimate bodies at 10 MB.
+The webhook is asynchronous. It validates, answers 202 and measures in a goroutine, so the notifications controller never waits. Each replica runs at most 20 measurements at once (`maxConcurrentSyncs`), and a webhook beyond that gets 429 instead of queuing unbounded work. Webhook bodies are capped at 64 KB and cloud-estimate bodies at 10 MB. A webhook for an application that deploys to another cluster gets 200 and is not measured (see *Sync hook*); it is answered before the 20-measurement limit, as nothing runs in the background.
 
 ### Sync hook (`pkg/hook/sync_hook.go`)
 
 Measures and stores an application's cost after a sync.
 
 1. Validate the notification (`ValidateNotification`): application name and namespace are required, namespaces must be DNS labels, resources must have valid names.
-2. Skip anything but `SyncResult == "Succeeded"`.
-3. Wait for metrics to be recorded. The delay is passed to `hook.NewSyncHook` in `cmd/main.go` (5 seconds); there is no environment variable.
-4. Query OpenCost for the deployment namespace: cost, efficiency summary and per-pod breakdown. The cost query must succeed; the other two only log a warning and leave their fields empty.
-5. Project the 24-hour cost onto a month (see *Monthly figures*).
-6. If the webhook carried the application's `resources`, compute the application's own share from the pods (`PodAllocations.ForApplication`) and store it as `app_json`.
-7. Save the record.
+2. Skip an application that deploys to another cluster (`DeploysHere`). OpenCost measures only the cluster it runs in, so a namespace of the same name here is not the application's. The cluster is the notification's `destinationServer` or `destinationName`. Local means the server is empty or `https://kubernetes.default.svc`, and the name is empty or `in-cluster`. A template that sends neither field is taken to be local.
+3. Skip anything but `SyncResult == "Succeeded"`.
+4. Wait for metrics to be recorded. The delay is passed to `hook.NewSyncHook` in `cmd/main.go` (5 seconds); there is no environment variable.
+5. Query OpenCost for the deployment namespace: cost, efficiency summary and per-pod breakdown. The cost query must succeed; the other two only log a warning and leave their fields empty.
+6. Project the 24-hour cost onto a month (see *Monthly figures*).
+7. If the webhook carried the application's `resources`, compute the application's own share from the pods (`PodAllocations.ForApplication`) and store it as `app_json`.
+8. Save the record.
 
 ### Measuring at install (`pkg/backfill/`)
 
@@ -118,6 +119,7 @@ Some choices worth knowing:
 - The gauges are measured rates, not projections: cost per hour over the last hour, split by `resource` with no total. Monthly figures, change since a sync and anomalies are queries and recording rules (`helm/files/prometheus-rules.yaml`), not metrics.
 - `namespace` and `name` are the Application's, as in `argocd_app_info`, so the two join without relabelling. The exporter is scraped with `honorLabels`.
 - An Application that OpenCost couldn't measure has no series until it can be, and `exporter_refresh_errors_total` counts the failure. That's better than serving an old value. A deleted Application's series go at the next refresh, because Applications are listed live.
+- An Application that deploys to another cluster (`Destination.Local`) has no cost or workload series: OpenCost here would price a namespace of the same name in this cluster instead. It isn't an error, so it is counted by the `exporter_remote_applications` gauge, not by `exporter_refresh_errors_total`, whose alert would never clear on a hub cluster. Its cloud estimates are still exported, because they come from CI.
 - `/metrics` is never on the API port, which trusts Argo CD's proxy headers.
 
 ### Configuration (`pkg/config/config.go`)
@@ -147,7 +149,7 @@ OpenCost is queried by namespace, so **a record's own columns hold the cost of t
 - Application routes serve `CostActual.ForApplication()`, which marks `scope: "application"`, or `"namespace"` for records without `app_json` (stored before migration 007, or synced by a notifications template that does not send `resources`). Namespace routes serve the namespace columns.
 - Never compare figures of different scopes (see `comparableHistory` in `api.go`; the recorder stores a scope with each day).
 - The UI attributes cost per app on the Namespaces page by matching pods to controllers (`ui/src/utils/namespaceApps.ts`). For old `namespace` records the app page narrows the figures itself (`asApplication` / `scopeToApp` in `ui/src/utils/costInsights.ts`) and labels the rest as the namespace's.
-- The notifications template must send `{{.app.spec.destination.namespace}}` (where the app deploys, not `.app.metadata.namespace`, where the Application object lives) and the app's `resources`. See `deploy/argocd-notifications-patch.yaml`. The Helm chart reads the same template from `helm/files/argocd/` unrendered, so the braces need no escaping.
+- The notifications template must send `{{.app.spec.destination.namespace}}` (where the app deploys, not `.app.metadata.namespace`, where the Application object lives) and the app's `resources`, plus the destination cluster as `destinationServer` and `destinationName` (each wrapped in `{{with}}`, so an unset one is empty rather than `<no value>`). See `deploy/argocd-notifications-patch.yaml`. The Helm chart reads the same template from `helm/files/argocd/` unrendered, so the braces need no escaping.
 
 ### Application identity
 
@@ -184,6 +186,6 @@ The Helm chart ([helm/README.md](../helm/README.md), [configuration.md](configur
 2. **IaC estimates are pushed, not pulled.** Cloud-service costs need a CI step that posts the Infracost output. `pushed_at` is the only freshness signal; the UI warns after 7 days.
 3. **24-hour window.** A sync's effect shows fully only after a day. A namespace younger than that is projected from the hours it has existed, which is noisier the shorter it is: a sync measured minutes after a first deploy finds little or no data.
 4. **A missed webhook is a missed measurement.** There is no periodic re-measure of `cost_actuals`, so an app that does not sync is not measured again (daily history and the exporter still read OpenCost, so cost over time keeps flowing). Measuring at install fills in only applications with no record at all.
-5. **Applications on other clusters are not measured at install.** OpenCost measures the cluster it runs in, so the startup measurement skips applications deploying elsewhere rather than measure a same-named namespace here.
+5. **Only this cluster is measured.** OpenCost measures the cluster it runs in, so an application that deploys to another cluster has no cost records and no cost series: the sync webhook, the exporter and the measurement at install all skip it rather than measure a same-named namespace here. Measuring those needs this service and OpenCost in that cluster. Records stored before this was enforced are not removed, and the daily history recorder, which works from stored records, keeps recording the same-named local namespace for them.
 6. **Re-measuring is not replaying.** Calling the webhook again measures the last 24 hours as of now, not as of the original sync, and OpenCost history cannot be rebuilt after its retention window.
 7. **No backup.** Nothing in the chart backs up PostgreSQL; use your platform's backup tooling.

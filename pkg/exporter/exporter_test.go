@@ -234,6 +234,44 @@ argocd_cost_intelligence_application_estimated_hourly_cost{name="shop",namespace
 	assert.InDelta(t, 1, testutil.ToFloat64(e.errors.WithLabelValues(StageEstimates)), 0)
 }
 
+func TestRefresh_SkipsApplicationsOnOtherClusters(t *testing.T) {
+	t.Parallel()
+
+	// Both deploy to namespaces that exist here too, but on clusters this OpenCost does not measure.
+	prodShop := Application{
+		Ref:         models.AppRef{Namespace: "argocd", Name: "prod-shop"},
+		Destination: Destination{Server: "https://prod.example.com", Namespace: "shop"},
+		Workloads:   models.ManagedResources{workload("Deployment", "web", "shop")},
+	}
+	prodRedis := Application{
+		Ref:         models.AppRef{Namespace: "argocd", Name: "prod-redis"},
+		Destination: Destination{Name: "prod", Namespace: "team-a"},
+		Workloads:   models.ManagedResources{workload("Deployment", "redis", "team-a")},
+	}
+	estimates := &fakeEstimates{estimates: []models.AppCloudEstimate{
+		{App: prodShop.Ref, Estimate: models.CloudServiceEstimate{Source: "infracost", TotalMonthlyCost: 730}},
+	}}
+	costs := cluster()
+	e, reg := newExporter(&fakeApps{apps: []Application{redis, prodShop, prodRedis}}, costs, estimates)
+
+	e.Refresh(context.Background())
+
+	got := gatherText(t, e)
+	assert.Contains(t, got, `argocd_cost_intelligence_application_hourly_cost{name="redis"`, "local Applications are still measured")
+	assert.NotContains(t, got, `argocd_cost_intelligence_application_hourly_cost{name="prod-shop"`)
+	assert.NotContains(t, got, `argocd_cost_intelligence_application_workload_info{name="prod-shop"`)
+	assert.NotContains(t, got, `name="prod-redis"`)
+	assert.Contains(t, got, `argocd_cost_intelligence_application_estimated_hourly_cost{name="prod-shop",namespace="argocd",source="infracost"} 1`,
+		"an estimate from CI holds wherever the Application deploys")
+	assert.Equal(t, []string{"argocd"}, costs.asked, "OpenCost is not asked about namespaces only remote Applications use")
+	require.NoError(t, testutil.GatherAndCompare(reg, strings.NewReader(`
+# HELP argocd_cost_intelligence_exporter_remote_applications Argo CD Applications in the last refresh that deploy to another cluster, which OpenCost here does not measure. They have no cost series.
+# TYPE argocd_cost_intelligence_exporter_remote_applications gauge
+argocd_cost_intelligence_exporter_remote_applications 2
+`), "argocd_cost_intelligence_exporter_remote_applications"))
+	assert.InDelta(t, 0, testutil.ToFloat64(e.errors.WithLabelValues(StageOpenCost)), 0, "skipping is not a failure")
+}
+
 func TestRefresh_ADeletedApplicationDisappears(t *testing.T) {
 	t.Parallel()
 

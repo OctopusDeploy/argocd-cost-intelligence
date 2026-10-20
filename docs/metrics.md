@@ -30,6 +30,8 @@ Costs are in OpenCost's currency, usually USD. Multiply by 730 for a month (the 
 
 Each refresh replaces the series. An Application that has no workloads (only ConfigMaps, say) has no series. An Application that could not be measured, because OpenCost failed for one of its namespaces, has no cost series until it can be, rather than an old value; its `workload_info` stays. `exporter_refresh_errors_total` counts the failures. A deleted Application's series disappear at the next refresh.
 
+OpenCost measures only the cluster it runs in, so an Application that deploys to another cluster has no cost or `workload_info` series. Measuring it would price a namespace of the same name in this cluster instead. Its cloud estimates come from CI, not OpenCost, so `application_estimated_hourly_cost` still has them. `exporter_remote_applications` counts these Applications.
+
 These metrics won't match the Cost Intelligence tab. The tab projects a month from the last 24 hours at each sync, while these are always the last hour, so they follow scaling, restarts and spot price changes as they happen.
 
 The metrics only cover the Application's own pods. Namespace and cluster totals, including pods no Application manages, idle node capacity and shared costs, are for OpenCost to report. Adding the metrics up gives the cost Argo CD Applications are responsible for, not your bill.
@@ -40,6 +42,7 @@ The metrics only cover the Application's own pods. Namespace and cluster totals,
 |---|---|---|---|
 | `argocd_cost_intelligence_exporter_last_refresh_timestamp_seconds` | gauge | | When the exporter last refreshed with the current list of Applications. Not updated when listing Applications fails. |
 | `argocd_cost_intelligence_exporter_last_refresh_duration_seconds` | gauge | | How long the last refresh took. |
+| `argocd_cost_intelligence_exporter_remote_applications` | gauge | | Applications in the last refresh that deploy to another cluster, which OpenCost here does not measure. They are expected, not errors. |
 | `argocd_cost_intelligence_exporter_refresh_errors_total` | counter | `stage` | Failed refresh steps: `applications` (listing Applications; every cost series is dropped), `opencost` (one per namespace that failed), `estimates` (reading cloud estimates from PostgreSQL). |
 
 The exporter also reports `opencost_request_duration_seconds`, `database_operation_duration_seconds`, and Go and process metrics, as below.
@@ -55,7 +58,7 @@ Each API replica reports its own; Prometheus tells replicas apart by target.
 | Metric | Type | Labels | Meaning |
 |---|---|---|---|
 | `argocd_cost_intelligence_http_request_duration_seconds` | histogram | `route`, `method`, `code` | API requests. `route` is the route pattern, such as `/api/cost-analysis/{appName}/actual`, never the actual path; `unmatched` for paths no route serves. |
-| `argocd_cost_intelligence_sync_webhooks_total` | counter | `result` | Sync notifications from Argo CD: `accepted`, `unauthorized` (wrong or missing token), `invalid` (unreadable, or no application namespace) or `overloaded` (refused because too many measurements are running). |
+| `argocd_cost_intelligence_sync_webhooks_total` | counter | `result` | Sync notifications from Argo CD: `accepted`, `unauthorized` (wrong or missing token), `invalid` (unreadable, or no application namespace), `overloaded` (refused because too many measurements are running) or `remote` (the application deploys to another cluster, so nothing is measured). |
 | `argocd_cost_intelligence_sync_measurements_total` | counter | `result` | Cost measurements after accepted notifications: `success` or `error`. |
 | `argocd_cost_intelligence_sync_measurement_duration_seconds` | histogram | | Duration of a measurement, including the 5 s wait for metrics to settle. |
 | `argocd_cost_intelligence_opencost_request_duration_seconds` | histogram | `endpoint`, `code` | Requests to OpenCost, by API path (`/allocation`, `/allocation/summary`, `/assets`, ...) and HTTP status; `code="error"` when no response arrived. |
@@ -150,7 +153,7 @@ sum by (app_namespace, app_name) (
 | `ArgoCDCostIntelligenceExporterAbsent` | No exporter is scraped, for 15 minutes. |
 | `ArgoCDCostIntelligenceExporterErrors` | A refresh step keeps failing for 30 minutes. |
 | `ArgoCDCostIntelligenceMeasurementsFailing` | More than half of the measurements after a sync fail, for 15 minutes. |
-| `ArgoCDCostIntelligenceWebhooksRefused` | Webhooks were refused in the last 30 minutes and none accepted: the token Argo CD sends no longer matches. |
+| `ArgoCDCostIntelligenceWebhooksRefused` | Webhooks were refused in the last 30 minutes and none got through (accepted, or for an application on another cluster): the token Argo CD sends no longer matches. |
 | `ArgoCDCostIntelligenceOpenCostErrors` | More than half of the requests to OpenCost fail, for 15 minutes. |
 | `ArgoCDCostIntelligenceHistoryStale` | No replica has recorded daily cost history for 3 hours. |
 | `ArgoCDCostIntelligenceHistoryFailing` | Every history run in the last 3 hours failed. |

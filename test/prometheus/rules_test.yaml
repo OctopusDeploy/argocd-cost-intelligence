@@ -136,6 +136,20 @@ tests:
         eval_time: 40m
         exp_alerts: []
 
+  # Unknown clients are refused, and Argo CD's webhooks get through, all for applications on another cluster.
+  - interval: 1m
+    input_series:
+      - series: 'argocd_cost_intelligence_sync_webhooks_total{result="unauthorized"}'
+        values: '0+1x60'
+      - series: 'argocd_cost_intelligence_sync_webhooks_total{result="accepted"}'
+        values: '0x60'
+      - series: 'argocd_cost_intelligence_sync_webhooks_total{result="remote"}'
+        values: '0+1x60'
+    alert_rule_test:
+      - alertname: ArgoCDCostIntelligenceWebhooksRefused
+        eval_time: 40m
+        exp_alerts: []
+
   # Three OpenCost requests in four fail, with a 5xx or no answer.
   - interval: 1m
     input_series:

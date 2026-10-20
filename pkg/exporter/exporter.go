@@ -8,7 +8,10 @@
 // own them. Scrapes are served from the last refresh, so they cost nothing and put no load on OpenCost.
 //
 // The exporter publishes only what its last refresh measured. An Application it could not measure is
-// absent, not shown with an older value, and refresh_errors_total says which step failed.
+// absent, not shown with an older value, and refresh_errors_total says which step failed. OpenCost
+// measures only the cluster it runs in, so an Application deploying to another cluster has no cost or
+// workload series, rather than the cost of a namespace of the same name here; remote_applications
+// counts them.
 package exporter
 
 import (
@@ -103,6 +106,7 @@ type Exporter struct {
 	samples  atomic.Pointer[[]sample]
 	ran      atomic.Bool
 	errors   *prometheus.CounterVec
+	remote   prometheus.Gauge
 	last     prometheus.Gauge
 	duration prometheus.Gauge
 }
@@ -121,6 +125,11 @@ func New(apps ApplicationLister, costs CostSource, estimates EstimateSource, int
 			Name:      "exporter_refresh_errors_total",
 			Help:      "Failed steps of the exporter's refreshes, by stage: applications, opencost (one per namespace) or estimates.",
 		}, []string{"stage"}),
+		remote: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: telemetry.Namespace,
+			Name:      "exporter_remote_applications",
+			Help:      "Argo CD Applications in the last refresh that deploy to another cluster, which OpenCost here does not measure. They have no cost series.",
+		}),
 		last: prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace: telemetry.Namespace,
 			Name:      "exporter_last_refresh_timestamp_seconds",
@@ -136,7 +145,7 @@ func New(apps ApplicationLister, costs CostSource, estimates EstimateSource, int
 		e.errors.WithLabelValues(stage)
 	}
 	e.samples.Store(&[]sample{})
-	reg.MustRegister(e, e.errors, e.last, e.duration)
+	reg.MustRegister(e, e.errors, e.remote, e.last, e.duration)
 	return e
 }
 
@@ -186,7 +195,16 @@ func (e *Exporter) Refresh(ctx context.Context) {
 		return
 	}
 
-	samples := e.costSamples(ctx, apps)
+	local := make([]Application, 0, len(apps))
+	for _, app := range apps {
+		if app.Destination.Local() {
+			local = append(local, app)
+		}
+	}
+	e.remote.Set(float64(len(apps) - len(local)))
+
+	samples := e.costSamples(ctx, local)
+	// Cloud estimates come from CI, not OpenCost, so they hold wherever the Application deploys.
 	samples = append(samples, e.estimateSamples(ctx, apps)...)
 	e.samples.Store(&samples)
 	e.last.Set(float64(start.Unix()))

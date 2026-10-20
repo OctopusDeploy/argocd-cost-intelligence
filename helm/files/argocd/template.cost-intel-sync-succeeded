@@ -9,6 +9,8 @@ webhook:
         "applicationName": "{{.app.metadata.name}}",
         "applicationNamespace": "{{.app.metadata.namespace}}",
         "namespace": "{{.app.spec.destination.namespace}}",
+        "destinationServer": "{{with .app.spec.destination.server}}{{.}}{{end}}",
+        "destinationName": "{{with .app.spec.destination.name}}{{.}}{{end}}",
         "resources": [{{range $i, $r := .app.status.resources}}{{if $i}}, {{end}}{"kind": "{{$r.kind}}", "name": "{{$r.name}}", "namespace": "{{with index $r "namespace"}}{{.}}{{end}}"}{{end}}],
         "syncTimestamp": "{{.app.status.operationState.finishedAt}}",
         "syncResult": "Succeeded"

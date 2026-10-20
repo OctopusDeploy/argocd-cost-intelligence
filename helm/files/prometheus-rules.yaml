@@ -68,11 +68,12 @@ groups:
           summary: "{{ $value | humanizePercentage }} of ArgoCD Cost Intelligence's measurements after a sync fail"
           description: "Syncs are not being measured. Check OpenCost (opencost_request_duration_seconds by code) and PostgreSQL (database_operation_duration_seconds by result)."
 
-      # Every sync webhook is refused: the token Argo CD Notifications sends no longer matches.
+      # Every sync webhook is refused: the token Argo CD Notifications sends no longer matches. A webhook
+      # for an application on another cluster passed the token check, so it counts as getting through.
       - alert: ArgoCDCostIntelligenceWebhooksRefused
         expr: |
           sum(increase(argocd_cost_intelligence_sync_webhooks_total{result="unauthorized"}[30m])) > 0
-          and sum(increase(argocd_cost_intelligence_sync_webhooks_total{result="accepted"}[30m])) == 0
+          and sum(increase(argocd_cost_intelligence_sync_webhooks_total{result=~"accepted|remote"}[30m])) == 0
         labels:
           severity: warning
         annotations:

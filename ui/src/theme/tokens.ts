@@ -48,7 +48,7 @@ const dark: Tokens = {
   hairline: 'rgba(142, 156, 171, 0.18)',
   shadow: 'none',
   accent: '#3d8fe0',
-  accentText: '#62aaf0',
+  accentText: '#6db3f4',
   accentWash: 'rgba(61, 143, 224, 0.18)',
   hover: 'rgba(255, 255, 255, 0.08)',
   tile: '#ffffff',

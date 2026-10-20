@@ -5,7 +5,7 @@ import { PluginFrame } from './PluginFrame';
 import { PLUGIN_CLASS } from '../theme/globalStyles';
 
 describe('PluginFrame', () => {
-  it('names the product and its maker in the header', () => {
+  it('names the product in the header', () => {
     render(<PluginFrame>body</PluginFrame>);
 
     expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('Cost Intelligence');

@@ -2,8 +2,8 @@ import interLatin from '@fontsource-variable/inter/files/inter-latin-wght-normal
 
 // The plugin uses Inter, Octopus Deploy's interface font. Argo CD's page does not load it, so the
 // Latin subset of the variable font (every weight in one file) ships inside the bundle: no request
-// leaves the cluster, which keeps air-gapped installs working. Inter is licensed under the SIL Open
-// Font License 1.1.
+// leaves the cluster, which keeps air-gapped installs working. The font's copyright and licence
+// notice is a comment inside the rule, so it travels with the font data through minification.
 //
 // It is registered under its own family name so it can never change how another font named Inter
 // renders elsewhere on Argo CD's page.
@@ -13,6 +13,8 @@ export const FONT_FAMILY = `'${FAMILY}', Inter, -apple-system, BlinkMacSystemFon
 
 // The unicode-range is the Latin subset's own, as published with the font.
 export const FONT_FACE = `
+/* Inter. Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter).
+   Licensed under the SIL Open Font License, Version 1.1 (https://openfontlicense.org). */
 @font-face {
   font-family: '${FAMILY}';
   font-style: normal;

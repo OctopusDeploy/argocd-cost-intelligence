@@ -61,6 +61,15 @@ describe('the bundled font', () => {
     expect(css).toContain(`font-family: ${family};`);
     expect(pluginRootStyle(getTokens('light')).fontFamily).toBe(FONT_FAMILY);
   });
+
+  // The SIL Open Font License asks for the copyright and licence to travel with the font.
+  it('carries the font licence next to the font', () => {
+    ensureGlobalStyles();
+
+    const css = sheets()[0].textContent ?? '';
+    expect(css).toContain('Copyright 2016 The Inter Project Authors');
+    expect(css).toContain('SIL Open Font License, Version 1.1');
+  });
 });
 
 describe('pluginRootStyle', () => {

@@ -91,6 +91,10 @@ type CostStorage interface {
 	// PruneDailyCosts deletes every stored day before before (a UTC date).
 	PruneDailyCosts(ctx context.Context, before string) error
 
+	// DeleteMeasurements deletes an application's cost records and daily history, and reports whether
+	// there were any. Its cloud estimates are kept: they come from CI, not from OpenCost.
+	DeleteMeasurements(ctx context.Context, app models.AppRef) (bool, error)
+
 	// Close closes the storage connection
 	Close() error
 }

@@ -107,6 +107,8 @@ spec:
           value: {{ .Values.costIntelligence.dailyHistoryDays | quote }}
         - name: BACKFILL_CONCURRENCY
           value: {{ .Values.costIntelligence.backfillConcurrency | quote }}
+        - name: PRUNE_REMOTE_COST
+          value: {{ .Values.costIntelligence.pruneRemoteCost | quote }}
         - name: VPA_ENABLED
           value: {{ .Values.costIntelligence.vpa.enabled | quote }}
         {{- with .Values.costIntelligence.clusterScopeApp }}

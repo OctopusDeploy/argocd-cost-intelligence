@@ -38,6 +38,13 @@ costIntelligence:
   # Replicas take turns, so OpenCost sees this many queries at most. 0 turns the backfill off.
   backfillConcurrency: 4
 
+  # Delete the cost records and daily history stored for Applications that deploy to another
+  # cluster, when the service starts and on each daily history run (PRUNE_REMOTE_COST). These
+  # Applications are never measured, but cost stored before they were skipped priced a namespace of
+  # the same name in this cluster. Off by default because it can't be undone: an Application
+  # targeting this cluster by its API server URL or a renamed in-cluster entry counts as remote.
+  pruneRemoteCost: false
+
   # PostgreSQL connection pool per replica (DB_MAX_OPEN_CONNS, DB_MAX_IDLE_CONNS). Keep
   # replicas x maxOpenConns below PostgreSQL's max_connections.
   database:

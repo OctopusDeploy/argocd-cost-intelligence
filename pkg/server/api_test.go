@@ -136,6 +136,10 @@ func (m *mockStorage) SetDailyProgress(context.Context, models.AppRef, models.Da
 
 func (m *mockStorage) PruneDailyCosts(context.Context, string) error { return nil }
 
+func (m *mockStorage) DeleteMeasurements(context.Context, models.AppRef) (bool, error) {
+	return false, nil
+}
+
 // newTestAPIServer wires a CostAPIServer backed by the given mock storage.
 // A minimal OpenCost test server is used for the SyncHook so the /on-sync
 // goroutine does not panic when it fires.

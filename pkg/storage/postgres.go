@@ -823,6 +823,36 @@ func (p *PostgresCostStorage) PruneDailyCosts(ctx context.Context, before string
 	return nil
 }
 
+func (p *PostgresCostStorage) DeleteMeasurements(ctx context.Context, app models.AppRef) (bool, error) {
+	tx, err := p.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, fmt.Errorf("failed to begin delete transaction: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck // a no-op after Commit
+
+	var deleted int64
+	for _, query := range []string{
+		`DELETE FROM cost_actuals WHERE application_namespace = $1 AND application_name = $2`,
+		`DELETE FROM cost_daily WHERE application_namespace = $1 AND application_name = $2`,
+		`DELETE FROM cost_daily_progress WHERE application_namespace = $1 AND application_name = $2`,
+	} {
+		res, err := tx.ExecContext(ctx, query, app.Namespace, app.Name)
+		if err != nil {
+			return false, fmt.Errorf("failed to delete the measurements of %s: %w", app, err)
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return false, fmt.Errorf("failed to count the deleted measurements of %s: %w", app, err)
+		}
+		deleted += n
+	}
+
+	if err := tx.Commit(); err != nil {
+		return false, fmt.Errorf("failed to commit delete of %s: %w", app, err)
+	}
+	return deleted > 0, nil
+}
+
 func (p *PostgresCostStorage) Close() error {
 	return p.db.Close()
 }

@@ -123,12 +123,25 @@ func runAPI(cfg *config.Config, logger *log.Logger) {
 		serverOpts...,
 	)
 
+	// The Applications are listed live to tell those deploying to another cluster, which OpenCost
+	// does not measure. Outside a cluster there are none to list.
+	applications, err := inClusterApplications()
+	if err != nil {
+		logger.Printf("Not listing Argo CD Applications: %v\n", err)
+	}
+
 	// Record each application's daily cost, so long ranges do not depend on Prometheus retention.
 	background, stopBackground := context.WithCancel(context.Background())
 	defer stopBackground()
 	var recorder *history.Recorder
 	if cfg.DailyHistoryDays > 0 {
 		recorder = history.NewRecorder(costStorage, opencostClient, cfg.DailyHistoryDays, logger)
+		if applications != nil {
+			recorder.WithApplications(applications)
+			if cfg.PruneRemoteCost {
+				recorder.PruneRemote()
+			}
+		}
 		if metrics != nil {
 			recorder.OnRun(metrics.ObserveHistoryRun)
 		}
@@ -140,10 +153,17 @@ func runAPI(cfg *config.Config, logger *log.Logger) {
 
 	// Measure the applications with no cost record yet, so a fresh install shows costs before each
 	// application syncs again.
-	if cfg.BackfillConcurrency > 0 {
-		go runBackfill(background, cfg.BackfillConcurrency, costStorage, opencostClient, recorder, logger)
-	} else {
+	switch {
+	case cfg.BackfillConcurrency == 0:
 		logger.Print("Startup backfill disabled (BACKFILL_CONCURRENCY=0)")
+	case applications == nil:
+		logger.Print("Startup backfill off: it lists the Argo CD Applications")
+	default:
+		b := backfill.New(applications, costStorage, opencostClient, cfg.BackfillConcurrency, logger)
+		if cfg.PruneRemoteCost {
+			b.PruneRemote()
+		}
+		go runBackfill(background, b, recorder, logger)
 	}
 
 	servers := []*http.Server{{
@@ -165,31 +185,31 @@ func runAPI(cfg *config.Config, logger *log.Logger) {
 	serveUntilSignal(logger, servers, stopBackground)
 }
 
-// runBackfill measures every Argo CD Application without a cost record, after any other replica's run,
-// then has the recorder record their history. It runs again a few times while namespaces are left
-// unmeasured. Outside a cluster there are no Applications to list.
-func runBackfill(ctx context.Context, concurrency int, store storage.CostStorage, client *opencost.Client, recorder *history.Recorder, logger *log.Logger) {
+// inClusterApplications lists the Argo CD Applications of the cluster the service runs in.
+func inClusterApplications() (exporter.ApplicationLister, error) {
 	kubeConfig, err := rest.InClusterConfig()
 	if err != nil {
-		logger.Printf("Startup backfill off: not running in a Kubernetes cluster (%v)\n", err)
-		return
+		return nil, fmt.Errorf("not running in a Kubernetes cluster: %w", err)
 	}
 	kubeConfig.Timeout = 30 * time.Second
 	kubeClient, err := dynamic.NewForConfig(kubeConfig)
 	if err != nil {
-		logger.Printf("Startup backfill off: %v\n", err)
-		return
+		return nil, err
 	}
+	return exporter.NewKubeApplicationLister(kubeClient), nil
+}
 
-	b := backfill.New(exporter.NewKubeApplicationLister(kubeClient), store, client, concurrency, logger)
+// runBackfill runs b after any other replica's run, then has the recorder record the new records'
+// history. It runs again a few times while namespaces are left unmeasured.
+func runBackfill(ctx context.Context, b *backfill.Backfill, recorder *history.Recorder, logger *log.Logger) {
 	b.RunWithRetries(ctx, backfill.RetryDelays, func(result backfill.Result, err error) {
 		if err != nil {
 			logger.Printf("Startup backfill: %v\n", err)
 			return
 		}
-		logger.Printf("Startup backfill: %d measured, %d already recorded, %d on other clusters, %d without a destination namespace, "+
-			"%d in namespaces OpenCost has no data for yet, %d failed\n",
-			result.Saved, result.Recorded, result.Remote, result.NoNamespace, result.NoData, result.Failed)
+		logger.Printf("Startup backfill: %d measured, %d already recorded, %d on other clusters (%d with stored cost deleted), "+
+			"%d without a destination namespace, %d in namespaces OpenCost has no data for yet, %d failed\n",
+			result.Saved, result.Recorded, result.Remote, result.Removed, result.NoNamespace, result.NoData, result.Failed)
 		if result.Saved > 0 && recorder != nil {
 			recorder.RecordSoon()
 		}

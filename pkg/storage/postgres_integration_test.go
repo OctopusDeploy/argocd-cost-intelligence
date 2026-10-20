@@ -954,6 +954,47 @@ func TestPruneDailyCosts_DeletesDaysBeforeTheCutoff(t *testing.T) {
 	assert.Empty(t, b)
 }
 
+func TestDeleteMeasurements_DeletesOneApplicationsCostAndHistoryOnly(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Second)
+	saveSameNamedApps(t, now)
+	for _, app := range []models.AppRef{teamAWeb, teamBWeb} {
+		require.NoError(t, testStorage.SaveDailyCosts(ctx, app, "web", models.ScopeApplication, []models.DailyCost{{Date: "2026-10-01", TotalCost: 1}}))
+		require.NoError(t, testStorage.SetDailyProgress(ctx, app, models.DailyProgress{Through: "2026-10-01", Scope: models.ScopeApplication}))
+	}
+	require.NoError(t, testStorage.SaveCloudEstimate(ctx, teamAWeb, &models.CloudServiceEstimate{
+		Source: "infracost", TotalMonthlyCost: 100.0, Currency: "USD", PushedAt: now,
+	}))
+
+	deleted, err := testStorage.DeleteMeasurements(ctx, teamAWeb)
+	require.NoError(t, err)
+	assert.True(t, deleted)
+
+	_, err = testStorage.GetLatestActual(ctx, teamAWeb)
+	require.ErrorIs(t, err, ErrNotFound)
+	days, err := testStorage.GetDailyCosts(ctx, teamAWeb, models.ScopeApplication, "2000-01-01", "2100-01-01")
+	require.NoError(t, err)
+	assert.Empty(t, days)
+	progress, err := testStorage.GetDailyProgress(ctx, teamAWeb)
+	require.NoError(t, err)
+	assert.Nil(t, progress)
+	estimate, err := testStorage.GetCloudEstimate(ctx, teamAWeb)
+	require.NoError(t, err)
+	assert.NotNil(t, estimate, "cloud estimates come from CI and are kept")
+
+	other, err := testStorage.GetLatestActual(ctx, teamBWeb)
+	require.NoError(t, err)
+	assert.Equal(t, "b1", other.ID, "team-b:web shares the name, not the deletion")
+	days, err = testStorage.GetDailyCosts(ctx, teamBWeb, models.ScopeApplication, "2000-01-01", "2100-01-01")
+	require.NoError(t, err)
+	assert.Len(t, days, 1)
+
+	deleted, err = testStorage.DeleteMeasurements(ctx, teamAWeb)
+	require.NoError(t, err)
+	assert.False(t, deleted, "nothing is left to delete")
+}
+
 func TestListLatestActuals_OneRecordPerApplication(t *testing.T) {
 	truncate(t)
 	ctx := context.Background()

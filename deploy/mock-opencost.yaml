@@ -18,10 +18,14 @@ data:
      * Simulates the OpenCost API endpoints for local development and testing
      * without needing a real Kubernetes cluster with metrics.
      *
-     * Provides fake but realistic cost data for testing cost-intelligence backend.
+     * Provides fake but realistic cost data for testing cost-intelligence backend. Outside a cluster
+     * (docker-compose, CI) it serves fixed pods; in one, the namespace's real pods with made-up costs
+     * (see "Pods from the cluster" below).
      */
 
+    const fs = require('fs');
     const http = require('http');
+    const https = require('https');
     const url = require('url');
 
     // Mock cost data by namespace
@@ -177,12 +181,294 @@ data:
       return steps;
     }
 
-    // Handler for /allocation endpoint
-    function handleAllocation(queryParams) {
-      const namespace = queryParams.filter ? queryParams.filter.replace('namespace:"', '').replace('"', '') : 'default';
-      const aggregate = queryParams.aggregate || 'namespace';
+    // windowRange reads an OpenCost window as epoch milliseconds: "<start>,<end>" in RFC3339, or a
+    // duration such as "24h" or "7d" that ends now.
+    function windowRange(windowStr) {
+      const now = Date.now();
+      if (windowStr && windowStr.includes(',')) {
+        const [start, end] = windowStr.split(',').map((value) => Date.parse(value));
+        if (start < end) return { start, end };
+      }
+      const match = /^(\d+)([hd])$/.exec(windowStr || '');
+      const length = match ? parseInt(match[1], 10) * (match[2] === 'h' ? 3600 * 1000 : DAY_MS) : DAY_MS;
+      return { start: now - length, end: now };
+    }
 
-      const costs = mockCosts[namespace] || mockCosts['default'];
+    function namespaceOf(queryParams) {
+      return queryParams.filter ? queryParams.filter.replace('namespace:"', '').replace('"', '') : 'default';
+    }
+
+    // --- Pods from the cluster ---------------------------------------------------------------------------
+    //
+    // In a cluster, with a service account that may list pods and replicasets (deploy/mock-opencost.yaml),
+    // the mock reports the pods that actually run in the namespace it is asked about, owned by their real
+    // controllers the way OpenCost names them, so an Argo CD application's own workloads match and its
+    // figures have values. The costs are made up but stable: each pod's come from its name, its requests
+    // and how long it ran in the window. Outside a cluster, or for a namespace without pods, the mock
+    // serves the fixed pods above.
+
+    const SA_DIR = '/var/run/secrets/kubernetes.io/serviceaccount';
+    const IN_CLUSTER = Boolean(process.env.KUBERNETES_SERVICE_HOST) && fs.existsSync(`${SA_DIR}/token`);
+    const POD_CACHE_MS = 30 * 1000;
+    const HOUR_MS = 3600 * 1000;
+    const MiB = 1024 * 1024;
+    const GiB = 1024 * MiB;
+    // PRICE_MULTIPLIER scales every price below, because a local cluster's small pods cost cents at
+    // OpenCost's real prices and the UI is easier to judge with larger figures.
+    const PRICE_MULTIPLIER = (() => {
+      const value = Number(process.env.PRICE_MULTIPLIER || 1);
+      if (Number.isFinite(value) && value > 0) return value;
+      console.warn(`Ignoring PRICE_MULTIPLIER=${process.env.PRICE_MULTIPLIER}: not a positive number`);
+      return 1;
+    })();
+    // OpenCost's default on-demand prices.
+    const CPU_CORE_HOURLY = 0.031611 * PRICE_MULTIPLIER;
+    const RAM_GIB_HOURLY = 0.004237 * PRICE_MULTIPLIER;
+    // A claim is priced as 8 GiB at $0.04 per GiB-month.
+    const PVC_HOURLY = ((8 * 0.04) / 720) * PRICE_MULTIPLIER;
+
+    function kubeGet(path) {
+      return new Promise((resolve, reject) => {
+        const req = https.request({
+          host: process.env.KUBERNETES_SERVICE_HOST,
+          port: process.env.KUBERNETES_SERVICE_PORT || 443,
+          path,
+          ca: fs.readFileSync(`${SA_DIR}/ca.crt`),
+          // Read on every call: a projected token is rotated.
+          headers: { Authorization: `Bearer ${fs.readFileSync(`${SA_DIR}/token`, 'utf8').trim()}` },
+          timeout: 5000,
+        }, (res) => {
+          let body = '';
+          res.on('error', reject);
+          res.on('aborted', () => reject(new Error(`GET ${path}: response aborted`)));
+          res.on('data', (chunk) => { body += chunk; });
+          res.on('end', () => {
+            if (res.statusCode !== 200) {
+              reject(new Error(`GET ${path}: ${res.statusCode} ${body.slice(0, 200)}`));
+              return;
+            }
+            try {
+              resolve(JSON.parse(body));
+            } catch (err) {
+              reject(err);
+            }
+          });
+        });
+        req.on('timeout', () => req.destroy(new Error(`GET ${path}: timed out`)));
+        req.on('error', reject);
+        req.end();
+      });
+    }
+
+    // hash maps a string to a stable number in [0, 1).
+    function hash(text) {
+      let h = 2166136261;
+      for (let i = 0; i < text.length; i++) {
+        h ^= text.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+      }
+      return (h >>> 0) / 4294967296;
+    }
+
+    function cores(quantity) {
+      if (!quantity) return 0;
+      return quantity.endsWith('m') ? parseFloat(quantity) / 1000 : parseFloat(quantity);
+    }
+
+    const BYTE_UNITS = { Ki: 1024, Mi: MiB, Gi: GiB, Ti: 1024 * GiB, k: 1e3, M: 1e6, G: 1e9, T: 1e12 };
+
+    function bytes(quantity) {
+      const match = /^([0-9.]+(?:e[0-9]+)?)([A-Za-z]*)$/.exec(quantity || '');
+      return match ? parseFloat(match[1]) * (BYTE_UNITS[match[2]] || 1) : 0;
+    }
+
+    // ownerOf names a pod's controller as OpenCost does: a ReplicaSet is reported as the Deployment that
+    // owns it, and as itself otherwise (an Argo Rollout's, for one); a CronJob's pod as its Job.
+    function ownerOf(pod, replicaSets) {
+      const ref = (pod.metadata.ownerReferences || []).find((r) => r.controller);
+      if (!ref) return { kind: '', name: '' };
+      if (ref.kind === 'ReplicaSet') {
+        const rs = replicaSets.get(ref.name);
+        const parent = rs && (rs.metadata.ownerReferences || []).find((r) => r.controller);
+        if (parent && parent.kind === 'Deployment') return { kind: 'deployment', name: parent.name };
+      }
+      return { kind: ref.kind.toLowerCase(), name: ref.name };
+    }
+
+    // latest returns the latest of the timestamps, or 0 when none parses.
+    function latest(timestamps) {
+      return Math.max(0, ...timestamps.map((t) => Date.parse(t) || 0));
+    }
+
+    // describePod returns what pricing a pod needs. A finished pod ends when its last container did, or,
+    // when none reports that (an evicted pod), at its last condition change, and never before it started.
+    function describePod(pod, replicaSets) {
+      const start = Date.parse(pod.status.startTime);
+      const done = pod.status.phase === 'Succeeded' || pod.status.phase === 'Failed';
+      const finishedAt = done
+        ? latest((pod.status.containerStatuses || []).map((s) => s.state?.terminated?.finishedAt))
+          || latest((pod.status.conditions || []).map((c) => c.lastTransitionTime))
+        : 0;
+      return {
+        name: pod.metadata.name,
+        owner: ownerOf(pod, replicaSets),
+        start,
+        end: done ? Math.max(start, finishedAt) : Infinity,
+        claims: (pod.spec.volumes || []).filter((v) => v.persistentVolumeClaim).length,
+        containers: pod.spec.containers.map((c) => ({
+          name: c.name,
+          cpuRequest: cores(c.resources?.requests?.cpu),
+          cpuLimit: cores(c.resources?.limits?.cpu),
+          ramRequest: bytes(c.resources?.requests?.memory),
+          ramLimit: bytes(c.resources?.limits?.memory),
+        })),
+      };
+    }
+
+    const podCache = new Map();
+
+    const NAMESPACE_NAME = /^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$/;
+
+    // clusterPods lists the namespace's pods that have started, or returns null outside a cluster or when
+    // the API can't be read. Listings with pods are cached for POD_CACHE_MS, as the plugin refreshes every
+    // 30s; an empty one or a failure is not, so a namespace's first pods show up at the next query.
+    async function clusterPods(namespace) {
+      if (!IN_CLUSTER || !NAMESPACE_NAME.test(namespace)) return null;
+      const cached = podCache.get(namespace);
+      if (cached && Date.now() - cached.at < POD_CACHE_MS) return cached.pods;
+      let pods = null;
+      try {
+        const [podList, rsList] = await Promise.all([
+          kubeGet(`/api/v1/namespaces/${namespace}/pods`),
+          kubeGet(`/apis/apps/v1/namespaces/${namespace}/replicasets`),
+        ]);
+        const replicaSets = new Map(rsList.items.map((rs) => [rs.metadata.name, rs]));
+        pods = podList.items.filter((pod) => Date.parse(pod.status?.startTime)).map((pod) => describePod(pod, replicaSets));
+      } catch (err) {
+        console.error(`Listing pods in ${namespace} failed, serving the fixed pods: ${err.message}`);
+      }
+      if (pods && pods.length > 0) podCache.set(namespace, { at: Date.now(), pods });
+      return pods;
+    }
+
+    // podAllocations prices each pod for the part of [start, end) it ran. With wholeWindow, a running pod
+    // is priced for all of it and a finished one (a Job's) for as long as it ran, so a daily series
+    // doesn't charge a minute-long Job for a whole day. Each container is charged the larger of its
+    // request and a made-up use, which runs at 15-85% of the CPU request and 30-90% of the memory one. A
+    // container without a request is given one, 1.5-4 times a made-up use, so every workload has
+    // efficiency, idle spend and rightsizing to show.
+    function podAllocations(pods, start, end, wholeWindow = false) {
+      const allocations = {};
+      for (const pod of pods) {
+        let from = Math.max(start, pod.start);
+        let to = Math.min(end, pod.end);
+        if (wholeWindow) {
+          from = start;
+          to = pod.end === Infinity ? end : start + Math.min(end - start, pod.end - pod.start);
+        }
+        if (to <= from) continue;
+        const hours = (to - from) / HOUR_MS;
+        const containers = pod.containers.map((c) => {
+          const seed = hash(`${pod.name}/${c.name}`);
+          const headroom = 1.5 + 2.5 * hash(`${c.name}/${pod.name}`);
+          const cpuUsage = c.cpuRequest > 0 ? c.cpuRequest * (0.15 + 0.7 * seed) : 0.01 + 0.09 * seed;
+          const ramUsage = c.ramRequest > 0 ? c.ramRequest * (0.3 + 0.6 * seed) : (32 + 160 * seed) * MiB;
+          const cpuRequest = c.cpuRequest || cpuUsage * headroom;
+          const ramRequest = c.ramRequest || ramUsage * headroom;
+          const cpuCoreHours = Math.max(cpuRequest, cpuUsage) * hours;
+          const ramByteHours = Math.max(ramRequest, ramUsage) * hours;
+          return {
+            ...c,
+            cpuRequest,
+            ramRequest,
+            cpuUsage,
+            ramUsage,
+            cpuCoreHours,
+            ramByteHours,
+            cpuCost: cpuCoreHours * CPU_CORE_HOURLY,
+            ramCost: (ramByteHours / GiB) * RAM_GIB_HOURLY,
+          };
+        });
+        const sum = (field) => containers.reduce((total, c) => total + c[field], 0);
+        const networkCost = (0.0002 + 0.002 * hash(pod.name)) * hours * PRICE_MULTIPLIER;
+        const pvCost = pod.claims * PVC_HOURLY * hours;
+        allocations[`pod:${pod.name}`] = {
+          start: toRFC3339(new Date(from)),
+          end: toRFC3339(new Date(to)),
+          minutes: hours * 60,
+          cpuCoreHours: sum('cpuCoreHours'),
+          cpuCost: sum('cpuCost'),
+          ramByteHours: sum('ramByteHours'),
+          ramCost: sum('ramCost'),
+          networkCost,
+          loadBalancerCost: 0,
+          pvCost,
+          totalCost: sum('cpuCost') + sum('ramCost') + networkCost + pvCost,
+          cpuCoreUsageAverage: sum('cpuUsage'),
+          ramByteUsageAverage: sum('ramUsage'),
+          cpuCoreRequestAverage: sum('cpuRequest'),
+          ramByteRequestAverage: sum('ramRequest'),
+          cpuCoreLimitAverage: sum('cpuLimit'),
+          ramByteLimitAverage: sum('ramLimit'),
+          controllerKind: pod.owner.kind,
+          controller: pod.owner.name,
+          containers,
+        };
+      }
+      return allocations;
+    }
+
+    // costsFor returns the pods to report for a namespace over a window: the cluster's when it has any,
+    // the fixed ones otherwise. Like OpenCost, the namespace's own window covers only the time its pods
+    // ran, which the backend projects to a month from.
+    async function costsFor(namespace, windowStr) {
+      const pods = await clusterPods(namespace);
+      if (pods && pods.length > 0) {
+        const { start, end } = windowRange(windowStr);
+        const ran = pods.filter((pod) => pod.start < end && pod.end > start);
+        const from = ran.length > 0 ? Math.max(start, Math.min(...ran.map((pod) => pod.start))) : start;
+        const to = ran.length > 0 ? Math.min(end, Math.max(...ran.map((pod) => pod.end))) : end;
+        return {
+          live: true,
+          pods,
+          window: [toRFC3339(new Date(from)), toRFC3339(new Date(to))],
+          allocations: podAllocations(pods, start, end),
+        };
+      }
+      return mockCosts[namespace] || mockCosts['default'];
+    }
+
+    // containersOf lists a pod's containers. A fixed pod has one, named after its controller, with
+    // requests above its use.
+    function containersOf(podName, alloc) {
+      if (alloc.containers) return alloc.containers;
+      const cpuUsage = alloc.cpuCoreUsageAverage ?? (alloc.cpuCoreHours > 0 ? alloc.cpuCoreHours / 24 : 0);
+      const ramUsage = alloc.ramByteUsageAverage ?? (alloc.ramByteHours > 0 ? alloc.ramByteHours / 24 : 0);
+      return [{
+        name: alloc.controller || podName,
+        cpuRequest: cpuUsage * 2.5,
+        cpuLimit: cpuUsage * 5,
+        ramRequest: ramUsage * 1.4,
+        ramLimit: ramUsage * 2,
+        cpuUsage,
+        ramUsage,
+        cpuCoreHours: alloc.cpuCoreHours,
+        ramByteHours: alloc.ramByteHours,
+        cpuCost: alloc.cpuCost,
+        ramCost: alloc.ramCost,
+      }];
+    }
+
+    // Handler for /allocation endpoint
+    function handleAllocation(queryParams, costs) {
+      const namespace = namespaceOf(queryParams);
+      const aggregate = queryParams.aggregate || 'namespace';
+      // Fixed pods hold a month's cost for the daily series; the cluster's are priced per window, so a
+      // daily series prices them for a whole day.
+      const perDay = costs.live ? 1 : 30;
+      const daily = costs.live && queryParams.step === '1d'
+        ? podAllocations(costs.pods, 0, DAY_MS, true)
+        : costs.allocations;
 
       // Build response based on aggregation type
       if (aggregate === 'namespace') {
@@ -190,15 +476,14 @@ data:
         if (queryParams.step === '1d') {
 
           let baseCPU = 0, baseRAM = 0, baseNetwork = 0, baseLB = 0, basePV = 0;
-          Object.values(costs.allocations).forEach((alloc) => {
+          Object.values(daily).forEach((alloc) => {
             baseCPU += alloc.cpuCost;
             baseRAM += alloc.ramCost;
             baseNetwork += alloc.networkCost || 0;
             baseLB += alloc.loadBalancerCost || 0;
             basePV += alloc.pvCost || 0;
           });
-          // Scale from monthly to daily
-          baseCPU /= 30; baseRAM /= 30; baseNetwork /= 30; baseLB /= 30; basePV /= 30;
+          baseCPU /= perDay; baseRAM /= perDay; baseNetwork /= perDay; baseLB /= perDay; basePV /= perDay;
 
           const data = [];
           for (const start of dailySteps(queryParams.window)) {
@@ -233,12 +518,14 @@ data:
           return { code: 200, data };
         }
 
-        let totalCPU = 0;
-        let totalRAM = 0;
-
+        let totalCPU = 0, totalRAM = 0, cpuCoreHours = 0, ramByteHours = 0, cpuUsage = 0, ramUsage = 0;
         Object.values(costs.allocations).forEach((alloc) => {
           totalCPU += alloc.cpuCost;
           totalRAM += alloc.ramCost;
+          cpuCoreHours += alloc.cpuCoreHours || 0;
+          ramByteHours += alloc.ramByteHours || 0;
+          cpuUsage += alloc.cpuCoreUsageAverage || 0;
+          ramUsage += alloc.ramByteUsageAverage || 0;
         });
 
         let totalNetwork = 0, totalLB = 0, totalPV = 0;
@@ -257,9 +544,9 @@ data:
               [namespace]: {
                 start: costs.window[0],
                 end: costs.window[1],
-                cpuCoreHours: 3.5,
+                cpuCoreHours: costs.live ? cpuCoreHours : 3.5,
                 cpuCost: totalCPU,
-                ramByteHours: 3758096384,
+                ramByteHours: costs.live ? ramByteHours : 3758096384,
                 ramCost: totalRAM,
                 networkCost: totalNetwork,
                 networkCrossZoneCost: Math.round(totalNetwork * 0.40 * 1000) / 1000,
@@ -277,10 +564,12 @@ data:
                   'kube-system/coredns':       { totalCost: Math.round(sharedCost * 0.31 * 1000) / 1000 },
                   'cert-manager/cert-manager': { totalCost: Math.round(sharedCost * 0.19 * 1000) / 1000 },
                 },
-                rawAllocationOnly: {
-                  cpuCoreUsageMax: Math.round(totalCPU / 30 * 2.5 * 1000) / 1000,
-                  ramByteUsageMax: Math.round(totalRAM / 30 * 2.0 * 1000) / 1000,
-                },
+                rawAllocationOnly: costs.live
+                  ? { cpuCoreUsageMax: cpuUsage * 1.6, ramByteUsageMax: ramUsage * 1.3 }
+                  : {
+                    cpuCoreUsageMax: Math.round(totalCPU / 30 * 2.5 * 1000) / 1000,
+                    ramByteUsageMax: Math.round(totalRAM / 30 * 2.0 * 1000) / 1000,
+                  },
               },
             },
           ],
@@ -314,15 +603,15 @@ data:
       } else if (aggregate === 'controller' && queryParams.step === '1d') {
         // An application's daily series: one entry per controller per day, as real OpenCost reports it.
         const byController = {};
-        Object.values(costs.allocations).forEach((alloc) => {
+        Object.values(daily).forEach((alloc) => {
           if (!alloc.controller) return;
           const kind = (alloc.controllerKind || 'Deployment').toLowerCase();
           const key = `${kind}:${alloc.controller}`;
           const entry = byController[key] || (byController[key] = { kind, name: alloc.controller, cpu: 0, ram: 0, network: 0, pv: 0 });
-          entry.cpu += alloc.cpuCost / 30;
-          entry.ram += alloc.ramCost / 30;
-          entry.network += (alloc.networkCost || 0) / 30;
-          entry.pv += (alloc.pvCost || 0) / 30;
+          entry.cpu += alloc.cpuCost / perDay;
+          entry.ram += alloc.ramCost / perDay;
+          entry.network += (alloc.networkCost || 0) / perDay;
+          entry.pv += (alloc.pvCost || 0) / perDay;
         });
 
         const data = [];
@@ -349,13 +638,13 @@ data:
         return { code: 200, data };
       } else if (aggregate === 'pod') {
         const pods = {};
-        Object.entries(costs.allocations).forEach(([key, alloc]) => {
+        Object.entries(costs.allocations).forEach(([key, { containers, ...alloc }]) => {
           const podName = key.replace('pod:', '');
           const cpuUsage = alloc.cpuCoreUsageAverage ?? (alloc.cpuCoreHours > 0 ? alloc.cpuCoreHours / 24 : 0);
           const ramUsage = alloc.ramByteUsageAverage ?? (alloc.ramByteHours > 0 ? alloc.ramByteHours / 24 : 0);
           pods[podName] = {
             ...alloc,
-            minutes: 24 * 60,
+            minutes: alloc.minutes ?? 24 * 60,
             cpuCoreUsageAverage: cpuUsage,
             ramByteUsageAverage: ramUsage,
             // Requests above use, so an application's efficiency and idle spend have something to show.
@@ -364,8 +653,8 @@ data:
             properties: {
               pod: podName,
               namespace,
-              controllerKind: alloc.controllerKind || 'Deployment',
-              controller: alloc.controller || podName,
+              controllerKind: alloc.controllerKind ?? 'Deployment',
+              controller: alloc.controller ?? podName,
             },
           };
         });
@@ -374,13 +663,46 @@ data:
           code: 200,
           data: [pods],
         };
+      } else if (aggregate === 'pod,container') {
+        // Each container of each pod, keyed "<pod>/<container>" as OpenCost keys a two-part aggregation.
+        const data = {};
+        Object.entries(costs.allocations).forEach(([key, alloc]) => {
+          const pod = key.replace('pod:', '');
+          for (const c of containersOf(pod, alloc)) {
+            data[`${pod}/${c.name}`] = {
+              name: `${pod}/${c.name}`,
+              start: alloc.start || costs.window[0],
+              end: alloc.end || costs.window[1],
+              minutes: alloc.minutes ?? 24 * 60,
+              cpuCoreHours: c.cpuCoreHours,
+              cpuCost: c.cpuCost,
+              ramByteHours: c.ramByteHours,
+              ramCost: c.ramCost,
+              totalCost: c.cpuCost + c.ramCost,
+              cpuCoreRequestAverage: c.cpuRequest,
+              cpuCoreUsageAverage: c.cpuUsage,
+              cpuCoreLimitAverage: c.cpuLimit,
+              ramByteRequestAverage: c.ramRequest,
+              ramByteUsageAverage: c.ramUsage,
+              ramByteLimitAverage: c.ramLimit,
+              properties: {
+                namespace,
+                pod,
+                container: c.name,
+                controllerKind: alloc.controllerKind ?? 'Deployment',
+                controller: alloc.controller ?? pod,
+              },
+            };
+          }
+        });
+        return { code: 200, data: [data] };
       }
 
       return { code: 400, data: { error: 'Invalid aggregation type' } };
     }
 
     // Handler for /allocation/summary endpoint
-    function handleAllocationSummary(queryParams) {
+    function handleAllocationSummary(queryParams, costs) {
       const aggregate = queryParams.aggregate || 'namespace';
 
       if (aggregate.startsWith('label:')) {
@@ -404,8 +726,7 @@ data:
         };
       }
 
-      const namespace = queryParams.filter ? queryParams.filter.replace('namespace:"', '').replace('"', '') : 'default';
-      const costs = mockCosts[namespace] || mockCosts['default'];
+      const namespace = namespaceOf(queryParams);
 
       let totalCPU = 0, totalRAM = 0;
       Object.values(costs.allocations).forEach((alloc) => {
@@ -414,10 +735,30 @@ data:
       });
 
       // Simulate realistic request/usage values for efficiency calculation
-      const cpuCoreRequestAverage = 1.0;
-      const cpuCoreUsageAverage = 0.4;
-      const ramByteRequestAverage = 536870912;   // 512 MB
-      const ramByteUsageAverage = 375809638;     // ~358 MB
+      let cpuCoreRequestAverage = 1.0;
+      let cpuCoreUsageAverage = 0.4;
+      let cpuCoreLimitAverage = 2.0;
+      let ramByteRequestAverage = 536870912;   // 512 MB
+      let ramByteUsageAverage = 375809638;     // ~358 MB
+      let ramByteLimitAverage = 1073741824;
+      let efficiency = 0.55;
+      if (costs.live) {
+        // The cluster's pods: their own requests and use, and an efficiency weighted by the cost of what
+        // they requested but didn't use.
+        const pods = Object.values(costs.allocations);
+        const sum = (field) => pods.reduce((total, alloc) => total + alloc[field], 0);
+        const unused = (cost, request, usage) => (request > usage ? cost * (1 - usage / request) : 0);
+        cpuCoreRequestAverage = sum('cpuCoreRequestAverage');
+        cpuCoreUsageAverage = sum('cpuCoreUsageAverage');
+        cpuCoreLimitAverage = sum('cpuCoreLimitAverage');
+        ramByteRequestAverage = sum('ramByteRequestAverage');
+        ramByteUsageAverage = sum('ramByteUsageAverage');
+        ramByteLimitAverage = sum('ramByteLimitAverage');
+        const unusedCost = pods.reduce((total, a) =>
+          total + unused(a.cpuCost, a.cpuCoreRequestAverage, a.cpuCoreUsageAverage)
+            + unused(a.ramCost, a.ramByteRequestAverage, a.ramByteUsageAverage), 0);
+        efficiency = totalCPU + totalRAM > 0 ? 1 - unusedCost / (totalCPU + totalRAM) : 0;
+      }
       // Real OpenCost never computes its idle fields (up to 1.121.3 they are only summed, so always 0);
       // the service measures idle cost from the pods' requests and usage instead.
       const cpuCostIdle = 0;
@@ -435,12 +776,12 @@ data:
                 [namespace]: {
                   cpuCoreRequestAverage,
                   cpuCoreUsageAverage,
-                  cpuCoreLimitAverage: 2.0,
+                  cpuCoreLimitAverage,
                   cpuCost: totalCPU,
                   cpuCostIdle,
                   ramByteRequestAverage,
                   ramByteUsageAverage,
-                  ramByteLimitAverage: 1073741824,
+                  ramByteLimitAverage,
                   ramCost: totalRAM,
                   ramCostIdle,
                   networkCost: 0,
@@ -448,7 +789,7 @@ data:
                   pvCost: 0,
                   sharedCost: 0,
                   externalCost: 0,
-                  efficiency: 0.55,
+                  efficiency,
                 },
               },
             },
@@ -463,8 +804,8 @@ data:
       return { status: 'ok', service: 'mock-opencost' };
     }
 
-    // Create HTTP server
-    const server = http.createServer((req, res) => {
+    // route answers one request.
+    async function route(req, res) {
       const parsedUrl = url.parse(req.url, true);
       const pathname = parsedUrl.pathname;
       const query = parsedUrl.query;
@@ -488,7 +829,7 @@ data:
         res.writeHead(200);
         res.end(JSON.stringify(response));
       } else if (pathname === '/allocation') {
-        const response = handleAllocation(query);
+        const response = handleAllocation(query, await costsFor(namespaceOf(query), query.window));
         res.writeHead(response.code || 200);
         res.end(JSON.stringify(response));
       } else if (pathname === '/allocation/autocomplete') {
@@ -499,7 +840,7 @@ data:
           data: { data: ['app', 'app_kubernetes_io_name', 'cost_center', 'env', 'team'] },
         }));
       } else if (pathname === '/allocation/summary') {
-        const response = handleAllocationSummary(query);
+        const response = handleAllocationSummary(query, await costsFor(namespaceOf(query), query.window));
         res.writeHead(response.code || 200);
         res.end(JSON.stringify(response));
       } else if (pathname === '/assets') {
@@ -545,6 +886,15 @@ data:
 
       // Log request
       console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    }
+
+    // Create HTTP server
+    const server = http.createServer((req, res) => {
+      route(req, res).catch((err) => {
+        console.error(`[${new Date().toISOString()}] ${req.method} ${req.url}: ${err.stack || err}`);
+        if (!res.headersSent) res.writeHead(500);
+        res.end(JSON.stringify({ code: 500, data: { error: String(err.message || err) } }));
+      });
     });
 
     const PORT = process.env.PORT || 9003;
@@ -552,8 +902,44 @@ data:
       console.log(`Mock OpenCost server listening on http://0.0.0.0:${PORT}`);
       console.log('Endpoints:');
       console.log(`  - GET /health`);
-      console.log(`  - GET /allocation?window=...&aggregate=namespace|pod|controller&filter=namespace:"..."`)
+      console.log(IN_CLUSTER
+        ? `  Serving the cluster's pods, prices x${PRICE_MULTIPLIER}`
+        : '  Serving fixed pods (not in a cluster)');
+      console.log(`  - GET /allocation?window=...&aggregate=namespace|pod|pod,container|controller&filter=namespace:"..."`)
     });
+---
+# The mock reports the pods that run in each namespace it is asked about, so it reads them (and the
+# ReplicaSets that tie them to their Deployments) cluster-wide.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mock-opencost
+  namespace: opencost
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: mock-opencost
+rules:
+- apiGroups: [""]
+  resources: [pods]
+  verbs: [list]
+- apiGroups: [apps]
+  resources: [replicasets]
+  verbs: [list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: mock-opencost
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: mock-opencost
+subjects:
+- kind: ServiceAccount
+  name: mock-opencost
+  namespace: opencost
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -572,10 +958,15 @@ spec:
       labels:
         app: opencost
     spec:
+      serviceAccountName: mock-opencost
       containers:
       - name: mock-opencost
         image: node:22-alpine
         command: ["node", "/scripts/mock-opencost-server.js"]
+        env:
+        # Scales the made-up prices of the cluster's pods so the UI shows realistic figures.
+        - name: PRICE_MULTIPLIER
+          value: "100"
         ports:
         - containerPort: 9003
         volumeMounts:

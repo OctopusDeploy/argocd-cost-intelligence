@@ -179,7 +179,8 @@ helm-deploy-real: docker-build docker-build-ui
 	@echo "==> Removing mock OpenCost, if present (it reuses the chart's resource names)..."
 	@if kubectl get configmap mock-opencost-script -n $(OPENCOST_NS) >/dev/null 2>&1; then \
 		kubectl delete deployment/opencost service/opencost configmap/mock-opencost-script \
-			-n $(OPENCOST_NS) --ignore-not-found --wait; \
+			serviceaccount/mock-opencost -n $(OPENCOST_NS) --ignore-not-found --wait; \
+		kubectl delete clusterrolebinding/mock-opencost clusterrole/mock-opencost --ignore-not-found; \
 	fi
 	@echo "==> Installing Prometheus + real OpenCost..."
 	helm repo add prometheus-community https://prometheus-community.github.io/helm-charts 2>/dev/null || true

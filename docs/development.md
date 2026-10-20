@@ -136,7 +136,7 @@ Both targets build the backend and UI images, import them into k3d, deploy OpenC
 |---|---|---|
 | Command | `make helm-deploy` | `make helm-deploy-real` |
 | OpenCost | `deploy/mock-opencost.yaml`, an embedded copy of `mock-opencost-server.js` (edit the script, then run `make sync-mock`; CI fails if they differ) | `opencost/opencost` with `prometheus-community/prometheus` (an existing Prometheus release is reused) |
-| Costs | Predictable, and high | Tiny but real: actual usage at OpenCost's default pricing |
+| Costs | Made up but stable, for the pods that actually run in each namespace (it reads them with its own read-only ClusterRole), so every app's own figures have values; requests a container doesn't set are made up too. Prices are OpenCost's defaults times `PRICE_MULTIPLIER` (100 in the manifest), so small local pods show realistic amounts | Tiny but real: actual usage at OpenCost's default pricing |
 | Good for | Feature and UI work, the webhook pipeline | Checking that costs follow real consumption, efficiency figures, pre-release checks |
 
 With real OpenCost, wait about 2 minutes after the install before you trigger a sync, or the costs read zero. A tiny workload costing `$0.02/month` is correct.

@@ -147,9 +147,17 @@ spec:
 
           # 0.1.0 wrote these two under names from Argo CD's notifications catalog. Remove them only
           # if they still hold exactly what it wrote; anything else is the user's.
-          # The template stays while a trigger still sends it, such as a kept trigger above.
-          remove_if_unchanged argocd-notifications-cm trigger.on-sync-succeeded "$LEGACY_TRIGGER"
-          if kubectl get cm argocd-notifications-cm -n "$ARGOCD_NAMESPACE" -o json | jq -e \
+          # The trigger stays while a subscription or defaultTriggers still names it, and the
+          # template stays while a trigger still sends it, such as a kept trigger.
+          CM_JSON=$(kubectl get cm argocd-notifications-cm -n "$ARGOCD_NAMESPACE" -o json)
+          if printf '%s' "$CM_JSON" | jq -e \
+            '[.data.subscriptions // "", .data.defaultTriggers // ""] | any(test("(^|[^A-Za-z0-9-])on-sync-succeeded"))' >/dev/null; then
+            echo "  kept trigger.on-sync-succeeded in argocd-notifications-cm: a subscription or defaultTriggers still names it"
+          else
+            remove_if_unchanged argocd-notifications-cm trigger.on-sync-succeeded "$LEGACY_TRIGGER"
+          fi
+          CM_JSON=$(kubectl get cm argocd-notifications-cm -n "$ARGOCD_NAMESPACE" -o json)
+          if printf '%s' "$CM_JSON" | jq -e \
             '[.data // {} | to_entries[] | select(.key | startswith("trigger.")) | .value | contains("app-sync-succeeded")] | any' >/dev/null; then
             echo "  kept template.app-sync-succeeded in argocd-notifications-cm: a trigger still sends it"
           else

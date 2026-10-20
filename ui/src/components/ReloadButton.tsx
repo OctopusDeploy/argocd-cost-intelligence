@@ -33,19 +33,22 @@ export const ReloadButton: React.FC<Props> = ({ onReload, label = 'Reload cost d
       style={{
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'center',
-        width: '32px',
+        gap: '6px',
         height: '32px',
-        padding: 0,
+        padding: '0 12px',
         border: `1px solid ${t.border}`,
-        borderRadius: '50%',
-        backgroundColor: 'transparent',
+        borderRadius: '4px',
+        backgroundColor: t.surfaceSunken,
         color: t.text,
+        fontFamily: 'inherit',
+        fontSize: '13px',
+        fontWeight: 500,
         opacity: reloading ? 0.5 : 1,
         cursor: reloading ? 'progress' : 'pointer',
       }}
     >
       <RefreshIcon />
+      Reload
     </button>
   );
 };

@@ -1,5 +1,6 @@
 import React from 'react';
-import { TrendIcon } from './icons';
+import { CardHeader } from './CardHeader';
+import { ChangeIcon, TrendIcon } from './icons';
 import { cardStyle, Tokens, useTokens } from '../theme/tokens';
 import { ChangeDriver, ChangeDrivers, NOT_TIED_TO_A_POD } from '../utils/costInsights';
 import { formatMoney, formatSignedMoney, pluralize } from '../utils/format';
@@ -25,11 +26,8 @@ export const ChangeDriversCard: React.FC<{ drivers: ChangeDrivers }> = ({ driver
 
   return (
     <section aria-labelledby={TITLE_ID} style={{ ...cardStyle(t), padding: '20px 24px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '16px', marginBottom: '8px' }}>
-        <h4 id={TITLE_ID} style={{ margin: 0, color: t.textStrong, fontSize: '14px', fontWeight: 500, lineHeight: '20px' }}>
-          What changed
-        </h4>
-        <span style={{ color: t.textMuted, fontSize: '12px' }}>Monthly, since the previous sync</span>
+      <div style={{ marginBottom: '8px' }}>
+        <CardHeader id={TITLE_ID} icon={<ChangeIcon />} title="What changed" detail="Monthly, since the previous sync" />
       </div>
 
       <table

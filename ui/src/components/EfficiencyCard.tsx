@@ -1,5 +1,6 @@
 import React from 'react';
-import { CheckIcon, ErrorIcon, InfoIcon, WarningIcon } from './icons';
+import { CardHeader } from './CardHeader';
+import { CheckIcon, ErrorIcon, GaugeIcon, InfoIcon, WarningIcon } from './icons';
 import { cardStyle, Tokens, useTokens } from '../theme/tokens';
 import { EfficiencyMetrics } from '../utils/api';
 import { efficiencyLevel, EfficiencyLevel } from '../utils/costInsights';
@@ -42,14 +43,12 @@ export const EfficiencyCard: React.FC<{ efficiency: EfficiencyMetrics; namespace
       aria-labelledby={TITLE_ID}
       style={{ ...cardStyle(t), display: 'flex', flexDirection: 'column', padding: '20px 24px' }}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '16px' }}>
-        <h4 id={TITLE_ID} style={{ margin: 0, color: t.textStrong, fontSize: '14px', fontWeight: 500, lineHeight: '20px' }}>
-          Resource efficiency
-        </h4>
-        <span style={{ color: t.textMuted, fontSize: '12px' }}>
-          {formatPercent(e.totalEfficiency)} of requested resources used
-        </span>
-      </div>
+      <CardHeader
+        id={TITLE_ID}
+        icon={<GaugeIcon />}
+        title="Resource efficiency"
+        detail={`${formatPercent(e.totalEfficiency)} of requested resources used`}
+      />
       {namespace && (
         <p style={{ margin: '4px 0 0', color: t.textMuted, fontSize: '12px' }}>Whole {namespace} namespace, not only this app</p>
       )}

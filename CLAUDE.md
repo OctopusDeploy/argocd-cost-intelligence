@@ -114,14 +114,15 @@ Linting is golangci-lint v2 (`.golangci.yaml`) with `gofumpt` and `goimports`.
 
 ### Design system
 
+- **Octopus Deploy look.** The plugin is a branded panel inside Argo CD's page ("Cost Intelligence by Octopus Deploy"), in Octopus's palette and its Inter font, with bordered cards, an icon tile above each card title, sentence-case labels and outlined buttons. Argo CD's own page around it is unchanged. Inter is bundled (`src/theme/font.ts`, inlined by webpack) because Argo CD serves the extension as one JS file and air-gapped clusters can't reach a font host.
 - **Colours** come from `src/theme/tokens.ts` (`useTokens()`) only; never hardcode one. `cardStyle(t)` is the standard container, `series` the chart palette.
-- **Reuse shared components** before building: `TabBar`, `StatStrip`, `Notice` / `ErrorNotice`, `ReloadButton`, `MeasuredLabel`, `Share`, `AdviceCard`, `Chip`, `levelIcon` / `LEVEL_LABELS`, `icons.tsx`.
+- **Reuse shared components** before building: `PluginFrame` (root and branded header), `CardHeader` / `IconTile`, `TabBar`, `StatStrip`, `Notice` / `ErrorNotice`, `ReloadButton`, `MeasuredLabel`, `Share`, `AdviceCard`, `Chip`, `levelIcon` / `LEVEL_LABELS`, `icons.tsx`. `BrandMark` is a stand-in for the official Octopus Deploy logo; swap its SVG when the asset arrives.
 - **Formatting** goes through `src/utils/format.ts` (`formatMoney`, `formatPercent`, ...). Never `toFixed` a currency by hand.
 - The same concept uses the same words and icon on every page, and columns beside a total add up to it.
 
 ### Argo CD's CSS
 
-Argo CD ships `outline: none !important` on buttons, links, spans and inputs, so inline focus styles do nothing. `src/theme/globalStyles.ts` injects one stylesheet instead (focus rings, button hover tints). Every root view sets `className={PLUGIN_CLASS}`, spreads `pluginRootStyle(t)` and calls `useGlobalStyles()`. Never set `outline: 'none'`. Scope every rule to `.cost-intel` (a test enforces this).
+Argo CD ships `outline: none !important` on buttons, links, spans and inputs, so inline focus styles do nothing. `src/theme/globalStyles.ts` injects one stylesheet instead (focus rings, button hover tints). Every root view renders inside `PluginFrame`, which sets `className={PLUGIN_CLASS}`, spreads `pluginRootStyle(t)` and calls `useGlobalStyles()`. Never set `outline: 'none'`. Scope every rule to `.cost-intel` (a test enforces this).
 
 ### Layout
 

@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
+import { CardHeader } from './CardHeader';
 import { Chip } from './Chip';
 import { DailyChart } from './DailyChart';
+import { ChartIcon } from './icons';
 import { ErrorNotice, Notice } from './Notice';
 import { PeriodChart } from './PeriodChart';
 import { StatStrip } from './StatStrip';
@@ -121,41 +123,37 @@ export const CostTrendComponent: React.FC<CostTrendProps> = ({ loading, error, d
       )}
 
       <section aria-labelledby={TITLE_ID} style={{ ...cardStyle(t), padding: '20px 24px 24px' }}>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'flex-start',
-            gap: '16px',
-            marginBottom: '16px',
-          }}
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <h4 id={TITLE_ID} style={{ margin: 0, fontSize: '14px', fontWeight: 500, lineHeight: '20px', color: t.textStrong }}>
-              {TITLES[unit]}
-            </h4>
-            <span style={{ fontSize: '12px', color: t.textMuted }}>
-              {namespace
+        <div style={{ marginBottom: '16px' }}>
+          <CardHeader
+            id={TITLE_ID}
+            icon={<ChartIcon />}
+            title={TITLES[unit]}
+            detail={
+              namespace
                 ? `Whole ${namespace} namespace, not only this app, queried from OpenCost for each day`
-                : 'Queried from OpenCost for each day, independent of sync frequency'}
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setView(current => (current === 'chart' ? 'table' : 'chart'))}
-            style={{
-              flexShrink: 0,
-              padding: '4px',
-              border: 'none',
-              backgroundColor: 'transparent',
-              color: t.accentText,
-              fontFamily: 'inherit',
-              fontSize: '12.8px',
-              cursor: 'pointer',
-            }}
-          >
-            {view === 'chart' ? 'View as table' : 'View as chart'}
-          </button>
+                : 'Queried from OpenCost for each day, independent of sync frequency'
+            }
+            action={
+              <button
+                type="button"
+                onClick={() => setView(current => (current === 'chart' ? 'table' : 'chart'))}
+                style={{
+                  height: '32px',
+                  padding: '0 14px',
+                  border: `1px solid ${t.accent}`,
+                  borderRadius: '4px',
+                  backgroundColor: 'transparent',
+                  color: t.accentText,
+                  fontFamily: 'inherit',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+              >
+                {view === 'chart' ? 'View as table' : 'View as chart'}
+              </button>
+            }
+          />
         </div>
 
         {range && <RangePicker range={range} today={today} t={t} />}
@@ -302,12 +300,10 @@ const DailyCostTable: React.FC<{ days: DailyCost[]; t: Tokens }> = ({ days, t })
     padding: '8px 12px',
     backgroundColor: t.surface,
     borderBottom: `1px solid ${t.border}`,
-    color: t.textMuted,
-    fontSize: '12px',
-    fontWeight: 500,
-    letterSpacing: '0.04em',
+    color: t.textStrong,
+    fontSize: '12.8px',
+    fontWeight: 600,
     textAlign: 'right',
-    textTransform: 'uppercase',
   };
   const cellStyle: React.CSSProperties = {
     padding: '8px 12px',

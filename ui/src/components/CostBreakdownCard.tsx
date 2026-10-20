@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { ChevronIcon, LeafIcon, WarningIcon } from './icons';
+import { CardHeader } from './CardHeader';
+import { ChevronIcon, LeafIcon, PieIcon, WarningIcon } from './icons';
 import { Notice } from './Notice';
 import { cardStyle, useTokens } from '../theme/tokens';
 import { CloudServiceEstimate, CostData } from '../utils/api';
@@ -61,12 +62,12 @@ export const CostBreakdownCard: React.FC<{ data: CostData; namespace?: string }>
 
   return (
     <section aria-labelledby={TITLE_ID} style={{ ...cardStyle(t), padding: '20px 24px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '16px' }}>
-        <h4 id={TITLE_ID} style={{ margin: 0, color: t.textStrong, fontSize: '14px', fontWeight: 500, lineHeight: '20px' }}>
-          Cost breakdown
-        </h4>
-        <span style={{ color: t.textMuted, fontSize: '12px' }}>{cloud ? 'Monthly, Kubernetes and cloud' : 'Monthly'}</span>
-      </div>
+      <CardHeader
+        id={TITLE_ID}
+        icon={<PieIcon />}
+        title="Cost breakdown"
+        detail={cloud ? 'Monthly, Kubernetes and cloud' : 'Monthly'}
+      />
       {namespace && (
         <p style={{ margin: '4px 0 0', color: t.textMuted, fontSize: '12px' }}>Whole {namespace} namespace, not only this app</p>
       )}

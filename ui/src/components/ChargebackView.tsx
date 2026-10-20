@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { CardHeader } from './CardHeader';
 import { Chip } from './Chip';
 import { Share } from './ControllerCostTable';
 import { LEVEL_LABELS, levelIcon } from './EfficiencyCard';
+import { TagIcon } from './icons';
 import { ErrorNotice, Notice } from './Notice';
 import { StatStrip } from './StatStrip';
 import { useChargeback } from '../hooks/useChargeback';
@@ -181,7 +183,7 @@ const Field: React.FC<{ label: string; htmlFor: string; t: Tokens; children: Rea
   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
     <label
       htmlFor={htmlFor}
-      style={{ color: t.textMuted, fontSize: '12px', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}
+      style={{ color: t.textMuted, fontSize: '12px', fontWeight: 500 }}
     >
       {label}
     </label>
@@ -276,14 +278,12 @@ const ChargebackTable: React.FC<TableProps> = ({ entries, totalCost, labelKey, l
 
   return (
     <section aria-labelledby={TITLE_ID}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '16px' }}>
-        <h4 id={TITLE_ID} style={{ margin: 0, color: t.textStrong, fontSize: '14px', fontWeight: 500, lineHeight: '20px' }}>
-          Costs by {labelKey}
-        </h4>
-        <span style={{ color: t.textMuted, fontSize: '12px' }}>
-          {loading ? 'Updating…' : 'Monthly · network includes load balancers'}
-        </span>
-      </div>
+      <CardHeader
+        id={TITLE_ID}
+        icon={<TagIcon />}
+        title={`Costs by ${labelKey}`}
+        detail={loading ? 'Updating…' : 'Monthly · network includes load balancers'}
+      />
 
       <div style={{ overflowX: 'auto' }}>
         <div role="table" aria-labelledby={TITLE_ID} style={{ minWidth: MIN_TABLE_WIDTH }}>
@@ -294,10 +294,9 @@ const ChargebackTable: React.FC<TableProps> = ({ entries, totalCost, labelKey, l
                 ...row,
                 height: '18px',
                 margin: '12px 0 8px',
-                color: t.textMuted,
-                fontSize: '12px',
-                fontWeight: 500,
-                textTransform: 'uppercase',
+                color: t.textStrong,
+                fontSize: '12.8px',
+                fontWeight: 600,
                 whiteSpace: 'nowrap',
               }}
             >

@@ -1,4 +1,5 @@
 import React from 'react';
+import { IconTile } from './CardHeader';
 import { GaugeIcon } from './icons';
 import { cardStyle, useTokens } from '../theme/tokens';
 
@@ -27,22 +28,9 @@ export const AdviceCard: React.FC<AdviceCardProps> = ({
   const t = useTokens();
 
   const icon = (
-    <span
-      aria-hidden="true"
-      style={{
-        display: 'flex',
-        flexShrink: 0,
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: '40px',
-        height: '40px',
-        borderRadius: '50%',
-        backgroundColor: t.accentWash,
-        color: t.accent,
-      }}
-    >
+    <IconTile color={t.tileAdvice}>
       <GaugeIcon />
-    </span>
+    </IconTile>
   );
 
   // In a banner the text takes the free width but wraps the button onto its own line below 320px.
@@ -56,7 +44,7 @@ export const AdviceCard: React.FC<AdviceCardProps> = ({
         minWidth: 0,
       }}
     >
-      <h4 style={{ margin: 0, color: t.textStrong, fontSize: '14px', fontWeight: 500, lineHeight: '20px' }}>{title}</h4>
+      <h4 style={{ margin: 0, color: t.textStrong, fontSize: '14px', fontWeight: 600, lineHeight: '20px' }}>{title}</h4>
       <div style={{ color: t.text, fontSize: '13px', lineHeight: '20px' }}>{children}</div>
       {notes}
     </div>
@@ -68,16 +56,15 @@ export const AdviceCard: React.FC<AdviceCardProps> = ({
       onClick={onShowResources}
       style={{
         flexShrink: 0,
-        height: '34px',
-        padding: '0 18px',
-        border: 'none',
-        borderRadius: '24px',
-        backgroundColor: '#6d7f8b',
-        color: '#f8fbfb',
+        height: '32px',
+        padding: '0 14px',
+        border: `1px solid ${t.accent}`,
+        borderRadius: '4px',
+        backgroundColor: 'transparent',
+        color: t.accentText,
         fontFamily: 'inherit',
         fontSize: '13px',
         fontWeight: 500,
-        textTransform: 'uppercase',
         cursor: 'pointer',
       }}
     >
@@ -95,7 +82,7 @@ export const AdviceCard: React.FC<AdviceCardProps> = ({
           {text}
         </div>
         {/* Indented to line up with the text, past the icon and its gap. */}
-        {button && <div style={{ paddingLeft: '56px' }}>{button}</div>}
+        {button && <div style={{ paddingLeft: '52px' }}>{button}</div>}
       </section>
     );
   }

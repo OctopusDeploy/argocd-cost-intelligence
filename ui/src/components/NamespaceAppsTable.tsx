@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import { CardHeader } from './CardHeader';
 import { Share } from './ControllerCostTable';
-import { ChevronIcon, WarningIcon } from './icons';
+import { AppsIcon, ChevronIcon, WarningIcon } from './icons';
 import { cardStyle, useTokens } from '../theme/tokens';
 import { formatMoney, formatRelativeTime, isStale, pluralize } from '../utils/format';
 import { NAME_COLUMN, SPACER_COLUMN } from '../utils/layout';
@@ -51,14 +52,12 @@ export const NamespaceAppsTable: React.FC<Props> = ({ apps, totalCost }) => {
 
   return (
     <section aria-labelledby={TITLE_ID}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '16px' }}>
-        <h4 id={TITLE_ID} style={{ margin: 0, color: t.textStrong, fontSize: '14px', fontWeight: 500, lineHeight: '20px' }}>
-          Applications
-        </h4>
-        <span style={{ color: t.textMuted, fontSize: '12px' }}>
-          Each pod counts once, under the app that manages it · totals include storage and network
-        </span>
-      </div>
+      <CardHeader
+        id={TITLE_ID}
+        icon={<AppsIcon />}
+        title="Applications"
+        detail="Each pod counts once, under the app that manages it · totals include storage and network"
+      />
       <div style={{ overflowX: 'auto' }}>
         <div role="table" aria-labelledby={TITLE_ID} style={{ minWidth: MIN_TABLE_WIDTH }}>
           <div role="rowgroup">
@@ -68,10 +67,9 @@ export const NamespaceAppsTable: React.FC<Props> = ({ apps, totalCost }) => {
                 ...row,
                 height: '18px',
                 margin: '12px 0 8px',
-                color: t.textMuted,
-                fontSize: '12px',
-                fontWeight: 500,
-                textTransform: 'uppercase',
+                color: t.textStrong,
+                fontSize: '12.8px',
+                fontWeight: 600,
                 whiteSpace: 'nowrap',
               }}
             >

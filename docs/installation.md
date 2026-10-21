@@ -25,11 +25,12 @@ The chart also runs a post-install/post-upgrade hook Job that changes Argo CD it
 | `argocd-rbac-cm` | `policy.cost-intel.csv`, which lets `role:admin` open the extension (see [Grant access in Argo CD](#grant-access-in-argo-cd)) |
 | `argocd-notifications-secret` | The key `cost-intel-webhook-token`, the bearer token the webhook sends |
 | `argocd-server` Deployment | An init container, `cost-intel-extension`, and a volume that fetch the UI bundle from the UI Service |
-| ClusterRole and binding `argocd-notifications-controller` | Applied so the notifications controller can read Applications in every namespace. If you already have a ClusterRole with that name, its rules are overwritten. |
 
 The hook only writes keys of its own, named after `cost-intel`. Your triggers, templates and `policy.csv` stay as they are. `subscriptions` is a single key shared by every subscription, so the hook adds its entry to the list and keeps the others. It changes that key only when its entry is missing or 0.1.0's entry is still there. The rewritten list keeps your entries and comments, but its formatting may change: indentation, quoting and blank lines between entries. If `argocd-notifications-cm` or `argocd-rbac-cm` doesn't exist, the hook skips it and says so in its log.
 
 The hook then restarts `argocd-notifications-controller`, the UI Deployment and `argocd-server`, so the Argo CD UI reloads during an install or upgrade. When the hook succeeds it deletes its own ServiceAccount, ClusterRole and Job.
+
+The hook doesn't change Kubernetes RBAC for Argo CD. The webhook is sent only for Applications the notifications controller can read. For Applications outside the Argo CD namespace ([apps in any namespace](https://argo-cd.readthedocs.io/en/stable/operator-manual/app-any-namespace/)), the Argo CD Helm chart already gives it a ClusterRole, unless `createClusterRoles` is false. With Argo CD's `install.yaml`, or with that value off, apply the notifications ClusterRole and binding from Argo CD's `examples/k8s-rbac/argocd-server-applications`; its binding names the `argocd` namespace, so change that if Argo CD runs elsewhere.
 
 ## Prerequisites
 
@@ -39,7 +40,7 @@ The hook then restarts `argocd-notifications-controller`, the UI Deployment and 
 | Argo CD 3.4 or 3.5 | The plugin uses the proxy extension feature, which the hook turns on. `argocd-notifications-controller` must be running in `argoCd.namespace`. |
 | OpenCost 1.121.1 or later | The backend and exporter call it on port 9003. The default URL is `http://opencost.opencost:9003`. See [opencost.io/docs/install](https://www.opencost.io/docs/install). |
 | Helm 3.8 or later | The chart is published as an OCI artifact. |
-| Cluster-admin | The hook patches resources in the Argo CD namespace and creates a ClusterRole. |
+| Cluster-admin | The chart creates ClusterRoles, and the hook patches resources in the Argo CD namespace. |
 | A default StorageClass | The bundled PostgreSQL claims a 20 GiB PVC. Without a default class, set `postgres.persistence.storageClassName`. |
 | metrics-server | The backend HPA needs it. Without it, set `costIntelligence.autoscaling.enabled=false`. |
 
@@ -335,5 +336,3 @@ kubectl patch deployment argocd-server -n argocd --type strategic \
 kubectl rollout restart deployment/argocd-server -n argocd
 kubectl rollout restart deployment/argocd-notifications-controller -n argocd
 ```
-
-The `argocd-notifications-controller` ClusterRole and ClusterRoleBinding that the hook applied stay in place. They give that controller access to Applications and projects. Delete them only if you didn't have them before the install.

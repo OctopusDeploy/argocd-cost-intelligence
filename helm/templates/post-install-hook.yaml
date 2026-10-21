@@ -76,17 +76,6 @@ spec:
           kubectl wait --for=condition=available --timeout=300s \
             deployment/argocd-notifications-controller -n {{ .Values.argoCd.namespace }} || true
 
-          echo "Ensuring Argo CD notifications controller has cluster-scoped RBAC..."
-          kubectl create clusterrole argocd-notifications-controller \
-            --verb=get,list,watch,update,patch \
-            --resource=applications.argoproj.io \
-            --resource=appprojects.argoproj.io \
-            --dry-run=client -o yaml | kubectl apply -f - || true
-          kubectl create clusterrolebinding argocd-notifications-controller \
-            --clusterrole=argocd-notifications-controller \
-            --serviceaccount={{ .Values.argoCd.namespace }}:argocd-notifications-controller \
-            --dry-run=client -o yaml | kubectl apply -f - || true
-
           echo "Configuring Argo CD extension proxy backend..."
           BACKEND_URL="http://{{ include "argocd-cost-intelligence.fullname" . }}.{{ .Values.namespace.name }}.svc.cluster.local:{{ .Values.costIntelligence.port }}"
           EXTENSION_CONFIG="extensions:\n- name: cost-intel\n  backend:\n    services:\n    - url: ${BACKEND_URL}"
@@ -256,9 +245,6 @@ rules:
 - apiGroups: ["apps"]
   resources: ["deployments"]
   verbs: ["get", "list", "watch", "patch"]
-- apiGroups: ["rbac.authorization.k8s.io"]
-  resources: ["clusterroles", "clusterrolebindings"]
-  verbs: ["get", "create", "update", "patch"]
 {{- if include "argocd-cost-intelligence.accessApplication.enabled" . }}
 - apiGroups: ["argoproj.io"]
   resources: ["applications"]

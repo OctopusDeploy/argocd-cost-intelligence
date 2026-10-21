@@ -8,6 +8,7 @@ import { useClusterOverhead } from '../hooks/useClusterOverhead';
 import { useDataQuality } from '../hooks/useDataQuality';
 import { UseNamespaceDataResult, useNamespaceData } from '../hooks/useNamespaceData';
 import { useOrphanedPods } from '../hooks/useOrphanedPods';
+import { useWasteRanking } from '../hooks/useWasteRanking';
 import { CostData, PodCost } from '../utils/api';
 
 vi.mock('../hooks/useNamespaceData', () => ({ useNamespaceData: vi.fn() }));
@@ -16,6 +17,7 @@ vi.mock('../hooks/useClusterOverhead', () => ({ useClusterOverhead: vi.fn() }));
 vi.mock('../hooks/useDataQuality', () => ({ useDataQuality: vi.fn() }));
 vi.mock('../hooks/useOrphanedPods', () => ({ useOrphanedPods: vi.fn() }));
 vi.mock('../hooks/useChargeback', () => ({ useChargeback: vi.fn() }));
+vi.mock('../hooks/useWasteRanking', () => ({ useWasteRanking: vi.fn() }));
 
 const DAY_MS = 86_400_000;
 const measuredAt = new Date(Date.now() - 2 * DAY_MS).toISOString();
@@ -67,6 +69,7 @@ const record = (applicationName: string): CostData => ({
 });
 
 const setSelectedNs = vi.fn();
+const reloadWaste = vi.fn(() => Promise.resolve());
 
 function withNamespaceData(overrides: Partial<UseNamespaceDataResult> = {}) {
   vi.mocked(useNamespaceData).mockReturnValue({
@@ -108,6 +111,29 @@ describe('NamespaceDashboard', () => {
     vi.mocked(useDataQuality).mockReturnValue({ pricingSource: 'estimated', message: 'Public cloud list prices (on-demand)' });
     vi.mocked(useOrphanedPods).mockReturnValue({ pods: [], totalWasted: 0, loading: false });
     vi.mocked(useChargeback).mockReturnValue({ entries: [], totalCost: 0, loading: false, error: null });
+    reloadWaste.mockClear();
+    vi.mocked(useWasteRanking).mockReturnValue({
+      ranking: {
+        apps: [
+          {
+            applicationNamespace: 'argocd',
+            applicationName: 'prometheus',
+            deploymentNamespace: 'prometheus',
+            measuredAt,
+            monthlyCost: 865.5,
+            cpuCost: 500,
+            idleCost: 416.16,
+            efficiency: record('prometheus').efficiency!,
+          },
+        ],
+        idleCost: 416.16,
+        namespaceOnly: 0,
+        noPods: 0,
+      },
+      loading: false,
+      error: null,
+      reload: reloadWaste,
+    });
   });
 
   it('summarises the cluster and explains a missing control plane fee', () => {
@@ -121,7 +147,7 @@ describe('NamespaceDashboard', () => {
   it('shows idle spend as a share of the cost it was measured for', () => {
     render(<NamespaceDashboard />);
 
-    expect(stat('Idle spend')).toEqual({ value: '$1,315.35', detail: '46% of the cluster cost' });
+    expect(stat('Idle spend')).toEqual({ value: '$1,315.35', detail: '46% of the cluster cost · See which apps' });
     expect(stat('Idle spend', 1)).toEqual({ value: '$899.19', detail: '45% of the namespace cost' });
   });
 
@@ -137,18 +163,21 @@ describe('NamespaceDashboard', () => {
 
     expect(stat('Idle spend')).toEqual({
       value: '$416.16',
-      detail: '46% of the cost of the 2 of 3 namespaces measured',
+      detail: '46% of the cost of the 2 of 3 namespaces measured · See which apps',
     });
     expect(stat('Idle spend', 1)).toEqual({ value: '—', detail: 'Not measured yet. Measured at the next sync' });
   });
 
-  it('shows idle spend as not measured when no namespace has it', () => {
+  it('shows idle spend as not measured when no namespace has it, and still leads to the apps', () => {
     withNamespaceData({
       namespaces: [{ namespace: 'argocd', totalCost: 2018.1, idleCost: null, appCount: 2, measuredAt }],
     });
     render(<NamespaceDashboard />);
 
-    expect(stat('Idle spend')).toEqual({ value: '—', detail: 'Not measured yet' });
+    expect(stat('Idle spend')).toEqual({
+      value: '—',
+      detail: "Not measured yet. Measured at each namespace's next sync · See which apps",
+    });
   });
 
   it('shows the selected namespace and lets another be picked', () => {
@@ -266,6 +295,44 @@ describe('NamespaceDashboard', () => {
     );
 
     expect(new URLSearchParams(window.location.search).get('costNs')).toBe('prometheus');
+  });
+
+  it('ranks apps by idle spend on their own tab, reached from the idle spend figure', () => {
+    render(<NamespaceDashboard />);
+    expect(screen.queryByText('Apps by idle spend')).toBeNull();
+    expect(vi.mocked(useWasteRanking)).toHaveBeenLastCalledWith(false);
+
+    fireEvent.click(screen.getByRole('button', { name: 'See which apps' }));
+
+    expect(new URLSearchParams(window.location.search).get('costTab')).toBe('idle');
+    expect(screen.getByRole('tab', { name: 'Idle spend' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByText('Apps by idle spend')).toBeTruthy();
+    expect(vi.mocked(useWasteRanking)).toHaveBeenLastCalledWith(true);
+  });
+
+  it('opens the namespace an app in the idle ranking deploys to, one step back from the ranking', () => {
+    window.history.replaceState(null, '', '/cost-intelligence?costTab=idle');
+    const length = window.history.length;
+    render(<NamespaceDashboard />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show namespace prometheus' }));
+
+    expect(setSelectedNs).toHaveBeenCalledWith('prometheus');
+    const params = new URLSearchParams(window.location.search);
+    expect(params.get('costNs')).toBe('prometheus');
+    expect(params.get('costTab')).toBeNull();
+    expect(window.history.length).toBe(length + 1);
+    expect(screen.getByRole('tab', { name: 'Namespaces' }).getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('reloads the idle ranking with the namespaces', async () => {
+    render(<NamespaceDashboard />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Reload cost data' }));
+    });
+
+    expect(reloadWaste).toHaveBeenCalled();
   });
 
   it('goes back to the namespace the previous step was reading', () => {

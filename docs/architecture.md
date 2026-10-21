@@ -29,7 +29,7 @@ Receives the webhook and serves cost data. Every route except the webhook is cal
 | Webhook | `POST /api/cost-analysis/on-sync` | nothing; `Authorization: Bearer <WEBHOOK_SECRET>` instead (not proxied) |
 | Any application | `/api/cost-analysis/config`, `/data-quality` | any application |
 | One application | `/api/cost-analysis/{appName}/` `actual`, `cloud-estimate` (POST), `trend`, `daily`, `orphaned-pods`, `rightsizing` | `{appName}` |
-| Cluster-wide | `/api/cost-analysis/namespaces`, `namespace/{ns}/` `summary`, `apps`, `orphaned-pods`; `chargeback`, `chargeback/labels`, `cluster/overhead` | the gate Application (`CLUSTER_SCOPE_APP`, or the one `pkg/clusterscope` finds) |
+| Cluster-wide | `/api/cost-analysis/namespaces`, `namespace/{ns}/` `summary`, `apps`, `orphaned-pods`; `chargeback`, `chargeback/labels`, `cluster/overhead`, `waste` | the gate Application (`CLUSTER_SCOPE_APP`, or the one `pkg/clusterscope` finds) |
 
 `/actual` attaches the anomaly score and the latest cloud estimate at read time; neither is stored.
 
@@ -107,6 +107,16 @@ Some choices worth knowing:
 - Only requests are suggested. Limits never are, but a memory limit below the VPA's upper bound gets a warning.
 - A new VPA is unsettled. Its upper bound starts at the VPA's maximum and narrows over about a day. A container whose upper bound is more than 3x its target is marked `unsettled` and its workload low confidence, and the UI shows neither the bound nor the limit warning.
 - Without a VPA nothing shows. The UI shows the section only when a workload has one, and the VPA card replaces the CPU suggestion only when it saves or costs at least $1 a month (`hasAdvice` in `ui/src/utils/rightsizing.ts`).
+
+### Waste ranking (`pkg/server/waste.go`)
+
+Ranks the cluster's applications by the idle cost of their own pods (`GET /waste`, shown on the Idle spend tab of the cluster page, reached from the Namespaces page's idle spend figure).
+
+1. Read each application's latest record (`ListLatestActuals`), keyed by its namespace and name.
+2. With the live Application list, keep only the applications that deploy to this cluster (`Destination.Local`), which also drops applications deleted from Argo CD. The list is cached for a minute (`exporter.CachedApplicationLister`), as every viewer of the Idle spend tab refreshes it every 30s; requests arriving together share one list, and a failed list is not cached. If the list fails the route answers 503 and the rest of the page still loads. Outside a cluster (docker-compose) there is no list and every stored application is ranked.
+3. Rank by application-scope idle cost (CPU + memory, see *Idle cost*). A record without `app_json` is counted as `namespaceOnly` and one whose application has no pods as `noPods`; neither is ranked, since its namespace's figures are not the application's.
+
+The tab lists every ranked application and a total, summed in the browser so the rows add up to it; a namespace filter (`costScope`, shared with Chargeback) narrows the list but not the figures above it. That total counts only pods an application owns, so it can be lower than the cluster's idle spend, which the tab shows beside it. The "Lower CPU request" column prices the suggestion the application's tab makes (`recommendCpuRequest`), from the same figures; where the tab shows a VPA's advice instead (see *Rightsizing*) the two can differ, as the ranking makes no live calls.
 
 ### Prometheus metrics (`pkg/telemetry/`, `pkg/exporter/`)
 

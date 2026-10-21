@@ -36,6 +36,7 @@ type mockStorage struct {
 	getCloudEstimateFn             func(ctx context.Context, app models.AppRef) (*models.CloudServiceEstimate, error)
 	getDailyCostsFn                func(ctx context.Context, app models.AppRef, scope, from, to string) ([]models.DailyCost, error)
 	getDailyProgressFn             func(ctx context.Context, app models.AppRef) (*models.DailyProgress, error)
+	listLatestActualsFn            func(ctx context.Context) ([]models.CostActual, error)
 }
 
 var _ storage.CostStorage = (*mockStorage)(nil)
@@ -108,7 +109,10 @@ func (m *mockStorage) GetCloudEstimate(ctx context.Context, app models.AppRef) (
 	return nil, nil
 }
 
-func (m *mockStorage) ListLatestActuals(context.Context) ([]models.CostActual, error) {
+func (m *mockStorage) ListLatestActuals(ctx context.Context) ([]models.CostActual, error) {
+	if m.listLatestActualsFn != nil {
+		return m.listLatestActualsFn(ctx)
+	}
 	return nil, nil
 }
 

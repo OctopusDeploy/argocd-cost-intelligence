@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import { ChargebackView } from './ChargebackView';
 import { PricingValue, pricingDetail } from './CostActual';
 import { LEVEL_LABELS, levelIcon } from './EfficiencyCard';
@@ -6,6 +6,7 @@ import { InfoIcon } from './icons';
 import { MeasuredLabel } from './MeasuredLabel';
 import { NamespaceAppsTable } from './NamespaceAppsTable';
 import { NamespaceList } from './NamespaceList';
+import { ClusterIdle, IdleSpendView } from './IdleSpendView';
 import { ErrorNotice, Notice } from './Notice';
 import { OrphanedPodsNotice } from './OrphanedPodsNotice';
 import { RecommendationCard } from './RecommendationCard';
@@ -19,6 +20,7 @@ import { useContainerWidth } from '../hooks/useContainerWidth';
 import { useDataQuality } from '../hooks/useDataQuality';
 import { UseNamespaceDataResult, useNamespaceData } from '../hooks/useNamespaceData';
 import { UrlWrite, useUrlState } from '../hooks/useUrlState';
+import { useWasteRanking } from '../hooks/useWasteRanking';
 import { Tokens, useTokens } from '../theme/tokens';
 import { ClusterOverhead, CostData, NamespaceSummary } from '../utils/api';
 import { efficiencyLevel, recommendCpuRequest } from '../utils/costInsights';
@@ -26,10 +28,11 @@ import { formatMoney, formatPercent, pluralize } from '../utils/format';
 import { PAIRED_ROW_MIN, SIDE_LIST_MIN } from '../utils/layout';
 import { ArgoApplication, splitNamespaceByApp } from '../utils/namespaceApps';
 
-type View = 'namespaces' | 'chargeback';
+type View = 'namespaces' | 'idle' | 'chargeback';
 
 const VIEWS: Array<Tab<View>> = [
   { id: 'namespaces', label: 'Namespaces' },
+  { id: 'idle', label: 'Idle spend' },
   { id: 'chargeback', label: 'Chargeback' },
 ];
 
@@ -40,12 +43,27 @@ const ID_PREFIX = 'cost-intel-overview';
 const PROVIDER_LABELS: Record<string, string> = { AWS: 'EKS', GCP: 'GKE', Azure: 'AKS' };
 
 // NamespaceDashboard is the plugin's system-level page: cluster costs by namespace and application,
-// and chargeback by Kubernetes label.
+// applications ranked by idle spend, and chargeback by Kubernetes label.
 export const NamespaceDashboard: React.FC = () => {
   // The open view and the selected namespace live in the URL, so this page can be linked to.
   const [view, setView] = useUrlState<View>('costTab', 'namespaces', VIEW_IDS);
   const [urlNamespace, setUrlNamespace] = useUrlState<string>('costNs', '');
   const namespaceData = useNamespaceData(urlNamespace || null);
+  const waste = useWasteRanking(view === 'idle');
+  const { reload: reloadNamespaces } = namespaceData;
+  const { reload: reloadWaste } = waste;
+  const reload = useCallback(async () => {
+    await Promise.all([reloadNamespaces(), reloadWaste()]);
+  }, [reloadNamespaces, reloadWaste]);
+
+  // An app's namespace opens on the Namespaces tab. Only the tab switch is a step to go Back through.
+  const openNamespace = useCallback(
+    (namespace: string) => {
+      setUrlNamespace(namespace, 'replace');
+      setView('namespaces');
+    },
+    [setUrlNamespace, setView]
+  );
 
   const latestMeasuredAt = namespaceData.namespaces.reduce<string | null>(
     (latest, ns) => (!latest || Date.parse(ns.measuredAt) > Date.parse(latest) ? ns.measuredAt : latest),
@@ -58,18 +76,29 @@ export const NamespaceDashboard: React.FC = () => {
       status={
         <>
           {latestMeasuredAt && <MeasuredLabel measuredAt={latestMeasuredAt} />}
-          <ReloadButton onReload={namespaceData.reload} />
+          <ReloadButton onReload={reload} />
         </>
       }
     >
       <TabBar tabs={VIEWS} active={view} onChange={setView} idPrefix={ID_PREFIX} label="Cost Intelligence overview" />
 
       <div id={panelId(ID_PREFIX, view)} role="tabpanel" aria-labelledby={tabId(ID_PREFIX, view)} style={framePanelStyle}>
-        {view === 'namespaces' ? (
-          <NamespacesView data={namespaceData} urlNamespace={urlNamespace} onSelectNamespace={setUrlNamespace} />
-        ) : (
-          <ChargebackView namespaces={namespaceData.namespaces} />
+        {view === 'namespaces' && (
+          <NamespacesView
+            data={namespaceData}
+            urlNamespace={urlNamespace}
+            onSelectNamespace={setUrlNamespace}
+            onShowIdleApps={() => setView('idle')}
+          />
         )}
+        {view === 'idle' && (
+          <IdleSpendView
+            waste={waste}
+            clusterIdle={clusterIdle(namespaceData.namespaces)}
+            onSelectNamespace={openNamespace}
+          />
+        )}
+        {view === 'chargeback' && <ChargebackView namespaces={namespaceData.namespaces} />}
       </div>
     </PluginFrame>
   );
@@ -79,9 +108,10 @@ interface NamespacesViewProps {
   data: UseNamespaceDataResult;
   urlNamespace: string;
   onSelectNamespace: (namespace: string, mode?: UrlWrite) => void;
+  onShowIdleApps: () => void;
 }
 
-const NamespacesView: React.FC<NamespacesViewProps> = ({ data, urlNamespace, onSelectNamespace }) => {
+const NamespacesView: React.FC<NamespacesViewProps> = ({ data, urlNamespace, onSelectNamespace, onShowIdleApps }) => {
   const t = useTokens();
   const argo = useArgoApplications();
   const quality = useDataQuality();
@@ -128,7 +158,7 @@ const NamespacesView: React.FC<NamespacesViewProps> = ({ data, urlNamespace, onS
             value: formatMoney(clusterTotal),
             detail: `${pluralize(namespaces.length, 'namespace')} · ${pluralize(appCount, 'app')}`,
           },
-          clusterIdleStat(namespaces),
+          clusterIdleStat(namespaces, onShowIdleApps, t),
           controlPlaneStat(overhead, overheadError, t),
           { label: 'Pricing', value: <PricingValue quality={quality} t={t} />, detail: pricingDetail(quality) },
         ]}
@@ -161,24 +191,61 @@ const NamespacesView: React.FC<NamespacesViewProps> = ({ data, urlNamespace, onS
 };
 
 const NOT_MEASURED_IDLE: Stat = { label: 'Idle spend', value: '—', detail: 'Not measured yet' };
+const CLUSTER_IDLE_NOT_MEASURED = "Not measured yet. Measured at each namespace's next sync";
 
-// clusterIdleStat sums the idle cost of the namespaces it was measured for, as a share of their cost
-// alone, so the two figures agree while records from before it was measured remain.
-function clusterIdleStat(namespaces: NamespaceSummary[]): Stat {
+// measuredIdle sums the idle cost of the namespaces it was measured for, and their cost alone, so
+// the two figures agree while records from before it was measured remain. It is null when no
+// namespace is measured.
+function measuredIdle(namespaces: NamespaceSummary[]): { idle: number; cost: number; measured: number } | null {
   const measured = namespaces.filter(ns => ns.idleCost !== null);
-  if (measured.length === 0) return NOT_MEASURED_IDLE;
-  const idle = measured.reduce((sum, ns) => sum + (ns.idleCost ?? 0), 0);
-  const cost = measured.reduce((sum, ns) => sum + ns.totalCost, 0);
-  const share = formatPercent(cost > 0 ? idle / cost : 0);
+  if (measured.length === 0) return null;
   return {
-    label: 'Idle spend',
-    value: formatMoney(idle),
-    detail:
-      measured.length === namespaces.length
-        ? `${share} of the cluster cost`
-        : `${share} of the cost of the ${measured.length} of ${namespaces.length} namespaces measured`,
+    idle: measured.reduce((sum, ns) => sum + (ns.idleCost ?? 0), 0),
+    cost: measured.reduce((sum, ns) => sum + ns.totalCost, 0),
+    measured: measured.length,
   };
 }
+
+// clusterIdle is what the Idle spend tab says of the cluster's idle spend.
+function clusterIdle(namespaces: NamespaceSummary[]): ClusterIdle | null {
+  const idle = measuredIdle(namespaces);
+  return idle && { idle: idle.idle, measured: idle.measured, namespaces: namespaces.length };
+}
+
+// clusterIdleStat reports the measured idle cost as a share of the cluster, with a way to the apps
+// it is in. The way stays while no namespace is measured, as the apps' own idle cost may already be.
+function clusterIdleStat(namespaces: NamespaceSummary[], onShowApps: () => void, t: Tokens): Stat {
+  const idle = measuredIdle(namespaces);
+  const share = idle && formatPercent(idle.cost > 0 ? idle.idle / idle.cost : 0);
+  return {
+    label: 'Idle spend',
+    value: idle ? formatMoney(idle.idle) : NOT_MEASURED_IDLE.value,
+    detail: (
+      <>
+        {!idle
+          ? CLUSTER_IDLE_NOT_MEASURED
+          : idle.measured === namespaces.length
+            ? `${share} of the cluster cost`
+            : `${share} of the cost of the ${idle.measured} of ${namespaces.length} namespaces measured`}
+        {' · '}
+        <button type="button" onClick={onShowApps} style={linkButton(t)}>
+          See which apps
+        </button>
+      </>
+    ),
+  };
+}
+
+const linkButton = (t: Tokens): React.CSSProperties => ({
+  padding: 0,
+  border: 'none',
+  backgroundColor: 'transparent',
+  color: t.accentText,
+  fontFamily: 'inherit',
+  fontSize: 'inherit',
+  fontWeight: 500,
+  cursor: 'pointer',
+});
 
 function namespaceIdleStat(namespace: NamespaceSummary): Stat {
   if (namespace.idleCost === null) return { ...NOT_MEASURED_IDLE, detail: 'Not measured yet. Measured at the next sync' };

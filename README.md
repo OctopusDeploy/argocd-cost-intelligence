@@ -22,7 +22,7 @@ helm install argocd-cost-intelligence \
   --wait --timeout 10m
 ```
 
-A post-install hook registers the extension and the notification webhook in Argo CD. On Argo CD 3.5 only the built-in `admin` role can see the tab at first; see [Grant access in Argo CD](docs/installation.md#grant-access-in-argo-cd) for other roles.
+A post-install hook registers the extension and the notification webhook in Argo CD. If Git manages Argo CD itself, the hook's changes would be reverted: turn it off and follow [Install when Git manages Argo CD](docs/gitops-install.md) instead. On Argo CD 3.5 only the built-in `admin` role can see the tab at first; see [Grant access in Argo CD](docs/installation.md#grant-access-in-argo-cd) for other roles.
 
 Sync an application, wait a few seconds, and open its **Cost Intelligence** tab.
 
@@ -61,6 +61,7 @@ These come from a small test cluster in the Argo CD dark theme, so the amounts a
 | I want to... | Read |
 |---|---|
 | Install the plugin, upgrade it or remove it | [Installation](docs/installation.md) |
+| Install it when Git manages Argo CD | [Install when Git manages Argo CD](docs/gitops-install.md) |
 | Look up a Helm value or manage secrets | [Configuration](docs/configuration.md) |
 | Fix a problem, understand the NetworkPolicy, back up the database | [Operations](docs/operations.md) |
 | Scrape cost and health metrics, query them, alert on them | [Prometheus metrics](docs/metrics.md) |

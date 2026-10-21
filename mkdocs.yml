@@ -35,6 +35,7 @@ nav:
 - Introduction: index.md
 - Using it:
   - Installation: installation.md
+  - Install when Git manages Argo CD: gitops-install.md
   - Configuration: configuration.md
   - Operations: operations.md
   - Prometheus metrics: metrics.md

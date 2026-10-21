@@ -1,7 +1,7 @@
 .PHONY: help build run test test-integration test-opencost clean docker-build docker-build-ui docker-push \
         deploy-local deploy-local-down deploy-k8s helm-deploy helm-deploy-real helm-undeploy \
         lint lint-go lint-ui lint-helm lint-prometheus lint-actions lint-manifests lint-dockerfile \
-        lint-shell lint-mock lint-notifications sync-mock docs docs-serve
+        lint-shell lint-mock lint-notifications sync-mock ui-extension docs docs-serve
 
 BINARY_NAME    = argocd-cost-intelligence
 IMAGE_NAME     = argocd-cost-intelligence
@@ -39,6 +39,7 @@ help:
 	@echo "  make clean           - Clean build artifacts"
 	@echo "  make docker-build    - Build backend Docker image"
 	@echo "  make docker-build-ui - Build UI Docker image"
+	@echo "  make ui-extension    - Build the UI plugin archive and checksum for the extension installer (dist/)"
 	@echo "  make docker-push     - Push Docker image to registry"
 	@echo "  make docker-run      - Run Docker container locally"
 	@echo "  make deploy-local    - Deploy with docker-compose"
@@ -58,7 +59,7 @@ help:
 	@echo "  make lint-dockerfile - hadolint for the Dockerfiles"
 	@echo "  make lint-shell      - shellcheck for scripts/"
 	@echo "  make lint-mock       - check deploy/mock-opencost.yaml matches mock-opencost-server.js"
-	@echo "  make lint-notifications - check deploy/argocd-notifications-patch.yaml matches helm/files/argocd/"
+	@echo "  make lint-notifications - check the trigger and template copies in deploy/ and docs/ match helm/files/argocd/"
 	@echo "  make sync-mock       - regenerate deploy/mock-opencost.yaml from mock-opencost-server.js"
 	@echo "  make docs            - Build the documentation site into site/ (fails on a broken link)"
 	@echo "  make docs-serve      - Serve the documentation site on http://127.0.0.1:8000/en/latest/"
@@ -104,6 +105,12 @@ docker-build:
 docker-build-ui:
 	@echo "Building UI Docker image $(UI_IMAGE_NAME):$(IMAGE_TAG)..."
 	docker build -t $(UI_IMAGE_NAME):$(IMAGE_TAG) ./ui
+
+# The archive and checksum file the release attaches for the Argo CD extension installer.
+ui-extension:
+	@echo "Packaging the UI plugin for the extension installer..."
+	cd ui && npm ci && npm run build
+	scripts/package-ui-extension.sh dist
 
 docker-push:
 	@echo "Pushing Docker image to registry..."
@@ -292,7 +299,7 @@ lint-mock:
 	scripts/mock-opencost-sync.sh check
 
 lint-notifications:
-	@echo "Checking the notifications patch against the chart..."
+	@echo "Checking the notifications trigger and template copies against the chart..."
 	scripts/notifications-payload-check.sh
 
 sync-mock:

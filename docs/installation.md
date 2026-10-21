@@ -130,7 +130,7 @@ helm install argocd-cost-intelligence \
 
 Before you run it, know what the hook does to your existing configuration:
 
-> **Warning:** If something reconciles `argocd-cm`, `argocd-notifications-cm`, `argocd-rbac-cm` or the `argocd-server` Deployment (Argo CD managing itself, for example), it will revert the hook's patches. In that case set `features.autoPatchArgoCd=false` and make the changes in your own source of truth. [`deploy/argocd-notifications-patch.yaml`](../deploy/argocd-notifications-patch.yaml) has the notifications part, and the rest is in [`helm/templates/post-install-hook.yaml`](../helm/templates/post-install-hook.yaml).
+> **Warning:** If something reconciles `argocd-cm`, `argocd-notifications-cm`, `argocd-rbac-cm` or the `argocd-server` Deployment (Argo CD managing itself, for example), it will revert the hook's patches. In that case set `features.autoPatchArgoCd=false` and make the changes in your own source of truth. [Install when Git manages Argo CD](gitops-install.md) has every change, for Argo CD's Helm chart and for plain manifests or Kustomize.
 
 ### Grant access in Argo CD
 
@@ -161,6 +161,8 @@ If Argo CD's own Helm chart or GitOps manages `argocd-rbac-cm`, add your rules t
 Then assign the roles to your groups as you normally do.
 
 ### Install with Argo CD or helm template
+
+If Git also manages Argo CD itself, follow [Install when Git manages Argo CD](gitops-install.md) instead. It covers this section too.
 
 The chart generates the sync webhook's token and reads it back on `helm upgrade`, so it stays the same. Argo CD and `helm template` render without cluster access, so they'd generate a new token on every render. That restarts the backend each time and leaves the Application permanently out of sync. Create the Secret yourself instead:
 

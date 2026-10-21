@@ -115,6 +115,22 @@ spec:
         - name: CLUSTER_SCOPE_APP
           value: {{ . | quote }}
         {{- end }}
+        # Without CLUSTER_SCOPE_APP, the gate is the Application that installed this Deployment,
+        # read from its tracking annotation, or else the chart's access Application.
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: DEPLOYMENT_NAME
+          value: {{ include "argocd-cost-intelligence.fullname" . | quote }}
+        - name: ARGOCD_NAMESPACE
+          value: {{ .Values.argoCd.namespace | quote }}
+        {{- /* Only an access Application this release created: otherwise anyone who could create one of
+               that name with the label would decide who sees cluster-wide costs. */}}
+        {{- if include "argocd-cost-intelligence.accessApplication.enabled" . }}
+        - name: CLUSTER_ACCESS_APP
+          value: {{ printf "%s:%s" .Values.argoCd.namespace .Values.costIntelligence.accessApplication.name | quote }}
+        {{- end }}
         {{- if .Values.security.containerSecurityContext }}
         securityContext:
           {{- toYaml .Values.security.containerSecurityContext | nindent 12 }}

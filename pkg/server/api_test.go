@@ -296,6 +296,30 @@ func TestHandleOnSync_OtherCluster_Returns200(t *testing.T) {
 	assert.Contains(t, rr.Body.String(), "another cluster")
 }
 
+func TestHandleOnSync_AccessApplication_Returns200(t *testing.T) {
+	t.Parallel()
+
+	access := models.AppRef{Namespace: "argocd", Name: "cost-intelligence-access"}
+	srv := newTestAPIServer(t, &mockStorage{}, WithUnmeasuredApp(access))
+	notification := models.SyncNotification{
+		ApplicationName:      access.Name,
+		ApplicationNamespace: access.Namespace,
+		Namespace:            "cost-intel",
+		SyncResult:           "Failed", // avoids OpenCost calls in the goroutine
+		SyncTimestamp:        time.Now(),
+	}
+	payload, _ := json.Marshal(notification)
+	rr := doRequest(t, srv, http.MethodPost, "/api/cost-analysis/on-sync", payload)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Contains(t, rr.Body.String(), "deploys nothing")
+
+	notification.ApplicationNamespace = "team-a"
+	payload, _ = json.Marshal(notification)
+	assert.Equal(t, http.StatusAccepted, doRequest(t, srv, http.MethodPost, "/api/cost-analysis/on-sync", payload).Code,
+		"a same-named Application in another namespace is measured")
+}
+
 func TestHandleOnSync_MissingApplicationNamespace_Returns400(t *testing.T) {
 	t.Parallel()
 

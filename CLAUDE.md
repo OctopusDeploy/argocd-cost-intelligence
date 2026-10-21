@@ -90,7 +90,8 @@ These are the invariants most likely to be broken by a well-meant change.
 See `pkg/server/auth.go`. Argo CD's proxy checks `Argocd-Application-Name` against the viewer's RBAC but not the request path, so the service enforces the rest:
 
 - `/{appName}/...` routes require the header's app to equal `{appName}`. Mount them with `appScoped(...)` and look data up by the `models.AppRef` from the request context, never by `chi.URLParam(r, "appName")`.
-- Cluster-wide routes require the header to name `CLUSTER_SCOPE_APP` (disabled when unset).
+- Cluster-wide routes require the header to name the gate Application: `CLUSTER_SCOPE_APP` when set (`off` disables them), else the one `pkg/clusterscope` resolves (the Application whose tracking annotation is on the service's own Deployment, verified against its status, then the chart's labelled access Application). Read it through `s.clusterScopeApp(ctx)`; it can change at runtime.
+- The access Application deploys nothing and is never measured (`models.ClusterAccessLabel`). Its empty chart is served unauthenticated at `/charts/`; keep that chart free of templates.
 - `/on-sync` is not proxied; it requires `Authorization: Bearer <WEBHOOK_SECRET>`.
 - Never trust `Argocd-Username` / `Argocd-User-Groups`: a client-supplied value passes through the proxy.
 - New routes go in the group matching their scope and must never take a namespace from the caller on an app-scoped route.
@@ -99,7 +100,7 @@ In the UI, app calls send `headers(ctx)` and cluster calls send `clusterHeaders(
 
 ## Configuration
 
-Required: `DB_PASSWORD`, `OPENCOST_BASE_URL`, `WEBHOOK_SECRET` (16+ characters). Optional: `CLUSTER_SCOPE_APP` (`<namespace>:<name>`), `DAILY_HISTORY_DAYS`, `BACKFILL_CONCURRENCY` (default 4, `0` = off), `PRUNE_REMOTE_COST` (default off), `VPA_ENABLED`, `METRICS_PORT` (default 9102; `0` = off in API mode; must differ from `SERVER_PORT`). `MODE=exporter` runs the exporter, which needs no `WEBHOOK_SECRET` and refreshes every `EXPORTER_INTERVAL` (default 5m, at least 1m). The full list with defaults is in [.env.example](.env.example) and [docs/configuration.md](docs/configuration.md#environment-variables).
+Required: `DB_PASSWORD`, `OPENCOST_BASE_URL`, `WEBHOOK_SECRET` (16+ characters). Optional: `CLUSTER_SCOPE_APP` (`<namespace>:<name>`; empty = find one, `off` = off), `CLUSTER_ACCESS_APP`, `DAILY_HISTORY_DAYS`, `BACKFILL_CONCURRENCY` (default 4, `0` = off), `PRUNE_REMOTE_COST` (default off), `VPA_ENABLED`, `METRICS_PORT` (default 9102; `0` = off in API mode; must differ from `SERVER_PORT`). `MODE=exporter` runs the exporter, which needs no `WEBHOOK_SECRET` and refreshes every `EXPORTER_INTERVAL` (default 5m, at least 1m). The full list with defaults is in [.env.example](.env.example) and [docs/configuration.md](docs/configuration.md#environment-variables).
 
 ## Go conventions
 

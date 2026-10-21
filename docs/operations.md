@@ -27,7 +27,14 @@ Common causes:
 
 ### "Cluster-wide costs are turned off"
 
-`costIntelligence.clusterScopeApp` isn't set. See [Choose your settings](installation.md#choose-your-settings), then run `helm upgrade --reuse-values --set costIntelligence.clusterScopeApp=<namespace>:<name>`. If the page tells you to ask for access to an application, the gate is set but the viewer's role can't `get` that Application.
+No Application gates them. The service logs why when it starts, in a line beginning `Cluster-wide cost data`. Either `costIntelligence.clusterScopeApp` is `off`, or the service found neither the Argo CD Application that installed it nor the chart's `cost-intelligence-access` Application. The second happens when:
+
+- Cost Intelligence was installed by something other than Argo CD or Helm (Flux, Terraform, `kubectl apply` of the raw manifests), or Helm couldn't see the Argo CD Application CRD at install time.
+- An Argo CD on another cluster manages it, or Argo CD tracks resources by label only (`application.resourceTrackingMethod: label`), so the Deployment carries no tracking annotation.
+- The service may not read its own Deployment (the chart's `-self` Role) or Argo CD Applications.
+- Someone deleted the `cost-intelligence-access` Application. `helm upgrade` creates it again.
+
+Set the gate yourself in any of these cases: see [Choose your settings](installation.md#choose-your-settings), then run `helm upgrade --reuse-values --set costIntelligence.clusterScopeApp=<namespace>:<name>`. The service looks again every minute, so a new access Application is picked up without a restart. If the page tells you to ask for access to an application, the gate is set but the viewer's role can't `get` that Application.
 
 ### Costs show $0 or "no data"
 

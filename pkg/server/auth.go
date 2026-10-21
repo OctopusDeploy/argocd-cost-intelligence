@@ -86,17 +86,18 @@ func appScoped(h func(http.ResponseWriter, *http.Request, models.AppRef)) http.H
 	}
 }
 
-// requireClusterScope admits a request only when it names the configured gate Application. Cluster-
-// wide cost data is visible to whoever Argo CD RBAC allows to get that Application, and to no one
-// when none is configured.
+// requireClusterScope admits a request only when it names the gate Application. Cluster-wide cost
+// data is visible to whoever Argo CD RBAC allows to get that Application, and to no one when there is
+// none.
 func (s *CostAPIServer) requireClusterScope(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.clusterScopeApp == nil {
-			forbidden(w, r, "cluster-wide cost data is disabled: set CLUSTER_SCOPE_APP to enable it")
+		gate := s.clusterScopeApp(r.Context())
+		if gate == nil {
+			forbidden(w, r, "cluster-wide cost data is disabled: no Argo CD Application gates it; set CLUSTER_SCOPE_APP to choose one")
 			return
 		}
-		if app, ok := callerApp(r); !ok || app != *s.clusterScopeApp {
-			forbidden(w, r, "cluster-wide cost data requires access to the application "+s.clusterScopeApp.String())
+		if app, ok := callerApp(r); !ok || app != *gate {
+			forbidden(w, r, "cluster-wide cost data requires access to the application "+gate.String())
 			return
 		}
 		next.ServeHTTP(w, r)

@@ -137,3 +137,20 @@ listed, so the port stays closed.
       protocol: TCP
 {{- end }}
 {{- end }}
+
+{{/*
+"true" when the chart creates the access Application: Helm, not Argo CD, renders the chart (lookup
+answers only when Helm talks to the cluster) and no gate Application is configured.
+*/}}
+{{- define "argocd-cost-intelligence.accessApplication.enabled" -}}
+{{- if and .Values.costIntelligence.accessApplication.create (not .Values.costIntelligence.clusterScopeApp) (lookup "apiextensions.k8s.io/v1" "CustomResourceDefinition" "" "applications.argoproj.io") -}}
+true
+{{- end -}}
+{{- end }}
+
+{{/*
+The Helm repository the service serves the access Application's empty chart from.
+*/}}
+{{- define "argocd-cost-intelligence.accessApplication.repoURL" -}}
+{{- printf "http://%s.%s.svc.cluster.local:%v/charts" (include "argocd-cost-intelligence.fullname" .) .Values.namespace.name .Values.costIntelligence.port }}
+{{- end }}

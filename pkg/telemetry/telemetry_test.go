@@ -24,9 +24,10 @@ func TestNewMetrics_StartsEveryResultAtZero(t *testing.T) {
 	NewMetrics(reg)
 
 	err := testutil.GatherAndCompare(reg, strings.NewReader(`
-# HELP argocd_cost_intelligence_sync_webhooks_total Sync notifications received from Argo CD, by result: accepted, unauthorized, invalid, overloaded or remote.
+# HELP argocd_cost_intelligence_sync_webhooks_total Sync notifications received from Argo CD, by result: accepted, unauthorized, invalid, overloaded, remote or ignored.
 # TYPE argocd_cost_intelligence_sync_webhooks_total counter
 argocd_cost_intelligence_sync_webhooks_total{result="accepted"} 0
+argocd_cost_intelligence_sync_webhooks_total{result="ignored"} 0
 argocd_cost_intelligence_sync_webhooks_total{result="invalid"} 0
 argocd_cost_intelligence_sync_webhooks_total{result="overloaded"} 0
 argocd_cost_intelligence_sync_webhooks_total{result="remote"} 0

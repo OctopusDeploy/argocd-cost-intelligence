@@ -39,13 +39,16 @@ func TestMetrics_CountWebhooksByResultAndTheMeasurementsThatFollow(t *testing.T)
 	t.Parallel()
 
 	reg := prometheus.NewRegistry()
-	srv := newTestAPIServer(t, &mockStorage{}, WithMetrics(telemetry.NewMetrics(reg)))
+	access := models.AppRef{Namespace: "argocd", Name: "cost-intelligence-access"}
+	srv := newTestAPIServer(t, &mockStorage{}, WithMetrics(telemetry.NewMetrics(reg)), WithUnmeasuredApp(access))
 
 	require.Equal(t, http.StatusAccepted, doRequest(t, srv, http.MethodPost, "/api/cost-analysis/on-sync", syncPayload(t)).Code)
 	require.Equal(t, http.StatusUnauthorized, doRequestWithHeaders(t, srv, http.MethodPost, "/api/cost-analysis/on-sync", syncPayload(t), nil).Code)
 	require.Equal(t, http.StatusBadRequest, doRequest(t, srv, http.MethodPost, "/api/cost-analysis/on-sync", []byte("not-json")).Code)
 	remote, _ := json.Marshal(models.SyncNotification{ApplicationName: "redis", ApplicationNamespace: "argocd", SyncResult: "Succeeded", DestinationServer: "https://prod.example.com"})
 	require.Equal(t, http.StatusOK, doRequest(t, srv, http.MethodPost, "/api/cost-analysis/on-sync", remote).Code)
+	ignored, _ := json.Marshal(models.SyncNotification{ApplicationName: access.Name, ApplicationNamespace: access.Namespace, Namespace: "cost-intel", SyncResult: "Succeeded"})
+	require.Equal(t, http.StatusOK, doRequest(t, srv, http.MethodPost, "/api/cost-analysis/on-sync", ignored).Code)
 	require.Eventually(t, func() bool { return len(srv.syncSem) == 0 }, 5*time.Second, 10*time.Millisecond)
 	for range maxConcurrentSyncs {
 		srv.syncSem <- struct{}{}
@@ -55,7 +58,7 @@ func TestMetrics_CountWebhooksByResultAndTheMeasurementsThatFollow(t *testing.T)
 		<-srv.syncSem
 	}
 
-	assert.Equal(t, map[string]float64{"accepted": 1, "unauthorized": 1, "invalid": 1, "overloaded": 1, "remote": 1},
+	assert.Equal(t, map[string]float64{"accepted": 1, "unauthorized": 1, "invalid": 1, "overloaded": 1, "remote": 1, "ignored": 1},
 		counterValues(t, reg, "argocd_cost_intelligence_sync_webhooks_total", "result"))
 	measured := counterValues(t, reg, "argocd_cost_intelligence_sync_measurements_total", "result")
 	assert.InDelta(t, 1, measured["success"]+measured["error"], 0, "one measurement, for the accepted webhook only")

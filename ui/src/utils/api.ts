@@ -361,7 +361,8 @@ class CostIntelligenceAPI {
     };
     if (!clusterScopeApp) {
       throw new ClusterAccessError(
-        'cluster-wide costs are turned off. An administrator can turn them on by setting the Helm value ' +
+        'cluster-wide costs are turned off, either on purpose or because no Argo CD application was found to decide ' +
+          'who sees them; the service log says which. An administrator can choose one by setting the Helm value ' +
           'costIntelligence.clusterScopeApp (environment variable CLUSTER_SCOPE_APP) to an Argo CD application ' +
           'as <namespace>:<name>, for example argocd:my-app. People allowed to view that application will see these pages.'
       );

@@ -75,6 +75,8 @@ jobs:
             dist/extension.tar.gz
             dist/extension_checksums.txt
           if-no-files-found: error
+          # A re-run of all jobs keeps the run's artifacts.
+          overwrite: true
 
       - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310  # v5.0.1
 

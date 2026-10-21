@@ -29,7 +29,7 @@ The examples below use these names. Change them everywhere if yours are differen
 | `argocd-cost-intelligence` | The name of the Cost Intelligence Application. The chart names its Services after it, so it appears in the URLs below |
 | `<chart-version>` | The Cost Intelligence chart version you install |
 
-If you rename the Application, the backend Service becomes `<name>` and the UI Service `<name>-ui`, unless the name already contains `argocd-cost-intelligence`. Run `kubectl get svc -n argocd-cost-intel` after the first sync to see the real names.
+If you rename the Application to a name that doesn't contain `argocd-cost-intelligence`, the backend Service becomes `<name>-argocd-cost-intelligence` and the UI Service `<name>-argocd-cost-intelligence-ui`. A name that contains it is used as it is. Run `kubectl get svc -n argocd-cost-intel` after the first sync to see the real names.
 
 ## Step 1: Create the namespace and the secrets
 
@@ -429,7 +429,7 @@ The [Argo CD extension installer](https://github.com/argoproj-labs/argocd-extens
 
 Each Cost Intelligence release from 0.1.0 on attaches the archive, `extension.tar.gz`, and its checksum file, `extension_checksums.txt`. 0.1.0-rc.1 doesn't have them, so use the init container above with it. The URLs below need internet access to GitHub. In an air-gapped cluster, host the two files yourself and point the URLs at them.
 
-If the hook has run on this Argo CD before, remove what it added to `argocd-server` first. Its init container has the same name as the installer's, so applying the installer on top of it would keep parts of the old one:
+If the hook has run on this Argo CD before, remove what it added to `argocd-server` before you sync the installer into it. Its init container has the same name as the installer's, so applying the installer on top of it would keep parts of the old one. Don't run this after that sync: it removes the `/tmp/extensions` mount, which by then is the Argo CD chart's own:
 
 ```bash
 kubectl patch deployment argocd-server -n argocd --type strategic -p '{"spec":{"template":{"spec":{"initContainers":[{"name":"cost-intel-extension","$patch":"delete"}],"containers":[{"name":"argocd-server","volumeMounts":[{"mountPath":"/tmp/extensions","$patch":"delete"}]}],"volumes":[{"name":"cost-intel-ext-js","$patch":"delete"}]}}}}'

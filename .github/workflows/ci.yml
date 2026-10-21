@@ -170,7 +170,7 @@ jobs:
       - name: Embedded mock OpenCost
         run: make lint-mock
 
-      - name: Notifications patch matches the chart
+      - name: Argo CD settings in deploy/ and docs/ match the hook
         run: make lint-notifications
 
   prometheus-rules:

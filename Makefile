@@ -59,7 +59,7 @@ help:
 	@echo "  make lint-dockerfile - hadolint for the Dockerfiles"
 	@echo "  make lint-shell      - shellcheck for scripts/"
 	@echo "  make lint-mock       - check deploy/mock-opencost.yaml matches mock-opencost-server.js"
-	@echo "  make lint-notifications - check the trigger and template copies in deploy/ and docs/ match helm/files/argocd/"
+	@echo "  make lint-notifications - check the copies in deploy/ and docs/ of what the hook writes to Argo CD (needs helm, jq)"
 	@echo "  make sync-mock       - regenerate deploy/mock-opencost.yaml from mock-opencost-server.js"
 	@echo ""
 	@echo "Helm deploy overrides (e.g. make helm-deploy K3D_CLUSTER=mycluster):"
@@ -297,7 +297,7 @@ lint-mock:
 	scripts/mock-opencost-sync.sh check
 
 lint-notifications:
-	@echo "Checking the notifications trigger and template copies against the chart..."
+	@echo "Checking the copies of the hook's Argo CD settings against the chart..."
 	scripts/notifications-payload-check.sh
 
 sync-mock:

@@ -213,10 +213,10 @@ notifications:
 
   # Sends the trigger above to the webhook above for every Application
   subscriptions:
-  - recipients:
-    - cost-intel
-    triggers:
-    - cost-intel-on-sync-succeeded
+    - recipients:
+      - cost-intel
+      triggers:
+      - cost-intel-on-sync-succeeded
 ```
 
 A few things to check in your existing values:

@@ -169,6 +169,12 @@ To try a UI build without redeploying, see "Trying a build in a running Argo CD"
 
 `make deploy-k8s` applies only the raw manifests in `deploy/`. It builds and imports nothing and doesn't wire up Argo CD, so use it for manifest changes, not as a shortcut for `helm-deploy`.
 
+## Documentation
+
+The pages under `docs/` and the README are also published on Read the Docs, built with MkDocs from `mkdocs.yml`. The README is the home page. Links to files outside `docs/` are rewritten at build time to point at GitHub, so keep writing ordinary relative links that work on GitHub. A new page also needs an entry in the `nav` of `mkdocs.yml`.
+
+`make docs` builds the site into `site/` and fails on a broken link or anchor; `make docs-serve` serves it with live reload. Both need Python 3.
+
 ## Code style
 
 Run `make fmt` before you commit. Formatting is `gofumpt` and `goimports`, and linting is golangci-lint v2 (`.golangci.yaml`; [CLAUDE.md](../CLAUDE.md) summarises the rules). Write comments only where the reason isn't obvious.

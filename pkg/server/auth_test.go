@@ -133,6 +133,56 @@ func TestClusterScopedRoutes_DisabledWithoutGateApplication(t *testing.T) {
 	}
 }
 
+// changingScope is a ClusterScope whose answer a test changes, as a resolver's does when the gate
+// Application is created or renamed.
+type changingScope struct {
+	mu  sync.Mutex
+	app *models.AppRef
+}
+
+func (c *changingScope) App(context.Context) *models.AppRef {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.app
+}
+
+func (c *changingScope) set(app *models.AppRef) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.app = app
+}
+
+func TestClusterScopedRoutes_FollowTheResolvedGateApplication(t *testing.T) {
+	t.Parallel()
+
+	ocClient := opencost.NewClient("http://opencost.invalid", time.Second, nil)
+	logger := log.New(os.Stdout, "", 0)
+	scope := &changingScope{}
+	srv := NewCostAPIServer(hook.NewSyncHook(ocClient, redisStore(), time.Millisecond, logger), redisStore(), ocClient, logger,
+		WithClusterScope(scope))
+	path := clusterScopedRoutes[0]
+	config := func(caller string) string {
+		rr := doRequestWithHeaders(t, srv, http.MethodGet, "/api/cost-analysis/config", nil, asApp(caller))
+		require.Equal(t, http.StatusOK, rr.Code)
+		return rr.Body.String()
+	}
+
+	rr := doRequestWithHeaders(t, srv, http.MethodGet, path, nil, asApp(testGateApp.String()))
+	assert.Equal(t, http.StatusForbidden, rr.Code, "no gate Application found yet")
+	assert.JSONEq(t, `{"clusterScopeApp":null}`, config("argocd:redis"))
+
+	scope.set(&testGateApp)
+	rr = doRequestWithHeaders(t, srv, http.MethodGet, path, nil, asApp(testGateApp.String()))
+	assert.NotEqual(t, http.StatusForbidden, rr.Code, rr.Body.String())
+	assert.JSONEq(t, `{"clusterScopeApp":{"namespace":"argocd","name":"cost-intel"}}`, config("argocd:redis"))
+
+	renamed := models.AppRef{Namespace: "argocd", Name: "cost-intelligence"}
+	scope.set(&renamed)
+	rr = doRequestWithHeaders(t, srv, http.MethodGet, path, nil, asApp(testGateApp.String()))
+	assert.Equal(t, http.StatusForbidden, rr.Code, "the old gate Application no longer admits")
+	assert.Contains(t, rr.Body.String(), renamed.String())
+}
+
 func TestConfig_ReportsGateApplication(t *testing.T) {
 	t.Parallel()
 

@@ -24,9 +24,21 @@ costIntelligence:
   # Namespaces and Chargeback pages, and cluster control-plane cost. Only users Argo CD RBAC
   # allows to get this Application can see them, for example with
   #   p, role:platform, applications, get, <project>/<name>, allow
-  # Any existing Application works; the one that deploys this chart is a natural choice.
-  # Empty turns cluster-wide cost data off for everyone. Per-application costs are unaffected.
+  # Empty finds one: the Argo CD Application that installed this chart, or, when Helm installed
+  # it, the access Application below. "off" turns cluster-wide cost data off for everyone.
+  # Per-application costs are unaffected either way.
   clusterScopeApp: ""
+
+  # When Helm itself installs this chart (helm install, not an Argo CD Application), there is no
+  # Application that installed it, so the chart creates one to gate cluster-wide cost data: an
+  # Argo CD Application in argoCd.namespace, in an AppProject of its own that permits no
+  # resources, made from an empty chart the service serves. It deploys nothing and is never
+  # measured. It is created only when Helm can see the Argo CD Application CRD, and not when
+  # clusterScopeApp is set.
+  accessApplication:
+    create: true
+    name: cost-intelligence-access
+    project: cost-intelligence-access
 
   # Days of each application's daily cost to keep in PostgreSQL (DAILY_HISTORY_DAYS). OpenCost
   # answers only for the days its Prometheus still keeps, often 15; this history lets the Trends

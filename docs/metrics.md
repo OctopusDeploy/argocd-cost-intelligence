@@ -58,7 +58,7 @@ Each API replica reports its own; Prometheus tells replicas apart by target.
 | Metric | Type | Labels | Meaning |
 |---|---|---|---|
 | `argocd_cost_intelligence_http_request_duration_seconds` | histogram | `route`, `method`, `code` | API requests. `route` is the route pattern, such as `/api/cost-analysis/{appName}/actual`, never the actual path; `unmatched` for paths no route serves. |
-| `argocd_cost_intelligence_sync_webhooks_total` | counter | `result` | Sync notifications from Argo CD: `accepted`, `unauthorized` (wrong or missing token), `invalid` (unreadable, or no application namespace), `overloaded` (refused because too many measurements are running) or `remote` (the application deploys to another cluster, so nothing is measured). |
+| `argocd_cost_intelligence_sync_webhooks_total` | counter | `result` | Sync notifications from Argo CD: `accepted`, `unauthorized` (wrong or missing token), `invalid` (unreadable, or no application namespace), `overloaded` (refused because too many measurements are running), `remote` (the application deploys to another cluster, so nothing is measured) or `ignored` (the chart's access Application, which deploys nothing, so nothing is measured). |
 | `argocd_cost_intelligence_sync_measurements_total` | counter | `result` | Cost measurements after accepted notifications: `success` or `error`. |
 | `argocd_cost_intelligence_sync_measurement_duration_seconds` | histogram | | Duration of a measurement, including the 5 s wait for metrics to settle. |
 | `argocd_cost_intelligence_opencost_request_duration_seconds` | histogram | `endpoint`, `code` | Requests to OpenCost, by API path (`/allocation`, `/allocation/summary`, `/assets`, ...) and HTTP status; `code="error"` when no response arrived. |

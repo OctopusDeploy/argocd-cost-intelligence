@@ -30,6 +30,7 @@ const (
 	WebhookInvalid      = "invalid"
 	WebhookOverloaded   = "overloaded"
 	WebhookRemote       = "remote"
+	WebhookIgnored      = "ignored"
 )
 
 // latencyBuckets suit calls to OpenCost and PostgreSQL: a few milliseconds to the 10s timeout.
@@ -53,7 +54,7 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 	reg.MustRegister(m.httpRequests, m.webhooks, m.measurements, m.measurementDuration, m.historyRuns, m.historyLastRun)
 	m.registerShared(reg)
 	// Every result appears from the start, at zero, so rates and alerts work before the first event.
-	for _, result := range []string{WebhookAccepted, WebhookUnauthorized, WebhookInvalid, WebhookOverloaded, WebhookRemote} {
+	for _, result := range []string{WebhookAccepted, WebhookUnauthorized, WebhookInvalid, WebhookOverloaded, WebhookRemote, WebhookIgnored} {
 		m.webhooks.WithLabelValues(result)
 	}
 	for _, result := range []string{"success", "error"} {
@@ -90,7 +91,7 @@ func newMetrics() *Metrics {
 		webhooks: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: Namespace,
 			Name:      "sync_webhooks_total",
-			Help:      "Sync notifications received from Argo CD, by result: accepted, unauthorized, invalid, overloaded or remote.",
+			Help:      "Sync notifications received from Argo CD, by result: accepted, unauthorized, invalid, overloaded, remote or ignored.",
 		}, []string{"result"}),
 		measurements: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: Namespace,

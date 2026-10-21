@@ -134,6 +134,20 @@ func TestKubeApplicationLister_ListsEveryNamespaceSorted(t *testing.T) {
 	assert.Equal(t, models.ManagedResources{{Kind: "Deployment", Name: "web", Namespace: "team-a"}}, apps[1].Workloads)
 }
 
+func TestKubeApplicationLister_SkipsTheAccessApplication(t *testing.T) {
+	t.Parallel()
+
+	access := application("argocd", "cost-intelligence", "cost-intel")
+	access.SetLabels(map[string]string{models.ClusterAccessLabel: "true"})
+	client := newFakeDynamic(access, application("argocd", "redis", "argocd", []string{"Deployment", "redis"}))
+
+	apps, err := NewKubeApplicationLister(client).List(context.Background())
+
+	require.NoError(t, err)
+	require.Len(t, apps, 1, "the access Application deploys nothing, so it is never measured")
+	assert.Equal(t, "argocd:redis", apps[0].Ref.String())
+}
+
 func TestKubeApplicationLister_ReportsAFailure(t *testing.T) {
 	t.Parallel()
 

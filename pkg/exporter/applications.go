@@ -64,7 +64,8 @@ func NewKubeApplicationLister(client dynamic.Interface) *KubeApplicationLister {
 	return &KubeApplicationLister{client: client}
 }
 
-// List returns every Application, sorted by namespace and name.
+// List returns every Application, sorted by namespace and name, but the chart's access Application,
+// which deploys nothing.
 func (l *KubeApplicationLister) List(ctx context.Context) ([]Application, error) {
 	apps := []Application{}
 	opts := metav1.ListOptions{Limit: listPageSize}
@@ -74,6 +75,9 @@ func (l *KubeApplicationLister) List(ctx context.Context) ([]Application, error)
 			return nil, fmt.Errorf("listing Argo CD Applications: %w", err)
 		}
 		for _, item := range list.Items {
+			if item.GetLabels()[models.ClusterAccessLabel] == "true" {
+				continue
+			}
 			app, err := parseApplication(item.Object)
 			if err != nil {
 				return nil, fmt.Errorf("reading Application %s/%s: %w", item.GetNamespace(), item.GetName(), err)

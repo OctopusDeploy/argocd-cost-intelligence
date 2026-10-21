@@ -154,7 +154,7 @@ server:
     - -c
     - >-
       for i in 1 2 3 4 5; do
-      wget -qO /ext/extension-cost-intel.js
+      wget -q -T 10 -O /ext/extension-cost-intel.js
       http://argocd-cost-intelligence-ui.argocd-cost-intel.svc.cluster.local:3000/index.js
       && echo OK && exit 0; sleep 10; done;
       echo "Warning: extension download failed"; exit 0
@@ -166,13 +166,13 @@ server:
       capabilities:
         drop: [ALL]
     volumeMounts:
-    - name: cost-intel-extension
+    - name: cost-intel-ext-js
       mountPath: /ext
   volumes:
-  - name: cost-intel-extension
+  - name: cost-intel-ext-js
     emptyDir: {}
   volumeMounts:
-  - name: cost-intel-extension
+  - name: cost-intel-ext-js
     mountPath: /tmp/extensions
 
 notifications:
@@ -227,7 +227,7 @@ A few things to check in your existing values:
 - The template above uses `{{ }}` on purpose. Argo CD Notifications fills them in when it sends the webhook, and the Argo CD chart passes these values through unchanged. If your own tooling runs the values file through a template engine first, escape them for that tool.
 - `server.extensions` in the same chart runs the [Argo CD extension installer](#use-the-argo-cd-extension-installer-instead) instead of the init container above. Use one or the other.
 
-The token goes into `argocd-notifications-secret`. The chart creates that Secret and fills it from `notifications.secret.items`. Put the token there in a values file you don't commit, or keep the Secret out of the chart with `notifications.secret.create: false` and create it with your secret tool:
+The token goes into `argocd-notifications-secret`. The chart creates that Secret and fills it from `notifications.secret.items`. If you install the Argo CD chart with Helm, you can put the token there in a values file you don't commit:
 
 ```yaml
 notifications:
@@ -236,7 +236,9 @@ notifications:
       cost-intel-webhook-token: <the token from step 1>
 ```
 
-You don't need the ClusterRole from the table. The chart already gives the notifications controller access to Applications in every namespace.
+If Argo CD renders its own chart from Git, every values file is in Git, so set `notifications.secret.create: false` and create the Secret with your secret tool instead.
+
+You don't need the ClusterRole from the table. The chart already gives the notifications controller access to Applications in every namespace. It only watches the namespaces in `configs.params."application.namespaces"`, though, as the [apps in any namespace](https://argo-cd.readthedocs.io/en/stable/operator-manual/app-any-namespace/) guide describes.
 
 Sync your Argo CD release. Changing the init container restarts `argocd-server`. If the restart happens before Cost Intelligence's UI is running, the download fails, `argocd-server` starts without the plugin, and you restart it later with `kubectl rollout restart deployment/argocd-server -n argocd`.
 
@@ -362,7 +364,7 @@ spec:
         - -c
         - >-
           for i in 1 2 3 4 5; do
-          wget -qO /ext/extension-cost-intel.js
+          wget -q -T 10 -O /ext/extension-cost-intel.js
           http://argocd-cost-intelligence-ui.argocd-cost-intel.svc.cluster.local:3000/index.js
           && echo OK && exit 0; sleep 10; done;
           echo "Warning: extension download failed"; exit 0
@@ -374,26 +376,26 @@ spec:
           capabilities:
             drop: [ALL]
         volumeMounts:
-        - name: cost-intel-extension
+        - name: cost-intel-ext-js
           mountPath: /ext
       containers:
       - name: argocd-server
         volumeMounts:
-        - name: cost-intel-extension
+        - name: cost-intel-ext-js
           mountPath: /tmp/extensions
       volumes:
-      - name: cost-intel-extension
+      - name: cost-intel-ext-js
         emptyDir: {}
 ```
 
-The token goes into `argocd-notifications-secret`, which Argo CD's `install.yaml` creates empty. Add the key with your secret tool, or with `kubectl` if the Secret isn't in Git:
+The token goes into `argocd-notifications-secret`, which Argo CD's `install.yaml` creates empty. Add the key with your secret tool, or with `kubectl` if the Secret isn't in Git, in the shell where you set `TOKEN` in step 1:
 
 ```bash
 kubectl patch secret argocd-notifications-secret -n argocd --type merge \
   -p "{\"stringData\":{\"cost-intel-webhook-token\":\"$TOKEN\"}}"
 ```
 
-If your Applications live in other namespaces as well as `argocd` ([apps in any namespace](https://argo-cd.readthedocs.io/en/stable/operator-manual/app-any-namespace/)), the notifications controller needs to read them there. Argo CD's `install.yaml` only gives it a Role in `argocd`. Add `notifications-clusterrole.yaml` to `resources`:
+If your Applications live in other namespaces as well as `argocd` ([apps in any namespace](https://argo-cd.readthedocs.io/en/stable/operator-manual/app-any-namespace/)), the notifications controller needs to read them there. Argo CD's `install.yaml` only gives it a Role in `argocd`. It also has to watch those namespaces, which `application.namespaces` in `argocd-cmd-params-cm` sets, as that guide describes. Add `notifications-clusterrole.yaml` to `resources`:
 
 ```yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -426,6 +428,12 @@ Sync or apply your overlay. The `argocd-server` patch restarts it. If the restar
 The [Argo CD extension installer](https://github.com/argoproj-labs/argocd-extension-installer) is an init container that downloads an extension archive and checks its checksum. The Argo CD chart runs it from `server.extensions`.
 
 Each Cost Intelligence release from 0.1.0 on attaches the archive, `extension.tar.gz`, and its checksum file, `extension_checksums.txt`. 0.1.0-rc.1 doesn't have them, so use the init container above with it. The URLs below need internet access to GitHub. In an air-gapped cluster, host the two files yourself and point the URLs at them.
+
+If the hook has run on this Argo CD before, remove what it added to `argocd-server` first. Its init container has the same name as the installer's, so applying the installer on top of it would keep parts of the old one:
+
+```bash
+kubectl patch deployment argocd-server -n argocd --type strategic -p '{"spec":{"template":{"spec":{"initContainers":[{"name":"cost-intel-extension","$patch":"delete"}],"containers":[{"name":"argocd-server","volumeMounts":[{"mountPath":"/tmp/extensions","$patch":"delete"}]}],"volumes":[{"name":"cost-intel-ext-js","$patch":"delete"}]}}}}'
+```
 
 With the Argo CD chart, use this instead of `server.initContainers`, `server.volumes` and `server.volumeMounts`:
 
@@ -467,7 +475,7 @@ With plain manifests, replace the init container in `cost-intel-argocd-server.ya
           capabilities:
             drop: [ALL]
         volumeMounts:
-        - name: cost-intel-extension
+        - name: cost-intel-ext-js
           mountPath: /tmp/extensions
         - name: tmp
           mountPath: /tmp
@@ -504,7 +512,7 @@ kubectl logs -n argocd deploy/argocd-server -c cost-intel-extension
 kubectl exec -n argocd deploy/argocd-server -c argocd-server -- ls /tmp/extensions
 ```
 
-The log ends with `OK` (the installer prints `UI extension installed successfully` instead) and the listing shows `extension-cost-intel.js`.
+The log says `OK`, or `UI extension installed successfully` with the installer, and the listing shows `extension-cost-intel.js`.
 
 Then open any Application in the Argo CD UI. It has a **Cost Intelligence** tab. Cost Intelligence measures each application when it starts, so most tabs show a cost within a few minutes, marked "Measured at install". Sync an application and its tab shows the new cost within about half a minute. If it doesn't, check that the webhook was sent:
 
@@ -522,7 +530,7 @@ Go through these in order. Each one is a common reason.
 - The file name doesn't start with `extension` and end in `.js`. Argo CD ignores other files in `/tmp/extensions`.
 - The tab is there but shows "401: Unauthorized extension request". The RBAC rule is missing or doesn't name your role. Check `policy.cost-intel.csv`, and that the extension name in it is `cost-intel`.
 - The tab is there but shows an error instead of costs. Check that `server.enable.proxy.extension` is `"true"` and that `argocd-server` restarted after it changed, because it reads that setting only when it starts. Then check that the URL in `extension.config` points at the backend Service on port 8080, not the UI Service.
-- The tab never fills in after a sync. The webhook isn't reaching Cost Intelligence. Check the subscription and the token from above. If `kubectl logs -n argocd-cost-intel deploy/argocd-cost-intelligence | grep 'Refused POST /on-sync'` prints anything, the two tokens differ.
+- The tab never fills in after a sync. The webhook isn't reaching Cost Intelligence. Check the subscription and the token from above. If `kubectl logs -n argocd-cost-intel deploy/argocd-cost-intelligence | grep 'Refused POST /on-sync'` prints anything, the two tokens differ. If both look right, restart the notifications controller with `kubectl rollout restart deployment/argocd-notifications-controller -n argocd`, as the hook does after it changes them.
 
 [operations.md](operations.md) covers more problems once the tab is there.
 

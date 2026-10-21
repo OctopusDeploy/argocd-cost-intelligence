@@ -39,6 +39,7 @@ help:
 	@echo "  make clean           - Clean build artifacts"
 	@echo "  make docker-build    - Build backend Docker image"
 	@echo "  make docker-build-ui - Build UI Docker image"
+	@echo "  make ui-extension    - Build the UI plugin archive and checksum for the extension installer (dist/)"
 	@echo "  make docker-push     - Push Docker image to registry"
 	@echo "  make docker-run      - Run Docker container locally"
 	@echo "  make deploy-local    - Deploy with docker-compose"
@@ -58,7 +59,7 @@ help:
 	@echo "  make lint-dockerfile - hadolint for the Dockerfiles"
 	@echo "  make lint-shell      - shellcheck for scripts/"
 	@echo "  make lint-mock       - check deploy/mock-opencost.yaml matches mock-opencost-server.js"
-	@echo "  make lint-notifications - check deploy/argocd-notifications-patch.yaml matches helm/files/argocd/"
+	@echo "  make lint-notifications - check the trigger and template copies in deploy/ and docs/ match helm/files/argocd/"
 	@echo "  make sync-mock       - regenerate deploy/mock-opencost.yaml from mock-opencost-server.js"
 	@echo ""
 	@echo "Helm deploy overrides (e.g. make helm-deploy K3D_CLUSTER=mycluster):"
@@ -296,7 +297,7 @@ lint-mock:
 	scripts/mock-opencost-sync.sh check
 
 lint-notifications:
-	@echo "Checking the notifications patch against the chart..."
+	@echo "Checking the notifications trigger and template copies against the chart..."
 	scripts/notifications-payload-check.sh
 
 sync-mock:

@@ -39,6 +39,7 @@ All notable changes to this project are listed here. The format follows [Keep a 
 - The application tab of an application that deploys to another cluster now says so, with the cluster's name or server, instead of showing empty cost views or the cost of a namespace of the same name in this cluster. It links to the single-cluster limit.
 - The alert for refused webhooks no longer fires on a cluster whose syncs are all for other clusters.
 - The hook no longer overwrites Argo CD Notifications settings you already had. It adds its entry to `subscriptions` and keeps the others, and running it again on upgrade adds nothing twice.
+- The hook no longer tries to give the notifications controller a ClusterRole for Applications in other namespaces. It used the name `argocd-notifications-controller`, which the Argo CD Helm chart gives its own ClusterRole, but Kubernetes never let the hook create or change it, so the step always failed without a message and nothing in your cluster changed. The hook's ServiceAccount no longer has any access to ClusterRoles or ClusterRoleBindings. For Applications outside the Argo CD namespace the Argo CD Helm chart already grants this; with Argo CD's `install.yaml`, apply the notifications ClusterRole from Argo CD's examples, as [docs/installation.md](docs/installation.md) now says.
 
 ### Security
 

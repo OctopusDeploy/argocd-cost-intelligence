@@ -3,7 +3,8 @@
 # hook writes: the webhook service, trigger and template in the manual patch in deploy/, and those
 # plus the subscription and RBAC policy in the Helm values and Kustomize patch in
 # docs/gitops-install.md, so the manual, GitOps and Helm installs can't drift. Examples in comments
-# and prose aren't read.
+# and prose aren't read. It also checks that nothing here creates Kubernetes RBAC under one of
+# Argo CD's own names.
 # The expected values come from rendering the hook with the chart's defaults, which is the install
 # the copies describe. Needs helm and jq. Exit 1 if any copy differs or is missing.
 set -euo pipefail
@@ -96,4 +97,31 @@ for copy in "${COPIES[@]}"; do
     fi
   done
 done
+
+# Kubernetes RBAC named argocd-* is Argo CD's own: its Helm chart has a ClusterRole and binding
+# named argocd-notifications-controller, and an apply under the same name replaces its rules. So no
+# Role, ClusterRole or binding with such a name, other than this chart's argocd-cost-intelligence*,
+# may come from the rendered chart, the hook's kubectl commands, deploy/ or the docs.
+rbac_names() {
+  awk '
+    function emit() { if (kind ~ /^(Cluster)?Role(Binding)?$/ && name != "") print file ": " kind " " name; kind = ""; name = ""; meta = 0 }
+    FNR == 1 { emit() }
+    /^---/ || /^```/ { emit(); next }
+    /^kind: / { kind = $2; file = FILENAME }
+    /^metadata:/ { meta = 1; next }
+    /^[^ ]/ { meta = 0 }
+    meta && /^  name: / && name == "" { name = $2 }
+    match($0, /kubectl create (clusterrole|clusterrolebinding|role|rolebinding) [^ ]+/) {
+      split(substr($0, RSTART, RLENGTH), w, " "); print FILENAME ": " w[3] " " w[4]
+    }
+    END { emit() }
+  ' "$@"
+}
+chart=$(helm template argocd-cost-intelligence ./helm --set postgres.auth.password=check)
+if taken=$(rbac_names <(printf '%s\n' "$chart") deploy/*.yaml docs/*.md \
+  | sed 's|^/dev/fd/[0-9]*:|rendered chart:|' | grep -E ' argocd-' | grep -vE ' argocd-cost-intelligence'); then
+  printf '%s\n' "$taken" >&2
+  echo "RBAC named after Argo CD's own objects (above); give it a Cost Intelligence name, or leave it to Argo CD's install." >&2
+  status=1
+fi
 exit "$status"

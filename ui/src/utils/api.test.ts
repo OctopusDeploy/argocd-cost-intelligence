@@ -167,6 +167,53 @@ describe('chargeback label keys', () => {
   });
 });
 
+describe('waste ranking', () => {
+  const gate = [anyApp, config({ namespace: 'argocd', name: 'cost-intel' }), gateApp('platform')];
+  const waste =
+    (status: number, body: unknown): Route =>
+    url =>
+      url.endsWith('/api/cost-analysis/waste') ? { status, body } : undefined;
+
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('asks as the gate application', async () => {
+    const ranking = { apps: [], idleCost: 0, namespaceOnly: 0, noPods: 0 };
+    const fetchMock = stubFetch(...gate, waste(200, ranking));
+    const { fetchWasteRanking } = await loadApi();
+
+    expect(await fetchWasteRanking()).toEqual(ranking);
+    expect(headersOf(fetchMock, '/api/cost-analysis/waste')).toEqual([
+      { 'Argocd-Application-Name': 'argocd:cost-intel', 'Argocd-Project-Name': 'platform' },
+    ]);
+  });
+
+  it("says when the service couldn't list the applications", async () => {
+    stubFetch(...gate, waste(503, { error: 'failed to list Argo CD applications' }));
+    const { fetchWasteRanking, ApplicationListError } = await loadApi();
+
+    const error = await fetchWasteRanking().catch(err => err);
+
+    expect(error).toBeInstanceOf(ApplicationListError);
+    expect(error.message).toContain('other clusters');
+  });
+
+  it('reports any other unavailability as it is', async () => {
+    stubFetch(...gate, waste(503, 'upstream connect error'));
+    const { fetchWasteRanking, ApplicationListError } = await loadApi();
+
+    const error = await fetchWasteRanking().catch(err => err);
+
+    expect(error).not.toBeInstanceOf(ApplicationListError);
+    expect(error.message).toContain('503');
+  });
+});
+
 describe('application requests', () => {
   afterEach(() => {
     vi.unstubAllGlobals();

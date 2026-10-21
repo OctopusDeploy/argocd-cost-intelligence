@@ -119,6 +119,13 @@ func runAPI(cfg *config.Config, logger *log.Logger) {
 		logger.Print("VPA rightsizing off (VPA_ENABLED=false)")
 	}
 
+	var applications exporter.ApplicationLister
+	if kubeClient != nil {
+		applications = exporter.NewKubeApplicationLister(kubeClient)
+		// The waste ranking is read by every viewer of the Idle spend tab, which refreshes it often.
+		serverOpts = append(serverOpts, server.WithApplications(exporter.NewCachedApplicationLister(applications, time.Minute)))
+	}
+
 	// Initialize API server
 	apiServer := server.NewCostAPIServer(
 		syncHook,
@@ -127,11 +134,6 @@ func runAPI(cfg *config.Config, logger *log.Logger) {
 		logger,
 		serverOpts...,
 	)
-
-	var applications exporter.ApplicationLister
-	if kubeClient != nil {
-		applications = exporter.NewKubeApplicationLister(kubeClient)
-	}
 
 	// Record each application's daily cost, so long ranges do not depend on Prometheus retention.
 	background, stopBackground := context.WithCancel(context.Background())

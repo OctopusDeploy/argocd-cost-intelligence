@@ -261,6 +261,33 @@ export interface ChargebackData {
   totalCost: number;
 }
 
+// AppWaste is one application's idle spend, from its own pods' measurement.
+export interface AppWaste {
+  applicationNamespace: string;
+  applicationName: string;
+  deploymentNamespace: string;
+  measuredAt: string;
+  monthlyCost: number;
+  cpuCost: number;
+  idleCost: number;
+  efficiency: EfficiencyMetrics;
+}
+
+// WasteRanking ranks the applications deploying to this cluster by idle spend, most first.
+// namespaceOnly and noPods count the applications it could not rank.
+export interface WasteRanking {
+  apps: AppWaste[];
+  idleCost: number;
+  namespaceOnly: number;
+  noPods: number;
+}
+
+// ApplicationListError says the service couldn't list the Argo CD applications, so it couldn't tell
+// which applications deploy to this cluster.
+export class ApplicationListError extends Error {}
+
+const APPLICATION_LIST_FAILED = 'failed to list Argo CD applications';
+
 class CostIntelligenceAPI {
   private baseUrl: string;
   // undefined = not fetched yet; null = fetched but no apps found
@@ -568,6 +595,27 @@ class CostIntelligenceAPI {
     }
   }
 
+  async getWasteRanking(): Promise<WasteRanking> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/cost-analysis/waste`, { headers: await this.clusterHeaders() });
+      if (!response.ok) {
+        // The service answers 503 with this error when it can't list the applications; a proxy in
+        // front of it could answer 503 for its own reasons.
+        const body = await response.text().catch(() => '');
+        if (response.status === 503 && body.includes(APPLICATION_LIST_FAILED)) {
+          throw new ApplicationListError(
+            "Couldn't list the Argo CD applications, so apps on other clusters can't be left out."
+          );
+        }
+        throw new Error(`${response.status}: ${body || response.statusText}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to fetch the waste ranking:', error);
+      throw error;
+    }
+  }
+
   async getNamespaceApps(namespace: string): Promise<CostData[]> {
     try {
       const response = await fetch(
@@ -645,4 +693,8 @@ export async function fetchClusterOverhead(): Promise<ClusterOverhead> {
 
 export async function fetchDataQuality(): Promise<DataQuality> {
   return _api.getDataQuality();
+}
+
+export async function fetchWasteRanking(): Promise<WasteRanking> {
+  return _api.getWasteRanking();
 }

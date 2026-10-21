@@ -1,7 +1,7 @@
 .PHONY: help build run test test-integration test-opencost clean docker-build docker-build-ui docker-push \
         deploy-local deploy-local-down deploy-k8s helm-deploy helm-deploy-real helm-undeploy \
         lint lint-go lint-ui lint-helm lint-prometheus lint-actions lint-manifests lint-dockerfile \
-        lint-shell lint-mock lint-notifications sync-mock ui-extension
+        lint-shell lint-mock lint-notifications sync-mock ui-extension docs docs-serve
 
 BINARY_NAME    = argocd-cost-intelligence
 IMAGE_NAME     = argocd-cost-intelligence
@@ -61,6 +61,8 @@ help:
 	@echo "  make lint-mock       - check deploy/mock-opencost.yaml matches mock-opencost-server.js"
 	@echo "  make lint-notifications - check the copies in deploy/ and docs/ of what the hook writes to Argo CD (needs helm, jq)"
 	@echo "  make sync-mock       - regenerate deploy/mock-opencost.yaml from mock-opencost-server.js"
+	@echo "  make docs            - Build the documentation site into site/ (fails on a broken link)"
+	@echo "  make docs-serve      - Serve the documentation site on http://127.0.0.1:8000/en/latest/"
 	@echo ""
 	@echo "Helm deploy overrides (e.g. make helm-deploy K3D_CLUSTER=mycluster):"
 	@echo "  K3D_CLUSTER=$(K3D_CLUSTER)  HELM_RELEASE=$(HELM_RELEASE)"
@@ -303,6 +305,21 @@ lint-notifications:
 sync-mock:
 	@echo "Regenerating deploy/mock-opencost.yaml..."
 	scripts/mock-opencost-sync.sh write
+
+# The Read the Docs site (.readthedocs.yaml), built in a virtualenv of its own.
+DOCS_VENV = .cache/docs-venv
+
+# A stamp written only after pip succeeds, so a failed install is retried.
+$(DOCS_VENV)/.installed: docs/requirements.txt
+	python3 -m venv $(DOCS_VENV)
+	$(DOCS_VENV)/bin/pip install -q -r docs/requirements.txt
+	@touch $@
+
+docs: $(DOCS_VENV)/.installed
+	$(DOCS_VENV)/bin/mkdocs build --strict
+
+docs-serve: $(DOCS_VENV)/.installed
+	$(DOCS_VENV)/bin/mkdocs serve --strict
 
 vendor:
 	@echo "Downloading dependencies..."

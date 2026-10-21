@@ -165,9 +165,25 @@ kubectl get cm argocd-cm -n argocd -o yaml | grep -A3 extension.config          
 make logs                                                                          # backend logs
 ```
 
-To try a UI build without redeploying, see "Trying a build in a running Argo CD" in [CLAUDE.md](../CLAUDE.md). To look at OpenCost itself, `kubectl port-forward svc/opencost 9090:9090 -n opencost` serves its UI, and `http://localhost:9090/allocation?window=1d&aggregate=namespace` serves its API.
+To try a UI build without redeploying: `argocd-server` re-reads `/tmp/extensions` on every request, so a bundle can be swapped in without a restart (lost when the pod restarts).
+
+```bash
+cd ui && npm run build && cd ..
+POD=$(kubectl get pods -n argocd -l app.kubernetes.io/name=argocd-server -o name | head -1)
+CONTAINER=$(kubectl get -n argocd "$POD" -o jsonpath='{.spec.containers[0].name}')
+kubectl exec -i -n argocd "$POD" -c "$CONTAINER" -- sh -c \
+  'cat > /tmp/extensions/.new.js && mv -f /tmp/extensions/.new.js /tmp/extensions/extension-cost-intel.js' < ui/dist/index.js
+```
+
+To look at OpenCost itself, `kubectl port-forward svc/opencost 9090:9090 -n opencost` serves its UI, and `http://localhost:9090/allocation?window=1d&aggregate=namespace` serves its API.
 
 `make deploy-k8s` applies only the raw manifests in `deploy/`. It builds and imports nothing and doesn't wire up Argo CD, so use it for manifest changes, not as a shortcut for `helm-deploy`.
+
+## Documentation
+
+The pages under `docs/` and the README are also published on Read the Docs, built with MkDocs from `mkdocs.yml`. The README is the home page. Links to files outside `docs/` are rewritten at build time to point at GitHub, so keep writing ordinary relative links that work on GitHub. A new page also needs an entry in the `nav` of `mkdocs.yml`.
+
+`make docs` builds the site into `site/` and fails on a broken link or anchor; `make docs-serve` serves it with live reload. Both need Python 3.
 
 ## Code style
 

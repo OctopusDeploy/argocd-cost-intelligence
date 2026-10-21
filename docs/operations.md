@@ -104,7 +104,7 @@ This admits those ranges on the API port (and the exporter's metrics port), not 
 
 An Ingress sends traffic around the extension proxy, so it can't be authorized. The policy blocks the ingress controller and the chart adds no exception. Users reach cost data through the Argo CD UI.
 
-Anything else that calls the service directly, such as a CI job or a debugging pod, is blocked too. `kubectl port-forward` still works, because the kubelet delivers it from inside the pod's network namespace. CI pushes Infracost estimates through the Argo CD proxy (see the [README](../README.md#cloud-service-costs-infracost-integration)).
+Anything else that calls the service directly, such as a CI job or a debugging pod, is blocked too. `kubectl port-forward` still works, because the kubelet delivers it from inside the pod's network namespace. CI pushes Infracost estimates through the Argo CD proxy (see [Optional: cloud service costs](installation.md#optional-cloud-service-costs)).
 
 To check, call the service from a pod that should be refused:
 

@@ -2,7 +2,7 @@
 
 This guide is for you if Argo CD itself is installed and configured from Git, for example with Argo CD managing its own Helm release or a Kustomize overlay. In that case the chart's install hook is the wrong tool. It changes Argo CD's ConfigMaps and the `argocd-server` Deployment with `kubectl patch`, and those changes live only in the cluster. They are lost when your Git sets the same key, and they don't come back when you rebuild Argo CD from Git. So you turn the hook off and put the same settings in your own Argo CD configuration.
 
-You need everything in [installation.md](installation.md#prerequisites) first: Argo CD 3.4 or newer with Argo CD Notifications, and OpenCost.
+You need everything in [installation.md](installation.md#prerequisites) first: Argo CD 3.4 or 3.5 with Argo CD Notifications, and OpenCost.
 
 ## What you'll add
 

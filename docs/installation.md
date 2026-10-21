@@ -1,6 +1,6 @@
 # Installation
 
-This page covers installing Argo CD Cost Intelligence with Helm, checking that it works, upgrading and removing it. Chart settings are in [configuration.md](configuration.md). If something goes wrong, see [operations.md](operations.md#troubleshooting).
+This page covers installing ArgoCD Cost Intelligence with Helm, checking that it works, upgrading and removing it. Chart settings are in [configuration.md](configuration.md). If something goes wrong, see [operations.md](operations.md#troubleshooting).
 
 ## What the chart installs
 
@@ -238,6 +238,28 @@ What to expect:
 - Once there is a recommendation, **Actual costs** names the workloads to change and the monthly saving or cost, when it's at least $1. **Resources** shows each container's requests next to the VPA's range, and the requests to paste into your manifest.
 - Only requests are suggested. Limits are left alone, except for a warning when a memory limit is below the most the VPA expects the container to need.
 - The application must have synced since you installed or upgraded Cost Intelligence, so that its cost record lists the workloads it manages.
+
+## Optional: cloud service costs
+
+OpenCost measures what runs in Kubernetes. It can't see cloud services such as RDS, ElastiCache or S3. To cover those, the service accepts cost estimates from [Infracost](https://www.infracost.io/) (or a compatible tool) that your CI pipeline pushes to it through Argo CD.
+
+Add one step to your CI workflow after `terraform plan`:
+
+```bash
+infracost breakdown --format json --path ./terraform > /tmp/infracost.json
+
+curl -s -X POST \
+  "https://<argocd-host>/extensions/cost-intel/api/cost-analysis/<app-name>/cloud-estimate?source=infracost" \
+  -H "Authorization: Bearer $ARGOCD_TOKEN" \
+  -H "Argocd-Application-Name: <app-namespace>:<app-name>" \
+  -H "Argocd-Project-Name: <project>" \
+  -H "Content-Type: application/json" \
+  --data @/tmp/infracost.json
+```
+
+`ARGOCD_TOKEN` is an Argo CD token (for example a project role token) allowed to `get` the application and to `invoke` the `cost-intel` extension. `<app-namespace>` is the namespace of the Application resource, usually `argocd`.
+
+The **Actual costs** tab then shows a full-stack monthly cost card: Kubernetes compute, cloud services and the total. The card warns when the estimate is more than 7 days old, and it's hidden when nothing has been pushed.
 
 ## Optional: Prometheus metrics
 

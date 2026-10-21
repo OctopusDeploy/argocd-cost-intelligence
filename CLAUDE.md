@@ -100,7 +100,7 @@ In the UI, app calls send `headers(ctx)` and cluster calls send `clusterHeaders(
 
 ## Configuration
 
-Required: `DB_PASSWORD`, `OPENCOST_BASE_URL`, `WEBHOOK_SECRET` (16+ characters). Optional: `CLUSTER_SCOPE_APP` (`<namespace>:<name>`; empty = find one, `off` = off), `CLUSTER_ACCESS_APP`, `DAILY_HISTORY_DAYS`, `BACKFILL_CONCURRENCY` (default 4, `0` = off), `PRUNE_REMOTE_COST` (default off), `VPA_ENABLED`, `METRICS_PORT` (default 9102; `0` = off in API mode; must differ from `SERVER_PORT`). `MODE=exporter` runs the exporter, which needs no `WEBHOOK_SECRET` and refreshes every `EXPORTER_INTERVAL` (default 5m, at least 1m). The full list with defaults is in [.env.example](.env.example) and [docs/configuration.md](docs/configuration.md#environment-variables).
+Required: `DB_PASSWORD`, `OPENCOST_BASE_URL`, `WEBHOOK_SECRET` (16+ characters). Optional: `CLUSTER_SCOPE_APP` (`<namespace>:<name>`; empty = find one, `off` = off), `CLUSTER_ACCESS_APP`, `DAILY_HISTORY_DAYS`, `BACKFILL_CONCURRENCY` (default 4, `0` = off), `PRUNE_REMOTE_COST` (default off), `VPA_ENABLED`, `METRICS_PORT` (default 9102; `0` = off in API mode; must differ from `SERVER_PORT`). `MODE=exporter` runs the exporter, which needs no `WEBHOOK_SECRET` and refreshes every `EXPORTER_INTERVAL` (default 5m, at least 1m). The full list with defaults is in [.env.example](.env.example) and [docs/configuration.md](docs/configuration.md#running-without-helm).
 
 ## Go conventions
 

@@ -50,3 +50,7 @@ out/
 BACKLOG.md
 STRUCTURE.txt
 mockups/
+
+# MkDocs output (make docs) and the bytecode of its hook
+site/
+__pycache__/

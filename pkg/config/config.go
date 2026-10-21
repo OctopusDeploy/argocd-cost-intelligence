@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/kelseyhightower/envconfig"
+
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
 )
 
 type Config struct {
@@ -17,8 +19,22 @@ type Config struct {
 	WebhookSecret string `envconfig:"WEBHOOK_SECRET"`
 
 	// ClusterScopeApp ("<namespace>:<name>") is the Argo CD Application whose viewers may see
-	// cluster-wide cost data. Empty turns cluster-wide endpoints off.
+	// cluster-wide cost data. Empty finds one: the Application that installed the service, else
+	// ClusterAccessApp. ClusterScopeOff turns cluster-wide endpoints off.
 	ClusterScopeApp string `envconfig:"CLUSTER_SCOPE_APP"`
+
+	// ClusterAccessApp ("<namespace>:<name>") is the access Application the Helm chart creates when
+	// Helm installs the service, used when no Argo CD Application installed it.
+	ClusterAccessApp string `envconfig:"CLUSTER_ACCESS_APP"`
+
+	// ArgoCDNamespace is where Argo CD runs: an Application named without a namespace in Argo CD's
+	// tracking annotation is there.
+	ArgoCDNamespace string `envconfig:"ARGOCD_NAMESPACE" default:"argocd"`
+
+	// PodNamespace and DeploymentName locate the service's own Deployment, whose tracking annotation
+	// names the Application that installed it.
+	PodNamespace   string `envconfig:"POD_NAMESPACE"`
+	DeploymentName string `envconfig:"DEPLOYMENT_NAME"`
 
 	// DailyHistoryDays is how many days of each application's daily cost are kept, so the Trends tab
 	// can reach further back than OpenCost's Prometheus. 0 turns recording off.
@@ -48,6 +64,9 @@ type Config struct {
 	// ExporterInterval is how often the exporter measures every Application's cost.
 	ExporterInterval time.Duration `envconfig:"EXPORTER_INTERVAL" default:"5m"`
 }
+
+// ClusterScopeOff, as CLUSTER_SCOPE_APP, turns cluster-wide endpoints off.
+const ClusterScopeOff = "off"
 
 // Modes the service runs in.
 const (
@@ -131,6 +150,16 @@ func (c *Config) Validate() error {
 	}
 	if c.BackfillConcurrency < 0 {
 		return errors.New("BACKFILL_CONCURRENCY must not be negative; 0 turns the startup backfill off")
+	}
+	if c.ClusterScopeApp != "" && c.ClusterScopeApp != ClusterScopeOff {
+		if _, err := models.ParseAppRef(c.ClusterScopeApp); err != nil {
+			return fmt.Errorf("CLUSTER_SCOPE_APP %q: %w, or %q to turn cluster-wide cost data off", c.ClusterScopeApp, err, ClusterScopeOff)
+		}
+	}
+	if c.ClusterAccessApp != "" {
+		if _, err := models.ParseAppRef(c.ClusterAccessApp); err != nil {
+			return fmt.Errorf("CLUSTER_ACCESS_APP %q: %w", c.ClusterAccessApp, err)
+		}
 	}
 	if len(c.WebhookSecret) < minWebhookSecretLength {
 		return fmt.Errorf("WEBHOOK_SECRET is required and must be at least %d characters: it authenticates Argo CD Notifications to POST /on-sync", minWebhookSecretLength)

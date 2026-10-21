@@ -92,9 +92,18 @@ spec:
         - name: VPA_ENABLED
           value: "true"
         # Argo CD Application whose viewers may see cluster-wide cost data (Namespaces and
-        # Chargeback pages). Unset turns those pages off.
+        # Chargeback pages). Unset uses the Application that installed this Deployment, read from
+        # its tracking annotation; "off" turns those pages off.
         # - name: CLUSTER_SCOPE_APP
         #   value: "argocd:<application-name>"
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: DEPLOYMENT_NAME
+          value: argocd-cost-intelligence
+        - name: ARGOCD_NAMESPACE
+          value: argocd
         livenessProbe:
           httpGet:
             path: /health

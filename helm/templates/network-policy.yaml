@@ -38,6 +38,21 @@ spec:
         - port: {{ .Values.costIntelligence.port }}
           protocol: TCP
 
+    {{- if include "argocd-cost-intelligence.accessApplication.enabled" . }}
+
+    # ArgoCD repo server → the access Application's empty chart (GET /charts/...)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.argoCd.namespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: argocd-repo-server
+      ports:
+        - port: {{ .Values.costIntelligence.port }}
+          protocol: TCP
+    {{- end }}
+
     {{- if .Values.metrics.enabled }}
     {{- include "argocd-cost-intelligence.metrics.ingressRule" . | nindent 4 }}
     {{- end }}

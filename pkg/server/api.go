@@ -66,9 +66,13 @@ type CostAPIServer struct {
 	logger      *log.Logger
 	syncSem     chan struct{}
 
-	// clusterScopeApp is the Application a caller must be allowed to get to see cluster-wide
-	// cost data. Nil turns cluster-wide endpoints off.
-	clusterScopeApp *models.AppRef
+	// clusterScope finds the Application a caller must be allowed to get to see cluster-wide cost
+	// data. Nil, or no Application found, turns cluster-wide endpoints off.
+	clusterScope ClusterScope
+
+	// unmeasuredApp is an Application a sync notification is never measured for: the chart's access
+	// Application, which deploys nothing. Nil measures every one.
+	unmeasuredApp *models.AppRef
 
 	// webhookSecret is the bearer token POST /on-sync requires. Empty refuses every webhook.
 	webhookSecret string
@@ -89,10 +93,43 @@ func WithWebhookSecret(secret string) Option {
 	return func(s *CostAPIServer) { s.webhookSecret = secret }
 }
 
+// ClusterScope finds the Application that gates cluster-wide cost data.
+type ClusterScope interface {
+	// App returns the gate Application, or nil when there is none.
+	App(ctx context.Context) *models.AppRef
+}
+
+// FixedClusterScope is a gate Application chosen by configuration.
+type FixedClusterScope models.AppRef
+
+// App returns the configured Application.
+func (f FixedClusterScope) App(context.Context) *models.AppRef {
+	app := models.AppRef(f)
+	return &app
+}
+
 // WithClusterScopeApp makes cluster-wide endpoints available to callers whose requests name app,
 // which Argo CD's proxy only forwards for users allowed to get it.
 func WithClusterScopeApp(app models.AppRef) Option {
-	return func(s *CostAPIServer) { s.clusterScopeApp = &app }
+	return WithClusterScope(FixedClusterScope(app))
+}
+
+// WithClusterScope gates cluster-wide endpoints by the Application scope finds, when it finds one.
+func WithClusterScope(scope ClusterScope) Option {
+	return func(s *CostAPIServer) { s.clusterScope = scope }
+}
+
+// clusterScopeApp returns the gate Application, or nil when cluster-wide data is off.
+func (s *CostAPIServer) clusterScopeApp(ctx context.Context) *models.AppRef {
+	if s.clusterScope == nil {
+		return nil
+	}
+	return s.clusterScope.App(ctx)
+}
+
+// WithUnmeasuredApp answers sync notifications for app without measuring anything.
+func WithUnmeasuredApp(app models.AppRef) Option {
+	return func(s *CostAPIServer) { s.unmeasuredApp = &app }
 }
 
 // WithMetrics records HTTP requests, sync webhooks and measurements on m.
@@ -137,6 +174,11 @@ func (s *CostAPIServer) setupRoutes() {
 	// Health check endpoints — no auth so liveness/readiness probes always work.
 	s.router.Get("/health", s.handleHealth)
 	s.router.Get("/ready", s.handleReady)
+
+	// The empty chart of the access Application, fetched by Argo CD's repo server. Public: it holds
+	// nothing but its own name.
+	s.router.Get("/charts/index.yaml", handleAccessChartIndex)
+	s.router.Get("/charts/"+accessChartFile, handleAccessChart)
 
 	s.router.Route("/api/cost-analysis", func(r chi.Router) {
 		// Webhook from Argo CD's notifications controller. It does not pass through the extension
@@ -221,6 +263,16 @@ func (s *CostAPIServer) handleOnSync(w http.ResponseWriter, r *http.Request) {
 		s.metrics.ObserveWebhook(telemetry.WebhookRemote)
 		render.Status(r, http.StatusOK)
 		render.JSON(w, r, map[string]string{"message": "not measured: the application deploys to another cluster"})
+		return
+	}
+
+	// The access Application deploys nothing; measuring it would record the service's own namespace
+	// under its name.
+	if s.unmeasuredApp != nil && *s.unmeasuredApp == (models.AppRef{Namespace: notification.ApplicationNamespace, Name: notification.ApplicationName}) {
+		s.logger.Printf("Not measuring sync notification for %s: it is the access Application, which deploys nothing\n", s.unmeasuredApp)
+		s.metrics.ObserveWebhook(telemetry.WebhookIgnored)
+		render.Status(r, http.StatusOK)
+		render.JSON(w, r, map[string]string{"message": "not measured: the access Application deploys nothing"})
 		return
 	}
 
@@ -824,7 +876,7 @@ func (s *CostAPIServer) handleGetClusterOverhead(w http.ResponseWriter, r *http.
 // Tells the UI which Application gates cluster-wide cost data, so it can send that Application
 // in its proxy headers. clusterScopeApp is null when cluster-wide data is turned off.
 func (s *CostAPIServer) handleGetConfig(w http.ResponseWriter, r *http.Request) {
-	render.JSON(w, r, map[string]any{"clusterScopeApp": s.clusterScopeApp})
+	render.JSON(w, r, map[string]any{"clusterScopeApp": s.clusterScopeApp(r.Context())})
 }
 
 // GET /api/cost-analysis/data-quality

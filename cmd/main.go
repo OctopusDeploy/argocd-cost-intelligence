@@ -16,6 +16,7 @@ import (
 	"k8s.io/client-go/rest"
 
 	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/backfill"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/clusterscope"
 	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/config"
 	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/exporter"
 	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/history"
@@ -57,16 +58,20 @@ func runAPI(cfg *config.Config, logger *log.Logger) {
 		metrics = telemetry.NewMetrics(registry)
 	}
 
+	// Applications are read live: to tell those deploying to another cluster, which OpenCost does not
+	// measure, and to find the one gating cluster-wide cost data. Outside a cluster there are none.
+	kubeClient, err := inClusterClient()
+	if err != nil {
+		logger.Printf("Not reading Argo CD Applications: %v\n", err)
+	}
+
 	serverOpts := []server.Option{server.WithWebhookSecret(cfg.WebhookSecret), server.WithMetrics(metrics)}
-	if cfg.ClusterScopeApp != "" {
-		app, err := models.ParseAppRef(cfg.ClusterScopeApp)
-		if err != nil {
-			logger.Fatalf("Invalid CLUSTER_SCOPE_APP %q: %v", cfg.ClusterScopeApp, err)
-		}
-		serverOpts = append(serverOpts, server.WithClusterScopeApp(app))
-		logger.Printf("Cluster-wide cost data gated by application %s\n", app)
-	} else {
-		logger.Print("Cluster-wide cost data disabled (CLUSTER_SCOPE_APP not set)")
+	if scope := clusterScope(cfg, kubeClient, logger); scope != nil {
+		serverOpts = append(serverOpts, server.WithClusterScope(scope))
+	}
+	if cfg.ClusterAccessApp != "" {
+		access, _ := models.ParseAppRef(cfg.ClusterAccessApp) // checked by Validate
+		serverOpts = append(serverOpts, server.WithUnmeasuredApp(access))
 	}
 
 	logger.Print("Starting ArgoCD Cost Intelligence Service")
@@ -123,11 +128,9 @@ func runAPI(cfg *config.Config, logger *log.Logger) {
 		serverOpts...,
 	)
 
-	// The Applications are listed live to tell those deploying to another cluster, which OpenCost
-	// does not measure. Outside a cluster there are none to list.
-	applications, err := inClusterApplications()
-	if err != nil {
-		logger.Printf("Not listing Argo CD Applications: %v\n", err)
+	var applications exporter.ApplicationLister
+	if kubeClient != nil {
+		applications = exporter.NewKubeApplicationLister(kubeClient)
 	}
 
 	// Record each application's daily cost, so long ranges do not depend on Prometheus retention.
@@ -185,18 +188,49 @@ func runAPI(cfg *config.Config, logger *log.Logger) {
 	serveUntilSignal(logger, servers, stopBackground)
 }
 
-// inClusterApplications lists the Argo CD Applications of the cluster the service runs in.
-func inClusterApplications() (exporter.ApplicationLister, error) {
+// inClusterClient reads the cluster the service runs in.
+func inClusterClient() (dynamic.Interface, error) {
 	kubeConfig, err := rest.InClusterConfig()
 	if err != nil {
 		return nil, fmt.Errorf("not running in a Kubernetes cluster: %w", err)
 	}
 	kubeConfig.Timeout = 30 * time.Second
-	kubeClient, err := dynamic.NewForConfig(kubeConfig)
+	client, err := dynamic.NewForConfig(kubeConfig)
 	if err != nil {
-		return nil, err
+		return nil, err // not a nil *DynamicClient in a non-nil interface
 	}
-	return exporter.NewKubeApplicationLister(kubeClient), nil
+	return client, nil
+}
+
+// clusterScope finds the Application that gates cluster-wide cost data: CLUSTER_SCOPE_APP when set,
+// else the Application that installed the service, else the chart's access Application. Nil turns
+// cluster-wide data off.
+func clusterScope(cfg *config.Config, kubeClient dynamic.Interface, logger *log.Logger) server.ClusterScope {
+	switch cfg.ClusterScopeApp {
+	case config.ClusterScopeOff:
+		logger.Printf("Cluster-wide cost data disabled (CLUSTER_SCOPE_APP=%s)\n", config.ClusterScopeOff)
+		return nil
+	case "":
+	default:
+		app, _ := models.ParseAppRef(cfg.ClusterScopeApp) // checked by Validate
+		logger.Printf("Cluster-wide cost data gated by application %s (CLUSTER_SCOPE_APP)\n", app)
+		return server.FixedClusterScope(app)
+	}
+	if kubeClient == nil {
+		logger.Print("Cluster-wide cost data disabled: not running in a cluster and CLUSTER_SCOPE_APP not set")
+		return nil
+	}
+	var access *models.AppRef
+	if cfg.ClusterAccessApp != "" {
+		app, _ := models.ParseAppRef(cfg.ClusterAccessApp) // checked by Validate
+		access = &app
+	}
+	resolver := clusterscope.NewResolver(kubeClient,
+		clusterscope.Workload{Namespace: cfg.PodNamespace, Name: cfg.DeploymentName}, cfg.ArgoCDNamespace, access, logger)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	resolver.App(ctx) // logs what it finds
+	return resolver
 }
 
 // runBackfill runs b after any other replica's run, then has the recorder record the new records'

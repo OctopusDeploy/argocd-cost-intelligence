@@ -236,6 +236,56 @@ func TestValidate(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "cluster scope app accepted",
+			cfg: Config{
+				Database:        DatabaseConfig{Password: "secret"},
+				WebhookSecret:   testWebhookSecret,
+				OpenCost:        OpenCostConfig{BaseURL: "http://opencost:9003"},
+				ClusterScopeApp: "argocd:cost-intelligence",
+			},
+			wantErr: false,
+		},
+		{
+			name: "cluster scope off accepted",
+			cfg: Config{
+				Database:        DatabaseConfig{Password: "secret"},
+				WebhookSecret:   testWebhookSecret,
+				OpenCost:        OpenCostConfig{BaseURL: "http://opencost:9003"},
+				ClusterScopeApp: "off",
+			},
+			wantErr: false,
+		},
+		{
+			name: "cluster scope app without namespace",
+			cfg: Config{
+				Database:        DatabaseConfig{Password: "secret"},
+				WebhookSecret:   testWebhookSecret,
+				OpenCost:        OpenCostConfig{BaseURL: "http://opencost:9003"},
+				ClusterScopeApp: "cost-intelligence",
+			},
+			wantErr: true,
+		},
+		{
+			name: "cluster access app accepted",
+			cfg: Config{
+				Database:         DatabaseConfig{Password: "secret"},
+				WebhookSecret:    testWebhookSecret,
+				OpenCost:         OpenCostConfig{BaseURL: "http://opencost:9003"},
+				ClusterAccessApp: "argocd:cost-intelligence",
+			},
+			wantErr: false,
+		},
+		{
+			name: "cluster access app without namespace",
+			cfg: Config{
+				Database:         DatabaseConfig{Password: "secret"},
+				WebhookSecret:    testWebhookSecret,
+				OpenCost:         OpenCostConfig{BaseURL: "http://opencost:9003"},
+				ClusterAccessApp: "cost-intelligence",
+			},
+			wantErr: true,
+		},
+		{
 			name: "opencost HTTPS URL accepted",
 			cfg: Config{
 				Database:      DatabaseConfig{Password: "secret"},

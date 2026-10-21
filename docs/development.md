@@ -96,7 +96,7 @@ curl -s 'http://localhost:8080/api/cost-analysis/my-app/trend?days=30' \
   -H "Argocd-Application-Name: argocd:my-app" | jq .statistics
 ```
 
-Cluster-wide routes (`/namespaces`, `/namespace/{ns}/...`, `/chargeback`) answer 403 unless `CLUSTER_SCOPE_APP` is set. Add `CLUSTER_SCOPE_APP: "argocd:my-app"` to the service's `environment` in `docker-compose.yml` (or an override file) and send the same header.
+Cluster-wide routes (`/namespaces`, `/namespace/{ns}/...`, `/chargeback`) answer 403 unless `CLUSTER_SCOPE_APP` is set: outside a cluster the service can't find the Application that installed it. Add `CLUSTER_SCOPE_APP: "argocd:my-app"` to the service's `environment` in `docker-compose.yml` (or an override file) and send the same header.
 
 These log lines (`docker-compose logs -f argocd-cost-intelligence`) tell you what happened:
 

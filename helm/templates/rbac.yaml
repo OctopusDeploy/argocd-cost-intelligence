@@ -50,4 +50,41 @@ subjects:
 - kind: ServiceAccount
   name: {{ include "argocd-cost-intelligence.serviceAccountName" . }}
   namespace: {{ .Values.namespace.name }}
+
+---
+# The service reads its own Deployment's Argo CD tracking annotation to find the Application that
+# installed it, which gates cluster-wide cost data. That Deployment only.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "argocd-cost-intelligence.fullname" . }}-self
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+rules:
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  resourceNames:
+  - {{ include "argocd-cost-intelligence.fullname" . }}
+  verbs:
+  - get
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "argocd-cost-intelligence.fullname" . }}-self
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "argocd-cost-intelligence.fullname" . }}-self
+subjects:
+- kind: ServiceAccount
+  name: {{ include "argocd-cost-intelligence.serviceAccountName" . }}
+  namespace: {{ .Values.namespace.name }}
 {{- end }}

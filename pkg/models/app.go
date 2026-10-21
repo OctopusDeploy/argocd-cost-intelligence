@@ -23,3 +23,8 @@ func ParseAppRef(s string) (AppRef, error) {
 	}
 	return AppRef{Namespace: ns, Name: name}, nil
 }
+
+// ClusterAccessLabel marks the access Application the Helm chart creates to gate cluster-wide cost
+// data when no Argo CD Application installed Cost Intelligence. It deploys nothing, so it is never
+// measured.
+const ClusterAccessLabel = "cost-intelligence.octopus.com/cluster-access"

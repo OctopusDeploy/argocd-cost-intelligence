@@ -1,0 +1,41 @@
+{{- if include "argocd-cost-intelligence.accessApplication.enabled" . }}
+{{- $access := .Values.costIntelligence.accessApplication }}
+# Gates cluster-wide cost data when Helm, not Argo CD, installed the chart: whoever Argo CD RBAC
+# allows to get this Application may see it. It deploys nothing, and its project permits nothing.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: {{ $access.project }}
+  namespace: {{ .Values.argoCd.namespace }}
+  labels:
+    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+spec:
+  description: Gates cluster-wide costs in Cost Intelligence. Its Application deploys nothing.
+  sourceRepos:
+  - {{ include "argocd-cost-intelligence.accessApplication.repoURL" . }}
+  destinations:
+  - server: https://kubernetes.default.svc
+    namespace: {{ .Values.namespace.name }}
+  clusterResourceWhitelist: []
+  namespaceResourceBlacklist:
+  - group: "*"
+    kind: "*"
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ $access.name }}
+  namespace: {{ .Values.argoCd.namespace }}
+  labels:
+    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+    cost-intelligence.octopus.com/cluster-access: "true"
+spec:
+  project: {{ $access.project }}
+  source:
+    repoURL: {{ include "argocd-cost-intelligence.accessApplication.repoURL" . }}
+    chart: cost-intelligence-access
+    targetRevision: 1.0.0
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ .Values.namespace.name }}
+{{- end }}

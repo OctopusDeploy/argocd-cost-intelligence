@@ -65,6 +65,9 @@ export const NamespaceDashboard: React.FC = () => {
     [setUrlNamespace, setView]
   );
 
+  const { namespaces } = namespaceData;
+  const listedNamespaces = useMemo(() => new Set(namespaces.map(ns => ns.namespace)), [namespaces]);
+
   const latestMeasuredAt = namespaceData.namespaces.reduce<string | null>(
     (latest, ns) => (!latest || Date.parse(ns.measuredAt) > Date.parse(latest) ? ns.measuredAt : latest),
     null
@@ -94,7 +97,8 @@ export const NamespaceDashboard: React.FC = () => {
         {view === 'idle' && (
           <IdleSpendView
             waste={waste}
-            clusterIdle={clusterIdle(namespaceData.namespaces)}
+            clusterIdle={clusterIdle(namespaces)}
+            listedNamespaces={listedNamespaces}
             onSelectNamespace={openNamespace}
           />
         )}

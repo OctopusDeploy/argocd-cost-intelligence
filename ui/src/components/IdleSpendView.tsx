@@ -21,13 +21,15 @@ interface Props {
   waste: UseWasteRankingResult;
   // clusterIdle is null when no namespace is measured.
   clusterIdle: ClusterIdle | null;
+  // listedNamespaces are the namespaces the Namespaces tab can open.
+  listedNamespaces: ReadonlySet<string>;
   onSelectNamespace: (namespace: string) => void;
 }
 
 // IdleSpendView ranks the cluster's applications by the idle cost of their own pods, so the ones
 // worth fixing first are at the top. The figures above the ranking always cover every ranked app;
 // the namespace filter narrows only the ranking.
-export const IdleSpendView: React.FC<Props> = ({ waste, clusterIdle, onSelectNamespace }) => {
+export const IdleSpendView: React.FC<Props> = ({ waste, clusterIdle, listedNamespaces, onSelectNamespace }) => {
   const t = useTokens();
   // The same parameter as Chargeback's namespace, so a namespace chosen on one carries to the other.
   const [namespace, setNamespace] = useUrlState<string>('costScope', '');
@@ -113,6 +115,7 @@ export const IdleSpendView: React.FC<Props> = ({ waste, clusterIdle, onSelectNam
         namespace={namespace}
         noPods={ranking.noPods}
         action={filter}
+        listedNamespaces={listedNamespaces}
         onSelectNamespace={onSelectNamespace}
       />
       <div role="status" style={visuallyHidden}>

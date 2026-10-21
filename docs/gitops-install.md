@@ -239,7 +239,7 @@ notifications:
 
 If Argo CD renders its own chart from Git, every values file is in Git, so set `notifications.secret.create: false` and create the Secret with your secret tool instead.
 
-You don't need to add the notifications ClusterRole. The chart already gives the notifications controller access to Applications in every namespace. It only watches the namespaces in `configs.params."application.namespaces"`, though, as the [apps in any namespace](https://argo-cd.readthedocs.io/en/stable/operator-manual/app-any-namespace/) guide describes.
+You don't need to add the notifications ClusterRole. The chart already gives the notifications controller access to Applications in every namespace, unless you set `createClusterRoles: false`; then add Argo CD's, as for plain manifests below. It only watches the namespaces in `configs.params."application.namespaces"`, though, as the [apps in any namespace](https://argo-cd.readthedocs.io/en/stable/operator-manual/app-any-namespace/) guide describes.
 
 Sync your Argo CD release. Changing the init container restarts `argocd-server`. If the restart happens before Cost Intelligence's UI is running, the download fails, `argocd-server` starts without the plugin, and you restart it later with `kubectl rollout restart deployment/argocd-server -n argocd`.
 
@@ -398,7 +398,7 @@ kubectl patch secret argocd-notifications-secret -n argocd --type merge \
   -p "{\"stringData\":{\"cost-intel-webhook-token\":\"$TOKEN\"}}"
 ```
 
-If your Applications live in other namespaces as well as `argocd` ([apps in any namespace](https://argo-cd.readthedocs.io/en/stable/operator-manual/app-any-namespace/)), the notifications controller needs to read them there. Argo CD's `install.yaml` only gives it a Role in `argocd`. Argo CD ships a ClusterRole and ClusterRoleBinding for this, `argocd-notifications-controller-cluster-apps`, in `examples/k8s-rbac/argocd-server-applications`. Uncomment the two lines in `resources` above and use the same Argo CD version as your install. The controller also has to watch those namespaces, which `application.namespaces` in `argocd-cmd-params-cm` sets, as that guide describes.
+If your Applications live in other namespaces as well as `argocd` ([apps in any namespace](https://argo-cd.readthedocs.io/en/stable/operator-manual/app-any-namespace/)), the notifications controller needs to read them there. Argo CD's `install.yaml` only gives it a Role in `argocd`. Argo CD ships a ClusterRole and ClusterRoleBinding for this, `argocd-notifications-controller-cluster-apps`, in `examples/k8s-rbac/argocd-server-applications`. Besides Applications, it lets the controller read Secrets and ConfigMaps in every namespace. Uncomment the two lines in `resources` above and use the same Argo CD version as your install. The controller also has to watch those namespaces, which `application.namespaces` in `argocd-cmd-params-cm` sets, as that guide describes.
 
 Sync or apply your overlay. The `argocd-server` patch restarts it. If the restart happens before Cost Intelligence's UI is running, `argocd-server` starts without the plugin, and you restart it later with `kubectl rollout restart deployment/argocd-server -n argocd`.
 

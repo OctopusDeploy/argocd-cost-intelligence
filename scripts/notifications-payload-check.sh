@@ -101,16 +101,22 @@ done
 # Kubernetes RBAC named argocd-* is Argo CD's own: its Helm chart has a ClusterRole and binding
 # named argocd-notifications-controller, and an apply under the same name replaces its rules. So no
 # Role, ClusterRole or binding with such a name, other than this chart's argocd-cost-intelligence*,
-# may come from the rendered chart, the hook's kubectl commands, deploy/ or the docs.
+# may come from the rendered chart (including YAML in the hook's script), the hook's kubectl commands,
+# deploy/, the READMEs or the docs.
 rbac_names() {
   awk '
     function emit() { if (kind ~ /^(Cluster)?Role(Binding)?$/ && name != "") print file ": " kind " " name; kind = ""; name = ""; meta = 0 }
+    function indent() { match($0, /^[ -]*/); return RLENGTH }
+    function value() { v = $0; sub(/^[^:]*: */, "", v); sub(/ *#.*$/, "", v); gsub(/["\047]/, "", v); return v }
     FNR == 1 { emit() }
-    /^---/ || /^```/ { emit(); next }
-    /^kind: / { kind = $2; file = FILENAME }
-    /^metadata:/ { meta = 1; next }
-    /^[^ ]/ { meta = 0 }
-    meta && /^  name: / && name == "" { name = $2 }
+    /^ *---/ || /^ *```/ { emit(); next }
+    # A kind: at any depth, also as a list item, starts the next object.
+    /^[ -]*kind: / { if (kind != "") emit(); kind = value(); file = FILENAME }
+    /^[ -]*metadata:/ { meta = 1; mind = indent(); cind = 0; next }
+    meta && /[^ ]/ && indent() <= mind { meta = 0 }
+    meta && /[^ ]/ && !cind { cind = indent() }
+    # Only metadata'"'"'s own name, not one in its labels.
+    meta && name == "" && /^ *name: / && indent() == cind { name = value() }
     match($0, /kubectl create (clusterrole|clusterrolebinding|role|rolebinding) [^ ]+/) {
       split(substr($0, RSTART, RLENGTH), w, " "); print FILENAME ": " w[3] " " w[4]
     }
@@ -118,8 +124,10 @@ rbac_names() {
   ' "$@"
 }
 chart=$(helm template argocd-cost-intelligence ./helm --set postgres.auth.password=check)
-if taken=$(rbac_names <(printf '%s\n' "$chart") deploy/*.yaml docs/*.md \
-  | sed 's|^/dev/fd/[0-9]*:|rendered chart:|' | grep -E ' argocd-' | grep -vE ' argocd-cost-intelligence'); then
+# Kept apart from the filter below, so that if awk fails the script stops instead of finding nothing.
+names=$(rbac_names <(printf '%s\n' "$chart") deploy/*.yaml docs/*.md README.md helm/README.md)
+if taken=$(grep -E ' argocd-' <<< "$names" | grep -vE ' argocd-cost-intelligence' \
+  | sed 's|^/dev/fd/[0-9]*:|rendered chart:|'); then
   printf '%s\n' "$taken" >&2
   echo "RBAC named after Argo CD's own objects (above); give it a Cost Intelligence name, or leave it to Argo CD's install." >&2
   status=1

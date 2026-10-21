@@ -28,12 +28,21 @@ interface Props {
   noPods: number;
   // action sits at the card's top right, such as the namespace filter.
   action?: React.ReactNode;
+  // listedNamespaces are the namespaces the Namespaces tab can open; only they are links.
+  listedNamespaces: ReadonlySet<string>;
   onSelectNamespace: (namespace: string) => void;
 }
 
 // WasteRankingCard ranks applications by the idle cost of their own pods, with the saving of the
 // lower CPU request each one's tab suggests.
-export const WasteRankingCard: React.FC<Props> = ({ apps, namespace, noPods, action, onSelectNamespace }) => {
+export const WasteRankingCard: React.FC<Props> = ({
+  apps,
+  namespace,
+  noPods,
+  action,
+  listedNamespaces,
+  onSelectNamespace,
+}) => {
   const t = useTokens();
   const table = wasteTable(apps);
 
@@ -55,7 +64,9 @@ export const WasteRankingCard: React.FC<Props> = ({ apps, namespace, noPods, act
       </p>
     );
   } else {
-    body = <WasteTableView table={table} onSelectNamespace={onSelectNamespace} t={t} />;
+    body = (
+      <WasteTableView table={table} listedNamespaces={listedNamespaces} onSelectNamespace={onSelectNamespace} t={t} />
+    );
   }
 
   return (
@@ -74,11 +85,12 @@ export const WasteRankingCard: React.FC<Props> = ({ apps, namespace, noPods, act
 
 interface TableProps {
   table: ReturnType<typeof wasteTable>;
+  listedNamespaces: ReadonlySet<string>;
   onSelectNamespace: (namespace: string) => void;
   t: Tokens;
 }
 
-const WasteTableView: React.FC<TableProps> = ({ table, onSelectNamespace, t }) => {
+const WasteTableView: React.FC<TableProps> = ({ table, listedNamespaces, onSelectNamespace, t }) => {
   const row: React.CSSProperties = {
     display: 'grid',
     gridTemplateColumns: COLUMNS,
@@ -165,15 +177,21 @@ const WasteTableView: React.FC<TableProps> = ({ table, onSelectNamespace, t }) =
                 </a>
                 <span style={{ ...truncated, ...muted, fontSize: '12px' }}>
                   {app.applicationNamespace} · deploys to{' '}
-                  <button
-                    type="button"
-                    aria-label={`Show namespace ${app.deploymentNamespace}`}
-                    title={`Show namespace ${app.deploymentNamespace}`}
-                    onClick={() => onSelectNamespace(app.deploymentNamespace)}
-                    style={namespaceChip(t)}
-                  >
-                    {app.deploymentNamespace}
-                  </button>
+                  {/* A namespace the Namespaces tab doesn't list yet, such as one measured since it last
+                      refreshed, would open another namespace there, so it is not a link. */}
+                  {listedNamespaces.has(app.deploymentNamespace) ? (
+                    <button
+                      type="button"
+                      aria-label={`Show namespace ${app.deploymentNamespace}`}
+                      title={`Show namespace ${app.deploymentNamespace}`}
+                      onClick={() => onSelectNamespace(app.deploymentNamespace)}
+                      style={namespaceChip(t)}
+                    >
+                      {app.deploymentNamespace}
+                    </button>
+                  ) : (
+                    app.deploymentNamespace
+                  )}
                 </span>
               </span>
               <span role="cell" style={{ ...numeric, color: t.textStrong, fontWeight: 500 }}>

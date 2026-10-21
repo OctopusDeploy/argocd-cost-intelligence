@@ -48,12 +48,20 @@ const rowTexts = () =>
     .slice(1)
     .map(row => Array.from(row.querySelectorAll('[role="cell"], [role="rowheader"]')).map(cell => cell.textContent));
 
-const card = (apps: AppWaste[], props: { namespace?: string; noPods?: number; onSelectNamespace?: (ns: string) => void } = {}) =>
+interface CardProps {
+  namespace?: string;
+  noPods?: number;
+  listedNamespaces?: ReadonlySet<string>;
+  onSelectNamespace?: (ns: string) => void;
+}
+
+const card = (apps: AppWaste[], props: CardProps = {}) =>
   render(
     <WasteRankingCard
       apps={apps}
       namespace={props.namespace ?? ''}
       noPods={props.noPods ?? 0}
+      listedNamespaces={props.listedNamespaces ?? new Set(['shop'])}
       onSelectNamespace={props.onSelectNamespace ?? vi.fn()}
     />
   );
@@ -87,6 +95,13 @@ describe('WasteRankingCard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Show namespace shop' }));
 
     expect(onSelectNamespace).toHaveBeenCalledWith('shop');
+  });
+
+  it("doesn't link a namespace the Namespaces tab doesn't list", () => {
+    card(seven.slice(0, 1), { listedNamespaces: new Set(['payments']) });
+
+    expect(screen.queryByRole('button', { name: 'Show namespace shop' })).toBeNull();
+    expect(rowTexts()[0][1]).toBe('webteam-a · deploys to shop');
   });
 
   it('explains an empty ranking', () => {

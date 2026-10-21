@@ -46,7 +46,7 @@ const waste = (ranking: Partial<WasteRanking> | null, overrides: Partial<UseWast
 const allMeasured: ClusterIdle = { idle: 412.5, measured: 2, namespaces: 2 };
 
 const view = (result: UseWasteRankingResult, clusterIdle: ClusterIdle | null = allMeasured) =>
-  render(<IdleSpendView waste={result} clusterIdle={clusterIdle} onSelectNamespace={vi.fn()} />);
+  render(<IdleSpendView waste={result} clusterIdle={clusterIdle} listedNamespaces={new Set()} onSelectNamespace={vi.fn()} />);
 
 // stats reads the strip as label → value and detail.
 const stats = () =>

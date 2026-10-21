@@ -30,7 +30,7 @@ The hook only writes keys of its own, named after `cost-intel`. Your triggers, t
 
 The hook then restarts `argocd-notifications-controller`, the UI Deployment and `argocd-server`, so the Argo CD UI reloads during an install or upgrade. When the hook succeeds it deletes its own ServiceAccount, ClusterRole and Job.
 
-The hook doesn't change Kubernetes RBAC for Argo CD. The webhook is sent only for Applications the notifications controller can read. For Applications outside the Argo CD namespace ([apps in any namespace](https://argo-cd.readthedocs.io/en/stable/operator-manual/app-any-namespace/)), the Argo CD Helm chart already gives it a ClusterRole, unless `createClusterRoles` is false. With Argo CD's `install.yaml`, or with that value off, apply the notifications ClusterRole and binding from Argo CD's `examples/k8s-rbac/argocd-server-applications`.
+The hook doesn't change Kubernetes RBAC for Argo CD. The webhook is sent only for Applications the notifications controller can read. For Applications outside the Argo CD namespace ([apps in any namespace](https://argo-cd.readthedocs.io/en/stable/operator-manual/app-any-namespace/)), the Argo CD Helm chart already gives it a ClusterRole, unless `createClusterRoles` is false. With Argo CD's `install.yaml`, or with that value off, apply the notifications ClusterRole and binding from Argo CD's `examples/k8s-rbac/argocd-server-applications`; its binding names the `argocd` namespace, so change that if Argo CD runs elsewhere.
 
 ## Prerequisites
 

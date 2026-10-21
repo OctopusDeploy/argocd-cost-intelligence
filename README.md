@@ -55,7 +55,7 @@ A post-install hook registers the extension and the notification webhook in Argo
 
 On Argo CD 3.5 the extension is denied to every user until a policy allows it. The hook allows the built-in `admin` role in a key of its own, `policy.cost-intel.csv` in `argocd-rbac-cm`, and leaves your `policy.csv` alone. To give other roles access, see [Grant access in Argo CD](docs/installation.md#grant-access-in-argo-cd).
 
-Sync an application, wait a few seconds, and open its **Cost Intelligence** tab. Settings are in [docs/configuration.md](docs/configuration.md). The [installation guide](docs/installation.md) covers the prerequisites, the OpenCost URL, who sees cluster-wide costs, upgrading and troubleshooting.
+Sync an application, wait a few seconds, and open its **Cost Intelligence** tab. Settings are in [docs/configuration.md](docs/configuration.md). The [installation guide](docs/installation.md) covers the prerequisites, the OpenCost URL, who sees cluster-wide costs, upgrading and troubleshooting. If Argo CD itself is managed from Git, turn the hook off and follow [Install when Git manages Argo CD](docs/gitops-install.md) instead.
 
 ## How it works
 
@@ -138,6 +138,7 @@ Anything else without the header gets `403`. `/health`, `/ready` (Kubernetes pro
 | I want to... | Read |
 |---|---|
 | Install the plugin, upgrade it or remove it | [docs/installation.md](docs/installation.md) |
+| Install it when Argo CD is managed from Git | [docs/gitops-install.md](docs/gitops-install.md) |
 | Look up a Helm value or environment variable, or manage secrets | [docs/configuration.md](docs/configuration.md) |
 | Fix a problem, understand the NetworkPolicy, back up the database | [docs/operations.md](docs/operations.md) |
 | Scrape cost and health metrics, query them, alert on them | [docs/metrics.md](docs/metrics.md) |

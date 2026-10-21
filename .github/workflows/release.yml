@@ -240,11 +240,28 @@ jobs:
           echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
           echo "semver=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
 
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      # For installs that add the plugin with the Argo CD extension installer instead of the hook
+      # (docs/gitops-install.md). The docs link to these two file names; keep them.
+      - name: Package the UI extension
+        run: |
+          (cd ui && npm ci && npm run build)
+          scripts/package-ui-extension.sh dist
+
       - name: Create Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64  # v3.0.3
         with:
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-') }}
+          fail_on_unmatched_files: true
+          files: |
+            dist/extension.tar.gz
+            dist/extension_checksums.txt
           body: |
             ## Install with Helm
 
@@ -263,5 +280,9 @@ jobs:
             |-----------|-------|
             | Backend | `${{ env.BACKEND_IMAGE }}:${{ steps.version.outputs.tag }}` |
             | UI | `${{ env.UI_IMAGE }}:${{ steps.version.outputs.tag }}` |
+
+            ## UI extension
+
+            `extension.tar.gz` and `extension_checksums.txt` below are the UI plugin for the [Argo CD extension installer](https://github.com/argoproj-labs/argocd-extension-installer), for installs where Git manages Argo CD. See [Install when Git manages Argo CD](${{ github.server_url }}/${{ github.repository }}/blob/${{ steps.version.outputs.tag }}/docs/gitops-install.md#use-the-argo-cd-extension-installer-instead).
 
             ---

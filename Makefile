@@ -1,7 +1,7 @@
 .PHONY: help build run test test-integration test-opencost clean docker-build docker-build-ui docker-push \
         deploy-local deploy-local-down deploy-k8s helm-deploy helm-deploy-real helm-undeploy \
         lint lint-go lint-ui lint-helm lint-prometheus lint-actions lint-manifests lint-dockerfile \
-        lint-shell lint-mock lint-notifications sync-mock
+        lint-shell lint-mock lint-notifications sync-mock ui-extension
 
 BINARY_NAME    = argocd-cost-intelligence
 IMAGE_NAME     = argocd-cost-intelligence
@@ -102,6 +102,12 @@ docker-build:
 docker-build-ui:
 	@echo "Building UI Docker image $(UI_IMAGE_NAME):$(IMAGE_TAG)..."
 	docker build -t $(UI_IMAGE_NAME):$(IMAGE_TAG) ./ui
+
+# The archive and checksum file the release attaches for the Argo CD extension installer.
+ui-extension:
+	@echo "Packaging the UI plugin for the extension installer..."
+	cd ui && npm ci && npm run build
+	scripts/package-ui-extension.sh dist
 
 docker-push:
 	@echo "Pushing Docker image to registry..."

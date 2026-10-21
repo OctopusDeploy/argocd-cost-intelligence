@@ -55,6 +55,7 @@ def on_page_markdown(markdown, page, config, files):
         if target.startswith(("#", "/")) or SCHEME.match(target):
             return match.group(0)
         path, sep, anchor = target.partition("#")
+        path, qsep, query = path.partition("?")
         resolved = os.path.normpath(os.path.join(source_dir, path))
         if resolved == readme:
             resolved = os.path.join(docs, "index.md")
@@ -65,7 +66,7 @@ def on_page_markdown(markdown, page, config, files):
                 log.warning("Doc file '%s' links to '%s', which does not exist", page.file.src_uri, target)
             kind = "tree" if os.path.isdir(resolved) else "blob"
             new = f"{REPO_URL}/{kind}/{ref}/{os.path.relpath(resolved, root).replace(os.sep, '/')}"
-        return f"]({new}{sep}{anchor}{match.group(2) or ''})"
+        return f"]({new}{qsep}{query}{sep}{anchor}{match.group(2) or ''})"
 
     # Leave fenced code blocks alone: a command in one may contain "](".
     lines, in_fence = [], False

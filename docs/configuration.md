@@ -162,7 +162,7 @@ The chart has no value for the database host. The backend and exporter always co
 
 ## Running without Helm
 
-The chart sets these variables from its values, so you only need them when you run the image without the chart. [`.env.example`](../.env.example) is a template with every variable and its default.
+The chart sets these variables from its values, so you only need them when you run the image without the chart. [`.env.example`](../.env.example) is a template with the rest, such as the database connection, and their defaults.
 
 | Variable | Default | Description |
 |---|---|---|
@@ -170,7 +170,9 @@ The chart sets these variables from its values, so you only need them when you r
 | `METRICS_PORT` | `9102` | The port that serves Prometheus `/metrics`, apart from the API port. `0` turns metrics off (API mode only). |
 | `DB_HOST` | `localhost` | PostgreSQL host. The chart has no value for it. |
 | `DB_PASSWORD` | required | Database password. |
+| `DB_SSL_MODE` | `disable` | PostgreSQL SSL mode: `disable`, `require` or `verify-full`. |
 | `OPENCOST_BASE_URL` | `http://opencost:9003` | OpenCost API endpoint. |
+| `SERVER_READ_TIMEOUT` / `SERVER_WRITE_TIMEOUT` / `SERVER_IDLE_TIMEOUT` | `10s` / `10s` / `120s` | HTTP server timeouts. |
 | `WEBHOOK_SECRET` | required | The bearer token Argo CD Notifications sends to `/on-sync`, at least 16 characters. |
 | `CLUSTER_SCOPE_APP` | empty | The Argo CD Application (`<namespace>:<name>`) whose viewers may see cluster-wide cost data. Empty finds one and `off` turns it off; see [Choose your settings](installation.md#choose-your-settings). |
 | `CLUSTER_ACCESS_APP` | empty | The fallback Application (`<namespace>:<name>`) when none installed the service; see [Authorization](architecture.md#authorization). |

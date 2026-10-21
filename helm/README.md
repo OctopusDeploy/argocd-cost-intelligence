@@ -8,7 +8,7 @@ The chart deploys the backend API, the UI plugin, a bundled PostgreSQL StatefulS
 
 ## Requirements
 
-Argo CD 3.4+, OpenCost 1.121.1+ reachable from the release namespace, Helm 3.8+. Details: [installation guide](https://github.com/OctopusDeploy/argocd-cost-intelligence/blob/main/docs/installation.md).
+Argo CD 3.4 or 3.5, OpenCost 1.121.1+ reachable from the release namespace, Helm 3.8+. Details: [installation guide](https://github.com/OctopusDeploy/argocd-cost-intelligence/blob/main/docs/installation.md).
 
 ## Install
 

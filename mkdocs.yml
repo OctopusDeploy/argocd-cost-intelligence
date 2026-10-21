@@ -1,4 +1,4 @@
-site_name: Cost Intelligence for Argo CD
+site_name: ArgoCD Cost Intelligence
 site_description: The actual cost of each Argo CD application, measured with OpenCost
 site_url: !ENV [READTHEDOCS_CANONICAL_URL, https://argocd-cost-intelligence.readthedocs.io/en/latest/]
 repo_url: https://github.com/OctopusDeploy/argocd-cost-intelligence
@@ -24,6 +24,7 @@ markdown_extensions:
 - admonition
 - attr_list
 - footnotes
+- md_in_html
 - tables
 - pymdownx.highlight
 - pymdownx.superfences
@@ -32,12 +33,14 @@ markdown_extensions:
 
 nav:
 - Introduction: index.md
-- Installation: installation.md
-- Configuration: configuration.md
-- Operations: operations.md
-- Prometheus metrics: metrics.md
-- Architecture: architecture.md
-- Development: development.md
+- Using it:
+  - Installation: installation.md
+  - Configuration: configuration.md
+  - Operations: operations.md
+  - Prometheus metrics: metrics.md
+- Contributing:
+  - Architecture: architecture.md
+  - Development: development.md
 
 theme:
   name: material

@@ -1,6 +1,6 @@
 # Configuration
 
-This page lists the Helm values, how to manage the secrets, the ready-made profiles, and the environment variables the backend reads. To install, see [installation.md](installation.md).
+This page lists the Helm values, how to manage the secrets, the ready-made profiles, and the environment variables for running without Helm. To install, see [installation.md](installation.md).
 
 The defaults are in [`helm/values.yaml`](../helm/values.yaml). To print them for a released version:
 
@@ -58,7 +58,7 @@ The chart can't keep the PVC on uninstall, and it has no switch to run without o
 | `costIntelligence.port` | `8080` | Listen port (`SERVER_PORT`), also the Service and NetworkPolicy port. |
 | `costIntelligence.dailyHistoryDays` | `400` | How many days of each application's daily cost to keep in PostgreSQL (`DAILY_HISTORY_DAYS`), about one row per application per day. OpenCost only answers for the days its Prometheus keeps, often 15, so this history is what lets the Trends tab show months. `0` turns recording off. |
 | `costIntelligence.backfillConcurrency` | `4` | How many namespaces to measure at once when the service starts and finds Applications without a cost record (`BACKFILL_CONCURRENCY`). Replicas take turns, so OpenCost never sees more than this many queries from the backfill. `0` turns it off, and applications then show costs only after their next sync. |
-| `costIntelligence.pruneRemoteCost` | `false` | Delete the cost records and daily history stored for Applications that deploy to another cluster (`PRUNE_REMOTE_COST`). These are never measured, but cost stored before they were skipped priced a namespace of the same name here. It can't be undone; an Application that targets this cluster by its API server URL or a renamed in-cluster entry counts as remote. |
+| `costIntelligence.pruneRemoteCost` | `false` | Delete the cost records and daily history stored for Applications that deploy to another cluster (`PRUNE_REMOTE_COST`). It can't be undone, and an Application that targets this cluster by its API server URL counts as remote; see [Known limitations](architecture.md#known-limitations). |
 | `costIntelligence.vpa.enabled` | `true` | Read VPA recommendations for rightsizing (`VPA_ENABLED`) and give the ClusterRole read access to `verticalpodautoscalers`. See [installation.md](installation.md#optional-rightsizing). |
 | `costIntelligence.database.maxOpenConns` / `maxIdleConns` | `25` / `5` | Connection pool size per replica. Keep replicas times `maxOpenConns` below PostgreSQL's `max_connections`. |
 | `costIntelligence.server.readTimeout` / `writeTimeout` / `idleTimeout` | `10s` / `10s` / `120s` | HTTP server timeouts. Raise `writeTimeout` if large Trends queries get cut off. |
@@ -160,33 +160,22 @@ Set `postgres.enabled=false` to skip the bundled StatefulSet, PVC, Service and N
 
 The chart has no value for the database host. The backend and exporter always connect to `postgres.<namespace.name>.svc.cluster.local` on `postgres.service.port`, so make that name resolve to your database. An ExternalName Service called `postgres` in the release namespace does it. With `verify-full`, the server certificate has to match that name.
 
-## Environment variables
+## Running without Helm
 
-The backend reads its settings from environment variables. With Helm you set chart values instead, and the chart sets the variables. The last column names the chart value where there is one. `DB_PASSWORD` and `WEBHOOK_SECRET` are required, and the chart fills in both. [`.env.example`](../.env.example) is a template for running the backend without Helm.
+The chart sets these variables from its values, so you only need them when you run the image without the chart. [`.env.example`](../.env.example) is a template with every variable and its default.
 
 | Variable | Default | Description |
 |---|---|---|
-| `SERVER_PORT` | `8080` | HTTP server port. |
 | `MODE` | `api` | `api` serves the REST API. `exporter` exports every Argo CD Application's cost to Prometheus (see [metrics.md](metrics.md)). |
-| `METRICS_PORT` | `9102` | The port that serves Prometheus `/metrics`, apart from the API port. `0` turns metrics off (API mode only). Helm: `metrics.port`, `metrics.enabled`. |
-| `EXPORTER_INTERVAL` | `5m` | How often the exporter measures every Application, at least `1m`. Helm: `metrics.exporter.interval`. |
-| `DB_HOST` | `localhost` | PostgreSQL host. |
-| `DB_PORT` | `5432` | PostgreSQL port. |
-| `DB_USER` | `cost_user` | Database user. |
+| `METRICS_PORT` | `9102` | The port that serves Prometheus `/metrics`, apart from the API port. `0` turns metrics off (API mode only). |
+| `DB_HOST` | `localhost` | PostgreSQL host. The chart has no value for it. |
 | `DB_PASSWORD` | required | Database password. |
-| `DB_NAME` | `cost_intelligence` | Database name. |
-| `DB_SSL_MODE` | `disable` | PostgreSQL SSL mode (`disable`, `require` or `verify-full`). |
-| `DB_MAX_OPEN_CONNS` | `25` | Maximum open connections per replica. Helm: `costIntelligence.database.maxOpenConns`. |
-| `DB_MAX_IDLE_CONNS` | `5` | Maximum idle connections per replica. Helm: `costIntelligence.database.maxIdleConns`. |
-| `SERVER_READ_TIMEOUT` / `SERVER_WRITE_TIMEOUT` / `SERVER_IDLE_TIMEOUT` | `10s` / `10s` / `120s` | HTTP server timeouts. Helm: `costIntelligence.server.*`. |
 | `OPENCOST_BASE_URL` | `http://opencost:9003` | OpenCost API endpoint. |
-| `OPENCOST_TIMEOUT` | `10s` | How long to wait for OpenCost. |
-| `CLUSTER_SCOPE_APP` | empty | The Argo CD Application (`<namespace>:<name>`) whose viewers may see cluster-wide cost data. Empty finds one: the Application that installed the service's Deployment (from its `argocd.argoproj.io/tracking-id` annotation; needs `get` on that Deployment), or else `CLUSTER_ACCESS_APP`. Looked up again every minute. Outside a cluster, empty means off. `off` turns cluster-wide data off. Helm: `costIntelligence.clusterScopeApp`. |
-| `CLUSTER_ACCESS_APP` | empty | The Application (`<namespace>:<name>`) to fall back on when no Application installed the service. It counts only while it carries the label `cost-intelligence.octopus.com/cluster-access: "true"`. The chart sets it to its access Application, and only when it creates that Application. A sync notification for it measures nothing. |
-| `POD_NAMESPACE` / `DEPLOYMENT_NAME` | empty | The service's own Deployment, whose tracking annotation names the Application that installed it. The chart and the raw manifests set both. |
-| `ARGOCD_NAMESPACE` | `argocd` | Where Argo CD runs. A tracking annotation that names an Application without a namespace means one here. Helm: `argoCd.namespace`. |
-| `DAILY_HISTORY_DAYS` | `400` | Days of each application's daily cost to keep in PostgreSQL, so the Trends tab can show 6 months or a year when OpenCost's Prometheus keeps less. `0` turns recording off. Helm: `costIntelligence.dailyHistoryDays`. |
-| `BACKFILL_CONCURRENCY` | `4` | When the service starts it measures each Argo CD Application that deploys to this cluster and has no cost record yet, so a fresh install shows costs without waiting for every application to sync. This is how many namespaces it measures at once. The service has to run in the cluster with permission to list `applications`; outside it the backfill is skipped. `0` turns it off. Helm: `costIntelligence.backfillConcurrency`. |
-| `PRUNE_REMOTE_COST` | `false` | When the service starts and on each daily history run, delete the cost records and daily history stored for Argo CD Applications that deploy to another cluster, leaving their cloud estimates. An Application counts as deploying here only when its destination is `https://kubernetes.default.svc` or `in-cluster`. Needs the service in the cluster with permission to list `applications`. It can't be undone. Helm: `costIntelligence.pruneRemoteCost`. |
-| `VPA_ENABLED` | `true` | Read Vertical Pod Autoscaler recommendations (from Goldilocks or any VPA) for rightsizing advice. The service has to run in the cluster with permission to list `verticalpodautoscalers`. Without that, rightsizing stays hidden. Helm: `costIntelligence.vpa.enabled`. |
-| `WEBHOOK_SECRET` | required | The bearer token Argo CD Notifications sends to `/on-sync`, at least 16 characters. The chart generates it (or reads `webhook.existingSecret`) and copies it into `argocd-notifications-secret`. |
+| `WEBHOOK_SECRET` | required | The bearer token Argo CD Notifications sends to `/on-sync`, at least 16 characters. |
+| `CLUSTER_SCOPE_APP` | empty | The Argo CD Application (`<namespace>:<name>`) whose viewers may see cluster-wide cost data. Empty finds one and `off` turns it off; see [Choose your settings](installation.md#choose-your-settings). |
+| `CLUSTER_ACCESS_APP` | empty | The fallback Application (`<namespace>:<name>`) when none installed the service; see [Authorization](architecture.md#authorization). |
+| `POD_NAMESPACE` / `DEPLOYMENT_NAME` | empty | The service's own Deployment, whose tracking annotation names the Application that installed it. |
+| `ARGOCD_NAMESPACE` | `argocd` | Where Argo CD runs. A tracking annotation that names an Application without a namespace means one here. |
+| `BACKFILL_CONCURRENCY` | `4` | How many namespaces to measure at once when the service starts; `0` turns it off. See [Measuring at install](architecture.md#measuring-at-install-pkgbackfill). |
+| `PRUNE_REMOTE_COST` | `false` | Delete stored cost for Applications that deploy to another cluster, which can't be undone; see [Known limitations](architecture.md#known-limitations). |
+| `VPA_ENABLED` | `true` | Read Vertical Pod Autoscaler recommendations for rightsizing; see [Optional: rightsizing](installation.md#optional-rightsizing). |

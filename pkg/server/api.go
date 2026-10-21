@@ -18,6 +18,7 @@ import (
 	"github.com/go-chi/render"
 
 	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/cloudcost"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/exporter"
 	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/history"
 	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/hook"
 	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
@@ -76,6 +77,10 @@ type CostAPIServer struct {
 	// vpaLister reads VerticalPodAutoscalers for rightsizing. Nil turns rightsizing off.
 	vpaLister rightsizing.Lister
 
+	// applications lists the Argo CD Applications, to leave those on other clusters out of the waste
+	// ranking. Nil ranks every stored application.
+	applications exporter.ApplicationLister
+
 	// metrics records the API's own metrics. Nil records nothing.
 	metrics *telemetry.Metrics
 }
@@ -103,6 +108,12 @@ func WithMetrics(m *telemetry.Metrics) Option {
 // WithVPALister reads VerticalPodAutoscaler recommendations for /rightsizing through lister.
 func WithVPALister(lister rightsizing.Lister) Option {
 	return func(s *CostAPIServer) { s.vpaLister = lister }
+}
+
+// WithApplications lists the Argo CD Applications through lister, so the waste ranking leaves out
+// those deploying to another cluster or deleted from Argo CD.
+func WithApplications(lister exporter.ApplicationLister) Option {
+	return func(s *CostAPIServer) { s.applications = lister }
 }
 
 func NewCostAPIServer(
@@ -161,6 +172,7 @@ func (s *CostAPIServer) setupRoutes() {
 			r.Get("/chargeback", s.handleGetChargeback)
 			r.Get("/chargeback/labels", s.handleGetChargebackLabels)
 			r.Get("/cluster/overhead", s.handleGetClusterOverhead)
+			r.Get("/waste", s.handleGetWaste)
 		})
 
 		r.Route("/{appName}", func(r chi.Router) {

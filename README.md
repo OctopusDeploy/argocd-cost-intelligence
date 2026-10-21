@@ -107,7 +107,7 @@ An exporter publishes what each Application costs per hour. It labels the metric
 The API is called through Argo CD's extension proxy (`/extensions/cost-intel/...`), which forwards a request only when the caller may `get` the Application named in its `Argocd-Application-Name` (`<namespace>:<name>`) and `Argocd-Project-Name` headers. The backend then decides what that Application lets the caller see:
 
 - **Application endpoints** (`/{appName}/...`) answer only when `{appName}` is the application in the header, and return that application's data: the header's namespace tells apart same-named Applications in different namespaces (apps-in-any-namespace).
-- **Cluster-wide endpoints** (`/namespaces`, `/namespace/{ns}/...`, `/chargeback`, `/chargeback/labels`, `/cluster/overhead`) answer only requests naming the application in `CLUSTER_SCOPE_APP`, and are off when it is unset. Grant `applications, get` on that application to the users who should see every namespace.
+- **Cluster-wide endpoints** (`/namespaces`, `/namespace/{ns}/...`, `/chargeback`, `/chargeback/labels`, `/cluster/overhead`, `/waste`) answer only requests naming the application in `CLUSTER_SCOPE_APP`, and are off when it is unset. Grant `applications, get` on that application to the users who should see every namespace.
 - `/config` and `/data-quality` reveal nothing about a particular application and answer any proxied request.
 
 Anything else without the header gets `403`. `/health`, `/ready` (Kubernetes probes) and `/on-sync` (Argo CD Notifications) are not proxied and need no header. `/on-sync` instead requires `Authorization: Bearer <WEBHOOK_SECRET>` and answers `401` without it; the chart generates the secret and gives it to Argo CD Notifications. `/on-sync` also rejects a notification without `applicationNamespace` (`{{.app.metadata.namespace}}`) with `400`, because its costs could never be read back. The headers can only be trusted if nothing but `argocd-server` can reach the service, and the chart's NetworkPolicy takes care of that.
@@ -130,6 +130,7 @@ Anything else without the header gets `403`. `/health`, `/ready` (Kubernetes pro
 | GET | `/api/cost-analysis/chargeback?label=<key>` | Cost grouped by a Kubernetes label key |
 | GET | `/api/cost-analysis/chargeback/labels?namespace=<ns>` | Label keys pods carry, for the Chargeback picker (OpenCost 1.120.3+) |
 | GET | `/api/cost-analysis/cluster/overhead` | Control-plane fee (EKS/GKE/AKS) from OpenCost |
+| GET | `/api/cost-analysis/waste` | Applications on this cluster ranked by the idle cost of their own pods |
 | GET | `/api/cost-analysis/data-quality` | OpenCost pricing source: `real` / `estimated` / `unknown` |
 | GET | `/api/cost-analysis/config` | Which application gates cluster-wide data (`clusterScopeApp`, or `null`) |
 

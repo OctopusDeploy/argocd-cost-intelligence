@@ -111,7 +111,7 @@ Linting is golangci-lint v2 (`.golangci.yaml`) with `gofumpt` and `goimports`.
 
 ## UI plugin
 
-`ui/src/index.tsx` registers an application tab (`CostPanel`: Actual costs / Resources / Trends) and a system page at `/cost-intelligence` (`NamespaceDashboard`: Namespaces / Chargeback).
+`ui/src/index.tsx` registers an application tab (`CostPanel`: Actual costs / Resources / Trends) and a system page at `/cost-intelligence` (`NamespaceDashboard`: Namespaces / Idle spend / Chargeback).
 
 **React is not bundled.** Webpack maps it to the `window.React` that Argo CD sets: React 16.14 on Argo CD 3.4, React 19 on 3.5. Use only APIs React 16.14 has (no `useSyncExternalStore`, `useId`, `useTransition`, `react-dom/client`); ESLint rejects them. Keep `"jsx": "react"` in tsconfig.
 
@@ -143,7 +143,7 @@ The plugin fills the width Argo CD gives it and adapts to **its own width, not t
 ### Interaction
 
 - No submit buttons for filters: text queries after a 400ms debounce (Enter queries at once); chips, selects and tabs apply immediately.
-- View state lives in the URL via `src/hooks/useUrlState.ts` (`costTab`, `costNs`, `costLabel`, `costScope`, `costRange`, `costFrom`, `costTo`). `push` for navigation, `replace` for refinements. Never touch Argo CD's own parameters.
+- View state lives in the URL via `src/hooks/useUrlState.ts` (`costTab`, `costNs`, `costLabel`, `costScope`, `costRange`, `costFrom`, `costTo`). `push` for navigation, `replace` for refinements. Idle spend and Chargeback share `costScope`. Never touch Argo CD's own parameters.
 - Pages refresh every 30s in the background without a spinner and keep the last good data if a refresh fails.
 - The theme is read from Argo CD's `view_preferences` localStorage key by one shared poller (`src/hooks/useTheme.ts`). Do not add per-component timers.
 

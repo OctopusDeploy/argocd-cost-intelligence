@@ -90,6 +90,7 @@ var clusterScopedRoutes = []string{
 	"/api/cost-analysis/chargeback?label=team",
 	"/api/cost-analysis/chargeback/labels",
 	"/api/cost-analysis/cluster/overhead",
+	"/api/cost-analysis/waste",
 }
 
 func TestClusterScopedRoutes_RequireTheGateApplication(t *testing.T) {

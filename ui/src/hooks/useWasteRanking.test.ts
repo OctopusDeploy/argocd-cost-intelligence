@@ -25,7 +25,7 @@ const settle = () => advance(0);
 
 describe('useWasteRanking', () => {
   it('picks up costs measured while the page is open', async () => {
-    const { result } = renderHook(() => useWasteRanking());
+    const { result } = renderHook(() => useWasteRanking(true));
     await settle();
     expect(result.current.ranking?.idleCost).toBe(10);
 
@@ -37,7 +37,7 @@ describe('useWasteRanking', () => {
   });
 
   it('keeps the ranking on screen when a background refresh fails', async () => {
-    const { result } = renderHook(() => useWasteRanking());
+    const { result } = renderHook(() => useWasteRanking(true));
     await settle();
 
     vi.mocked(fetchWasteRanking).mockRejectedValue(new Error('500: failed to list cost records'));
@@ -49,14 +49,14 @@ describe('useWasteRanking', () => {
 
   it("explains that the applications couldn't be listed", async () => {
     vi.mocked(fetchWasteRanking).mockRejectedValue(new ApplicationListError("Couldn't list the Argo CD applications."));
-    const { result } = renderHook(() => useWasteRanking());
+    const { result } = renderHook(() => useWasteRanking(true));
     await settle();
 
     expect(result.current.error).toBe("Couldn't list the Argo CD applications.");
   });
 
   it('reports any other failure of the load the viewer asked for', async () => {
-    const { result } = renderHook(() => useWasteRanking());
+    const { result } = renderHook(() => useWasteRanking(true));
     await settle();
 
     vi.mocked(fetchWasteRanking).mockRejectedValue(new Error('500: failed to list cost records'));
@@ -66,12 +66,52 @@ describe('useWasteRanking', () => {
   });
 
   it('stops refreshing once the page is closed', async () => {
-    const { unmount } = renderHook(() => useWasteRanking());
+    const { unmount } = renderHook(() => useWasteRanking(true));
     await settle();
     unmount();
 
     await advance(REFRESH_MS * 2);
 
     expect(vi.mocked(fetchWasteRanking)).toHaveBeenCalledTimes(1);
+  });
+
+  it('loads nothing until it is enabled', async () => {
+    const { result, rerender } = renderHook(({ enabled }) => useWasteRanking(enabled), {
+      initialProps: { enabled: false },
+    });
+    await act(() => result.current.reload());
+    await advance(REFRESH_MS * 2);
+
+    expect(vi.mocked(fetchWasteRanking)).not.toHaveBeenCalled();
+    expect(result.current.loading).toBe(false);
+
+    rerender({ enabled: true });
+    await settle();
+
+    expect(result.current.ranking?.idleCost).toBe(10);
+  });
+
+  it('stops refreshing once it is disabled', async () => {
+    const { rerender } = renderHook(({ enabled }) => useWasteRanking(enabled), { initialProps: { enabled: true } });
+    await settle();
+    rerender({ enabled: false });
+
+    await advance(REFRESH_MS * 2);
+
+    expect(vi.mocked(fetchWasteRanking)).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the latest answer when an older one arrives after it', async () => {
+    const { result } = renderHook(() => useWasteRanking(true));
+    await settle();
+
+    let answerOld: (value: WasteRanking) => void = () => undefined;
+    vi.mocked(fetchWasteRanking).mockReturnValueOnce(new Promise(resolve => (answerOld = resolve)));
+    await advance(REFRESH_MS);
+    vi.mocked(fetchWasteRanking).mockResolvedValueOnce(ranking(30));
+    await act(() => result.current.reload());
+    await act(async () => answerOld(ranking(20)));
+
+    expect(result.current.ranking?.idleCost).toBe(30);
   });
 });

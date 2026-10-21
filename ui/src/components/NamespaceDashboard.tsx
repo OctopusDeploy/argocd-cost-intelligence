@@ -6,7 +6,7 @@ import { InfoIcon } from './icons';
 import { MeasuredLabel } from './MeasuredLabel';
 import { NamespaceAppsTable } from './NamespaceAppsTable';
 import { NamespaceList } from './NamespaceList';
-import { IdleSpendView } from './IdleSpendView';
+import { ClusterIdle, IdleSpendView } from './IdleSpendView';
 import { ErrorNotice, Notice } from './Notice';
 import { OrphanedPodsNotice } from './OrphanedPodsNotice';
 import { RecommendationCard } from './RecommendationCard';
@@ -49,7 +49,7 @@ export const NamespaceDashboard: React.FC = () => {
   const [view, setView] = useUrlState<View>('costTab', 'namespaces', VIEW_IDS);
   const [urlNamespace, setUrlNamespace] = useUrlState<string>('costNs', '');
   const namespaceData = useNamespaceData(urlNamespace || null);
-  const waste = useWasteRanking();
+  const waste = useWasteRanking(view === 'idle');
   const { reload: reloadNamespaces } = namespaceData;
   const { reload: reloadWaste } = waste;
   const reload = useCallback(async () => {
@@ -94,7 +94,7 @@ export const NamespaceDashboard: React.FC = () => {
         {view === 'idle' && (
           <IdleSpendView
             waste={waste}
-            clusterIdleCost={measuredIdle(namespaceData.namespaces)?.idle ?? null}
+            clusterIdle={clusterIdle(namespaceData.namespaces)}
             onSelectNamespace={openNamespace}
           />
         )}
@@ -204,6 +204,12 @@ function measuredIdle(namespaces: NamespaceSummary[]): { idle: number; cost: num
     cost: measured.reduce((sum, ns) => sum + ns.totalCost, 0),
     measured: measured.length,
   };
+}
+
+// clusterIdle is what the Idle spend tab says of the cluster's idle spend.
+function clusterIdle(namespaces: NamespaceSummary[]): ClusterIdle | null {
+  const idle = measuredIdle(namespaces);
+  return idle && { idle: idle.idle, measured: idle.measured, namespaces: namespaces.length };
 }
 
 // clusterIdleStat reports the measured idle cost as a share of the cluster, with a way to the apps

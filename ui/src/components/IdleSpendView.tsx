@@ -10,17 +10,24 @@ import { deploymentNamespaces, notRankedDetail, wasteTable } from '../utils/wast
 
 const NAMESPACE_SELECT_ID = 'cost-intel-idle-namespace';
 
+// ClusterIdle is the idle cost of the namespaces measured, and how many of them that is.
+export interface ClusterIdle {
+  idle: number;
+  measured: number;
+  namespaces: number;
+}
+
 interface Props {
   waste: UseWasteRankingResult;
-  // clusterIdleCost is the idle cost of every measured namespace, or null when none is measured.
-  clusterIdleCost: number | null;
+  // clusterIdle is null when no namespace is measured.
+  clusterIdle: ClusterIdle | null;
   onSelectNamespace: (namespace: string) => void;
 }
 
 // IdleSpendView ranks the cluster's applications by the idle cost of their own pods, so the ones
 // worth fixing first are at the top. The figures above the ranking always cover every ranked app;
 // the namespace filter narrows only the ranking.
-export const IdleSpendView: React.FC<Props> = ({ waste, clusterIdleCost, onSelectNamespace }) => {
+export const IdleSpendView: React.FC<Props> = ({ waste, clusterIdle, onSelectNamespace }) => {
   const t = useTokens();
   // The same parameter as Chargeback's namespace, so a namespace chosen on one carries to the other.
   const [namespace, setNamespace] = useUrlState<string>('costScope', '');
@@ -96,8 +103,8 @@ export const IdleSpendView: React.FC<Props> = ({ waste, clusterIdleCost, onSelec
           },
           {
             label: 'Cluster idle spend',
-            value: clusterIdleCost !== null ? formatMoney(clusterIdleCost) : '—',
-            detail: clusterIdleCost !== null ? 'Including pods no app owns' : "Not measured yet. Measured at each namespace's next sync",
+            value: clusterIdle ? formatMoney(clusterIdle.idle) : '—',
+            detail: clusterIdleDetail(clusterIdle),
           },
         ]}
       />
@@ -114,3 +121,11 @@ export const IdleSpendView: React.FC<Props> = ({ waste, clusterIdleCost, onSelec
     </div>
   );
 };
+
+// clusterIdleDetail says what the cluster's idle spend covers. Only while every namespace is measured
+// does it cover every pod the ranked apps own, and more.
+function clusterIdleDetail(idle: ClusterIdle | null): string {
+  if (!idle) return "Not measured yet. Measured at each namespace's next sync";
+  if (idle.measured < idle.namespaces) return `In the ${idle.measured} of ${idle.namespaces} namespaces measured`;
+  return 'Including pods no app owns';
+}

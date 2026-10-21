@@ -14,10 +14,17 @@ type CachedApplicationLister struct {
 	ttl  time.Duration
 	now  func() time.Time
 
-	// mu is held while listing, so requests arriving together share one list.
 	mu      sync.Mutex
 	apps    []Application
 	expires time.Time
+	// listing is the list in progress, which requests arriving together share.
+	listing *listing
+}
+
+type listing struct {
+	done chan struct{}
+	apps []Application
+	err  error
 }
 
 // NewCachedApplicationLister caches what next lists for ttl.
@@ -25,17 +32,38 @@ func NewCachedApplicationLister(next ApplicationLister, ttl time.Duration) *Cach
 	return &CachedApplicationLister{next: next, ttl: ttl, now: time.Now}
 }
 
-// List returns the cached Applications, or lists them when the cached list has expired.
+// List returns the cached Applications, or waits for them to be listed when the cached list has
+// expired. A request that ends while it waits returns at once; the list carries on for the others.
 func (c *CachedApplicationLister) List(ctx context.Context) ([]Application, error) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.apps != nil && c.now().Before(c.expires) {
-		return c.apps, nil
+	if !c.expires.IsZero() && c.now().Before(c.expires) {
+		apps := c.apps
+		c.mu.Unlock()
+		return apps, nil
 	}
-	apps, err := c.next.List(ctx)
-	if err != nil {
-		return nil, err
+	l := c.listing
+	if l == nil {
+		l = &listing{done: make(chan struct{})}
+		c.listing = l
+		go c.list(context.WithoutCancel(ctx), l)
 	}
-	c.apps, c.expires = apps, c.now().Add(c.ttl)
-	return apps, nil
+	c.mu.Unlock()
+
+	select {
+	case <-l.done:
+		return l.apps, l.err
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func (c *CachedApplicationLister) list(ctx context.Context, l *listing) {
+	l.apps, l.err = c.next.List(ctx)
+	c.mu.Lock()
+	if l.err == nil {
+		c.apps, c.expires = l.apps, c.now().Add(c.ttl)
+	}
+	c.listing = nil
+	c.mu.Unlock()
+	close(l.done)
 }

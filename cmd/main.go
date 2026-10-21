@@ -122,7 +122,7 @@ func runAPI(cfg *config.Config, logger *log.Logger) {
 	var applications exporter.ApplicationLister
 	if kubeClient != nil {
 		applications = exporter.NewKubeApplicationLister(kubeClient)
-		// The waste ranking is read by every viewer of the system page, which refreshes it often.
+		// The waste ranking is read by every viewer of the Idle spend tab, which refreshes it often.
 		serverOpts = append(serverOpts, server.WithApplications(exporter.NewCachedApplicationLister(applications, time.Minute)))
 	}
 

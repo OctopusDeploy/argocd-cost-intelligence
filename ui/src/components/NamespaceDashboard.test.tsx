@@ -300,12 +300,14 @@ describe('NamespaceDashboard', () => {
   it('ranks apps by idle spend on their own tab, reached from the idle spend figure', () => {
     render(<NamespaceDashboard />);
     expect(screen.queryByText('Apps by idle spend')).toBeNull();
+    expect(vi.mocked(useWasteRanking)).toHaveBeenLastCalledWith(false);
 
     fireEvent.click(screen.getByRole('button', { name: 'See which apps' }));
 
     expect(new URLSearchParams(window.location.search).get('costTab')).toBe('idle');
     expect(screen.getByRole('tab', { name: 'Idle spend' }).getAttribute('aria-selected')).toBe('true');
     expect(screen.getByText('Apps by idle spend')).toBeTruthy();
+    expect(vi.mocked(useWasteRanking)).toHaveBeenLastCalledWith(true);
   });
 
   it('opens the namespace an app in the idle ranking deploys to, one step back from the ranking', () => {

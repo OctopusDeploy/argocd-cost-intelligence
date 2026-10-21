@@ -1,7 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { IdleSpendView } from './IdleSpendView';
+import { ClusterIdle, IdleSpendView } from './IdleSpendView';
 import { UseWasteRankingResult } from '../hooks/useWasteRanking';
 import { AppWaste, EfficiencyMetrics, WasteRanking } from '../utils/api';
 
@@ -43,8 +43,10 @@ const waste = (ranking: Partial<WasteRanking> | null, overrides: Partial<UseWast
   ...overrides,
 });
 
-const view = (result: UseWasteRankingResult, clusterIdleCost: number | null = 412.5) =>
-  render(<IdleSpendView waste={result} clusterIdleCost={clusterIdleCost} onSelectNamespace={vi.fn()} />);
+const allMeasured: ClusterIdle = { idle: 412.5, measured: 2, namespaces: 2 };
+
+const view = (result: UseWasteRankingResult, clusterIdle: ClusterIdle | null = allMeasured) =>
+  render(<IdleSpendView waste={result} clusterIdle={clusterIdle} onSelectNamespace={vi.fn()} />);
 
 // stats reads the strip as label → value and detail.
 const stats = () =>
@@ -82,6 +84,12 @@ describe('IdleSpendView', () => {
     expect(stats()['Lower CPU requests']).toEqual(['—', 'No app has one to suggest']);
     expect(stats()['Not ranked']).toEqual(['0', 'Every app measured is ranked']);
     expect(stats()['Cluster idle spend']).toEqual(['—', "Not measured yet. Measured at each namespace's next sync"]);
+  });
+
+  it('says when the cluster idle spend covers only some namespaces', () => {
+    view(waste({ apps }), { idle: 120, measured: 1, namespaces: 3 });
+
+    expect(stats()['Cluster idle spend']).toEqual(['$120.00', 'In the 1 of 3 namespaces measured']);
   });
 
   it('narrows the ranking, not the figures above it, to one namespace', () => {

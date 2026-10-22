@@ -401,7 +401,13 @@ func MeasureNamespace(ctx context.Context, client *opencost.Client, namespace st
 		logger.Printf("Warning: failed to query OpenCost pod breakdown for %s: %v\n", namespace, pr.err)
 	}
 
-	logger.Printf("Measured costs - CPU: $%.2f, Memory: $%.2f, Storage: $%.2f, GPU: $%.2f, Total: $%.2f\n",
+	measured := &Namespace{name: namespace, measuredAt: time.Now(), metrics: mr.v, efficiency: er.v, pods: pr.v}
+	if !measured.HasData() {
+		logger.Printf("OpenCost has no data for namespace %s yet\n", namespace)
+		return measured, nil
+	}
+	logger.Printf("Measured costs of %s - CPU: $%.2f, Memory: $%.2f, Storage: $%.2f, GPU: $%.2f, Total: $%.2f\n",
+		namespace,
 		mr.v.AllocationTotals.CPUCost,
 		mr.v.AllocationTotals.MemoryCost,
 		mr.v.AllocationTotals.StorageCost,
@@ -415,13 +421,15 @@ func MeasureNamespace(ctx context.Context, client *opencost.Client, namespace st
 			er.v.TotalEfficiency*100,
 		)
 	}
-
-	return &Namespace{name: namespace, measuredAt: time.Now(), metrics: mr.v, efficiency: er.v, pods: pr.v}, nil
+	return measured, nil
 }
 
 // HasData reports whether OpenCost had any data for the namespace. Without it, the namespace's cost is
-// unknown rather than zero.
-func (n *Namespace) HasData() bool { return n.metrics.MeasuredHours > 0 }
+// unknown rather than zero. A namespace OpenCost has seen for only seconds can come back with a period
+// but no cost yet: that is no data either.
+func (n *Namespace) HasData() bool {
+	return n.metrics.MeasuredHours > 0 && n.metrics.AllocationTotals.TotalCost > 0
+}
 
 // Record is app's cost record from the namespace's measurement. owners are the pod-owning resources
 // the application manages; with nil, the application is known only as its whole namespace. A

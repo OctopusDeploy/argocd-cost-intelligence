@@ -12,6 +12,7 @@ ArgoCD Cost Intelligence shows what each Argo CD application actually costs, in 
 
 Requires Argo CD 3.4 or 3.5, OpenCost 1.121.1+ and Helm 3.8+.
 
+<!-- The release workflow fails a release tag that doesn't match the --version below. -->
 ```bash
 helm install argocd-cost-intelligence \
   oci://ghcr.io/octopusdeploy/charts/argocd-cost-intelligence \

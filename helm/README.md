@@ -15,14 +15,14 @@ Argo CD 3.4 or 3.5, OpenCost 1.121.1+ reachable from the release namespace, Helm
 ```bash
 helm install argocd-cost-intelligence \
   oci://ghcr.io/octopusdeploy/charts/argocd-cost-intelligence \
-  --version 0.1.0 \
+  --version <chart-version> \
   --namespace argocd-cost-intel --create-namespace \
   --set namespace.create=false \
   --set postgres.auth.password=<your-secure-password> \
   --wait --timeout 10m
 ```
 
-From a checkout, replace the OCI reference with `./helm`. Ready-made overlays: `values-minimal.yaml` (one replica, small storage) and `values-production.yaml` (autoscaling, resource limits, anti-affinity).
+Replace `<chart-version>` with the newest version on the [Releases page](https://github.com/OctopusDeploy/argocd-cost-intelligence/releases). From a checkout, replace the OCI reference with `./helm`. Ready-made overlays: `values-minimal.yaml` (one replica, small storage) and `values-production.yaml` (autoscaling, resource limits, anti-affinity).
 
 ## Values you will probably set
 

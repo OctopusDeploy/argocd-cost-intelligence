@@ -266,10 +266,11 @@ The **Actual costs** tab then shows a full-stack monthly cost card: Kubernetes c
 
 By default the chart serves metrics on port 9102: each Application's cost per hour (from the exporter) and the health of each API replica. If your Prometheus scrapes by `prometheus.io/*` pod annotations (the `prometheus-community/prometheus` chart does), you don't need to do anything else, as long as it scrapes with `honor_labels: true`. Two settings are worth checking:
 
-- **Who may scrape.** The NetworkPolicy admits only `metrics.allowedFrom`, which defaults to the `monitoring` namespace. If your Prometheus runs somewhere else, set it, or the targets show as down:
+- **Who may scrape.** The NetworkPolicy admits only the namespaces in `metrics.allowedFrom`, which defaults to `monitoring`. If your Prometheus runs somewhere else, set it to that namespace. Otherwise its scrapes time out and all the Cost Intelligence targets show as down. For a Prometheus in `prometheus-system`:
   ```bash
-  --set 'metrics.allowedFrom[0].namespaceSelector.matchLabels.kubernetes\.io/metadata\.name=prometheus'
+  --set 'metrics.allowedFrom[0].namespaceSelector.matchLabels.kubernetes\.io/metadata\.name=prometheus-system'
   ```
+  This replaces the default, so `monitoring` is no longer admitted. To keep it as well, add it as `metrics.allowedFrom[1]`. [metrics.md](metrics.md#security) shows how to admit only the Prometheus pods.
 - **The Prometheus Operator.** Use `metrics.serviceMonitor.enabled`, `metrics.prometheusRule.enabled`, their `labels`, and `metrics.podAnnotations=false`. See [metrics.md](metrics.md#prometheus-operator).
 
 Anyone who can query that Prometheus sees every Application's cost, whatever Argo CD's RBAC says. To export only the service's own health, set `metrics.exporter.enabled=false`. To export nothing, set `metrics.enabled=false`. [metrics.md](metrics.md) lists the metrics, how to join them with `argocd_app_info`, and example queries and alerts.

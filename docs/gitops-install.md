@@ -500,7 +500,7 @@ kubectl exec -n argocd "$POD" -c "$CONTAINER" -- ls /tmp/extensions
 
 The log says `OK`, or `UI extension installed successfully` with the installer, and the listing shows `extension-cost-intel.js`.
 
-Then open any Application in the Argo CD UI. It has a **Cost Intelligence** tab. Cost Intelligence measures each application when it starts, so most tabs show a cost within a few minutes, marked "Measured at install". Sync an application and its tab shows the new cost within about half a minute. If it doesn't, check that the webhook was sent:
+Then open any Application in the Argo CD UI. It has a **Cost Intelligence** tab. Cost Intelligence measures each application when it starts, so most tabs show a cost within a few minutes, marked "Measured at install". Sync an application and its tab shows the new cost within about half a minute. A new application takes a few minutes longer, since OpenCost has no data yet for the namespace its first sync creates; Cost Intelligence measures it again until it does. If an application that already ran doesn't show its cost, check that the webhook was sent:
 
 ```bash
 kubectl logs -n argocd -l app.kubernetes.io/name=argocd-notifications-controller --tail=-1 | grep cost-intel

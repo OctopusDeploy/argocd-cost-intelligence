@@ -7,21 +7,54 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/exporter"
 	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
 	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/opencost"
 	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/storage"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/telemetry"
 	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/validation"
 )
+
+// ErrNoData is returned for a sync whose namespace OpenCost has no data for yet, as for one created by
+// the sync itself. Its cost is unknown rather than zero, so nothing is recorded.
+var ErrNoData = errors.New("OpenCost has no data for the namespace yet")
+
+// RetryDelays are the waits before measuring a sync again while OpenCost has no data for its
+// namespace, the schedule the measurement at install retries on.
+var RetryDelays = []time.Duration{time.Minute, 2 * time.Minute, 4 * time.Minute, 8 * time.Minute}
+
+// maxConcurrentRetries bounds the retries measuring at once. They run outside the limit on syncs, so
+// a burst of new applications never turns away the webhooks that follow.
+const maxConcurrentRetries = 4
 
 type SyncHook struct {
 	opencostCli  *opencost.Client
 	costStorage  storage.CostStorage
 	measureDelay time.Duration
 	logger       *log.Logger
+	retries      *retries
 }
+
+// retries are the pending retries of syncs measured without OpenCost data, at most one per
+// application. They are held in memory only: after a restart the measurement at install covers an
+// application still without a record.
+type retries struct {
+	ctx     context.Context
+	delays  []time.Duration
+	observe func(result string)
+	slots   chan struct{}
+
+	mu sync.Mutex
+	// syncs numbers each application's syncs in the order they arrive, so a sync that finishes after a
+	// newer one started leaves no retry.
+	syncs   map[models.AppRef]uint64
+	pending map[models.AppRef]*pendingRetry
+}
+
+type pendingRetry struct{ cancel context.CancelFunc }
 
 func NewSyncHook(
 	opencostCli *opencost.Client,
@@ -41,6 +74,36 @@ func NewSyncHook(
 	}
 }
 
+// RetryWithoutData measures a sync again after each of delays while OpenCost has no data for its
+// namespace, until ctx is done. A newer sync of the same application replaces its pending retry.
+// observe, if not nil, gets each retry's result; the sync's own measurement is the caller's to count.
+// Call it before the hook handles any sync.
+func (h *SyncHook) RetryWithoutData(ctx context.Context, delays []time.Duration, observe func(result string)) {
+	if observe == nil {
+		observe = func(string) {}
+	}
+	h.retries = &retries{
+		ctx:     ctx,
+		delays:  delays,
+		observe: observe,
+		slots:   make(chan struct{}, maxConcurrentRetries),
+		syncs:   map[models.AppRef]uint64{},
+		pending: map[models.AppRef]*pendingRetry{},
+	}
+}
+
+// MeasurementResult is the result of a sync's measurement, as telemetry counts it.
+func MeasurementResult(err error) string {
+	switch {
+	case err == nil:
+		return telemetry.MeasurementSuccess
+	case errors.Is(err, ErrNoData):
+		return telemetry.MeasurementNoData
+	default:
+		return telemetry.MeasurementError
+	}
+}
+
 func (h *SyncHook) OnApplicationSync(ctx context.Context, notification *models.SyncNotification) error {
 	h.logger.Printf("Processing sync notification for application %s/%s\n", notification.ApplicationNamespace, notification.ApplicationName)
 
@@ -48,7 +111,9 @@ func (h *SyncHook) OnApplicationSync(ctx context.Context, notification *models.S
 		return err
 	}
 
+	app := models.AppRef{Namespace: notification.ApplicationNamespace, Name: notification.ApplicationName}
 	if !DeploysHere(notification) {
+		h.beginSync(app)
 		h.logger.Printf("Not measuring %s/%s: it deploys to another cluster (%s), and OpenCost measures only this one\n",
 			notification.ApplicationNamespace, notification.ApplicationName, cluster(notification))
 		return nil
@@ -64,13 +129,30 @@ func (h *SyncHook) OnApplicationSync(ctx context.Context, notification *models.S
 		return nil
 	}
 
+	// This sync's measurement replaces an earlier one still waiting to retry.
+	seq, replaced := h.beginSync(app)
+
 	// Wait for metrics to propagate
 	h.logger.Printf("Waiting %v for metrics to propagate...\n", h.measureDelay)
 	time.Sleep(h.measureDelay)
 
-	// Measure actual costs from OpenCost
+	err := h.record(ctx, notification)
+	// A sync that failed outright takes over the retry it replaced rather than leave the app unmeasured.
+	if errors.Is(err, ErrNoData) || (err != nil && replaced) {
+		h.scheduleRetry(app, *notification, seq) //nolint:contextcheck // a retry outlives this sync; it ends with the hook's own context
+	}
+	return err
+}
+
+// record measures the namespace of a sync and stores its cost record.
+func (h *SyncHook) record(ctx context.Context, notification *models.SyncNotification) error {
 	actual, err := h.measureActualCosts(ctx, notification)
 	if err != nil {
+		if errors.Is(err, ErrNoData) {
+			h.logger.Printf("Not recording a cost for %s/%s: OpenCost has no data for namespace %s yet\n",
+				notification.ApplicationNamespace, notification.ApplicationName, notification.Namespace)
+			return err
+		}
 		h.logger.Printf("Error measuring costs: %v\n", err)
 		return fmt.Errorf("failed to measure actual costs: %w", err)
 	}
@@ -92,10 +174,116 @@ func (h *SyncHook) OnApplicationSync(ctx context.Context, notification *models.S
 	return nil
 }
 
+// scheduleRetry measures a sync recorded without OpenCost data again later, replacing a retry pending
+// for the same application. seq is the number beginSync gave the sync: once a newer sync of the application
+// has started, it schedules nothing.
+func (h *SyncHook) scheduleRetry(app models.AppRef, notification models.SyncNotification, seq uint64) {
+	r := h.retries
+	if r == nil || len(r.delays) == 0 {
+		return
+	}
+	ctx, cancel := context.WithCancel(r.ctx)
+	p := &pendingRetry{cancel: cancel}
+	r.mu.Lock()
+	if seq < r.syncs[app] {
+		r.mu.Unlock()
+		cancel()
+		return
+	}
+	if old := r.pending[app]; old != nil {
+		old.cancel()
+	}
+	r.pending[app] = p
+	r.mu.Unlock()
+
+	h.logger.Printf("Measuring %s/%s again in %v\n", app.Namespace, app.Name, r.delays[0])
+	go func() {
+		defer r.finish(app, p)
+		defer func() {
+			if rec := recover(); rec != nil {
+				h.logger.Printf("PANIC retrying the measurement of %s/%s: %v\n", app.Namespace, app.Name, rec)
+			}
+		}()
+		h.retry(ctx, app, &notification)
+	}()
+}
+
+// retry measures notification's namespace after each delay until it records a cost or ctx is done.
+// A retry keeps the sync's timestamp: its record is the sync's.
+func (h *SyncHook) retry(ctx context.Context, app models.AppRef, notification *models.SyncNotification) {
+	r := h.retries
+	for i, delay := range r.delays {
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
+		select {
+		case r.slots <- struct{}{}:
+		case <-ctx.Done():
+			return
+		}
+		err := func() error {
+			defer func() { <-r.slots }()
+			return h.record(ctx, notification)
+		}()
+		if err == nil {
+			r.observe(MeasurementResult(err))
+			return
+		}
+		if ctx.Err() != nil {
+			// Replaced by a newer sync, or shutting down: this attempt measured nothing of use.
+			return
+		}
+		r.observe(MeasurementResult(err))
+		if !errors.Is(err, ErrNoData) {
+			h.logger.Printf("Retry %d of %d for %s/%s failed: %v\n", i+1, len(r.delays), app.Namespace, app.Name, err)
+		}
+		if i+1 < len(r.delays) {
+			h.logger.Printf("Measuring %s/%s again in %v\n", app.Namespace, app.Name, r.delays[i+1])
+		}
+	}
+	h.logger.Printf("Not measuring %s/%s again: its next sync, or the measurement at install after a restart, will\n",
+		app.Namespace, app.Name)
+}
+
+// beginSync numbers a new sync of app and stops the retry pending for it, if any, which the sync
+// replaces. It returns the sync's number and whether it replaced a retry.
+func (h *SyncHook) beginSync(app models.AppRef) (seq uint64, replaced bool) {
+	r := h.retries
+	if r == nil {
+		return 0, false
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.syncs[app]++
+	if p := r.pending[app]; p != nil {
+		p.cancel()
+		delete(r.pending, app)
+		replaced = true
+	}
+	return r.syncs[app], replaced
+}
+
+// finish forgets p once its retry has ended, unless a newer retry has replaced it.
+func (r *retries) finish(app models.AppRef, p *pendingRetry) {
+	r.mu.Lock()
+	if r.pending[app] == p {
+		delete(r.pending, app)
+	}
+	r.mu.Unlock()
+	p.cancel()
+}
+
 func (h *SyncHook) measureActualCosts(ctx context.Context, notification *models.SyncNotification) (*models.CostActual, error) {
 	measured, err := MeasureNamespace(ctx, h.opencostCli, notification.Namespace, h.logger)
 	if err != nil {
 		return nil, err
+	}
+	if !measured.HasData() {
+		return nil, ErrNoData
 	}
 	// Without the application's resources (an older notifications template), the application is
 	// known only as its whole namespace.

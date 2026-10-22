@@ -135,9 +135,14 @@ func runAPI(cfg *config.Config, logger *log.Logger) {
 		serverOpts...,
 	)
 
-	// Record each application's daily cost, so long ranges do not depend on Prometheus retention.
 	background, stopBackground := context.WithCancel(context.Background())
 	defer stopBackground()
+
+	// A sync whose namespace OpenCost has no data for yet, as for one the sync created, is measured
+	// again a few times rather than left without a cost until the application syncs again.
+	syncHook.RetryWithoutData(background, hook.RetryDelays, metrics.ObserveRetry)
+
+	// Record each application's daily cost, so long ranges do not depend on Prometheus retention.
 	var recorder *history.Recorder
 	if cfg.DailyHistoryDays > 0 {
 		recorder = history.NewRecorder(costStorage, opencostClient, cfg.DailyHistoryDays, logger)

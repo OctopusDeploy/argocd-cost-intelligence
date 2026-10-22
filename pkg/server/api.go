@@ -311,10 +311,12 @@ func (s *CostAPIServer) handleOnSync(w http.ResponseWriter, r *http.Request) {
 		}()
 		start := time.Now()
 		err := s.syncHook.OnApplicationSync(ctx, &notification)
-		s.metrics.ObserveMeasurement(err, time.Since(start))
-		if err != nil {
+		result := hook.MeasurementResult(err)
+		if result == telemetry.MeasurementError {
+			// No data is expected for a namespace the sync created; the hook has logged it.
 			s.logger.Printf("Error processing sync notification for app=%s: %v\n", notification.ApplicationName, err)
 		}
+		s.metrics.ObserveMeasurement(result, time.Since(start))
 	}()
 
 	render.Status(r, http.StatusAccepted)

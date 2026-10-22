@@ -59,8 +59,8 @@ Each API replica reports its own; Prometheus tells replicas apart by target.
 |---|---|---|---|
 | `argocd_cost_intelligence_http_request_duration_seconds` | histogram | `route`, `method`, `code` | API requests. `route` is the route pattern, such as `/api/cost-analysis/{appName}/actual`, never the actual path; `unmatched` for paths no route serves. |
 | `argocd_cost_intelligence_sync_webhooks_total` | counter | `result` | Sync notifications from Argo CD: `accepted`, `unauthorized` (wrong or missing token), `invalid` (unreadable, or no application namespace), `overloaded` (refused because too many measurements are running), `remote` (the application deploys to another cluster, so nothing is measured) or `ignored` (the chart's access Application, which deploys nothing, so nothing is measured). |
-| `argocd_cost_intelligence_sync_measurements_total` | counter | `result` | Cost measurements after accepted notifications: `success` or `error`. |
-| `argocd_cost_intelligence_sync_measurement_duration_seconds` | histogram | | Duration of a measurement, including the 5 s wait for metrics to settle. |
+| `argocd_cost_intelligence_sync_measurements_total` | counter | `result` | Cost measurements after accepted notifications: `success`, `error`, or `no_data` (OpenCost had no data for the namespace yet, as for one the sync just created, so nothing was recorded). A `no_data` measurement is retried after 1, 2, 4 and 8 minutes, and each retry counts here too. |
+| `argocd_cost_intelligence_sync_measurement_duration_seconds` | histogram | | Duration of a measurement, including the 5 s wait for metrics to settle. Retries are not timed. |
 | `argocd_cost_intelligence_opencost_request_duration_seconds` | histogram | `endpoint`, `code` | Requests to OpenCost, by API path (`/allocation`, `/allocation/summary`, `/assets`, ...) and HTTP status; `code="error"` when no response arrived. |
 | `argocd_cost_intelligence_database_operation_duration_seconds` | histogram | `operation`, `result` | Storage operations against PostgreSQL, such as `SaveActual`. A record that does not exist yet is a `success`. |
 | `argocd_cost_intelligence_history_runs_total` | counter | `result` | Runs of the daily cost history recorder: `success`, or `error` when any Application failed. |
@@ -152,7 +152,7 @@ sum by (app_namespace, app_name) (
 | `ArgoCDCostIntelligenceExporterStale` | The exporter has not refreshed for 15 minutes. |
 | `ArgoCDCostIntelligenceExporterAbsent` | No exporter is scraped, for 15 minutes. |
 | `ArgoCDCostIntelligenceExporterErrors` | A refresh step keeps failing for 30 minutes. |
-| `ArgoCDCostIntelligenceMeasurementsFailing` | More than half of the measurements after a sync fail, for 15 minutes. |
+| `ArgoCDCostIntelligenceMeasurementsFailing` | More than half of the measurements after a sync fail, for 15 minutes. Measurements OpenCost had no data for (`no_data`) are left out. |
 | `ArgoCDCostIntelligenceWebhooksRefused` | Webhooks were refused in the last 30 minutes and none got through (accepted, or for an application on another cluster): the token Argo CD sends no longer matches. |
 | `ArgoCDCostIntelligenceOpenCostErrors` | More than half of the requests to OpenCost fail, for 15 minutes. |
 | `ArgoCDCostIntelligenceHistoryStale` | No replica has recorded daily cost history for 3 hours. |

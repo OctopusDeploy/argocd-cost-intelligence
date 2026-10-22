@@ -33,7 +33,7 @@ From a checkout, replace the OCI reference with `./helm`. Ready-made overlays: `
 | `costIntelligence.clusterScopeApp` | `""` | Argo CD Application (`<namespace>:<name>`) whose viewers see the cluster-wide Namespaces, Idle spend and Chargeback pages; empty uses the Application that installed the chart, or else the access Application; `off` turns them off |
 | `argoCd.namespace` | `argocd` | Where Argo CD runs |
 | `webhook.existingSecret` | `""` | Set when Argo CD or `helm template` renders the chart, so the webhook token stays stable |
-| `networkPolicy.enabled` | `true` | Set `false` on CNIs that do not enforce NetworkPolicy (Flannel, k3d) |
+| `networkPolicy.enabled` | `true` | Set `false` on CNIs that do not enforce NetworkPolicy, such as Flannel on its own (k3s and k3d do enforce it) |
 | `metrics.enabled` | `true` | Prometheus metrics and exporter |
 
 Every value, with defaults, is in [`values.yaml`](https://github.com/OctopusDeploy/argocd-cost-intelligence/blob/main/helm/values.yaml) and the [configuration reference](https://github.com/OctopusDeploy/argocd-cost-intelligence/blob/main/docs/configuration.md#helm-values).

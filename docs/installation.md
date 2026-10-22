@@ -68,7 +68,7 @@ The chart's NetworkPolicies only limit incoming traffic. The backend accepts `ar
 
 [operations.md](operations.md#networkpolicy) explains how the policies work and what to do if your CNI blocks kubelet probes.
 
-> **Warning:** k3d and clusters that use the Flannel CNI don't enforce NetworkPolicy. Install with `--set networkPolicy.enabled=false` there. Otherwise the policies do nothing, and you'd think you were protected when you aren't.
+> **Warning:** Clusters that use Flannel on its own don't enforce NetworkPolicy. Install with `--set networkPolicy.enabled=false` there. Otherwise the policies do nothing, and you'd think you were protected when you aren't. k3s and k3d use Flannel too, but k3s has its own policy controller, so they enforce NetworkPolicy unless k3s was started with `--disable-network-policy`.
 
 ### Images
 

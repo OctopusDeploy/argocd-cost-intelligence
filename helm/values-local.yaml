@@ -1,5 +1,6 @@
 # Local k3d development overrides
-# k3d uses flannel which does not enforce NetworkPolicy — disable to avoid false assurance.
+# The NetworkPolicies are off for local development. k3d enforces them, so set this to true to
+# test them.
 networkPolicy:
   enabled: false
 

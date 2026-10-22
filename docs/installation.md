@@ -167,6 +167,8 @@ Then assign the roles to your groups as you normally do.
 
 If Git also manages Argo CD itself, follow [Install when Git manages Argo CD](gitops-install.md) instead. It covers this section too.
 
+For an example Application, see [Step 2 of that guide](gitops-install.md#step-2-add-the-cost-intelligence-application). It sets `features.autoPatchArgoCd: false`, because in that guide Git holds Argo CD's settings and Step 3 changes them there.
+
 The chart generates the sync webhook's token and reads it back on `helm upgrade`, so it stays the same. Argo CD and `helm template` render without cluster access, so they'd generate a new token on every render. That restarts the backend each time and leaves the Application permanently out of sync. Create the Secret yourself instead:
 
 ```bash
@@ -202,7 +204,7 @@ kubectl port-forward svc/argocd-cost-intelligence 18080:8080 -n argocd-cost-inte
 curl -s http://localhost:18080/health      # {"status":"ok"}
 ```
 
-Then open any Application in Argo CD. It has a **Cost Intelligence** tab, which stays empty until the application's next successful sync. At that point Argo CD Notifications calls the webhook, the backend waits 5 seconds, asks OpenCost and stores the result. Sync an application and the tab fills within the UI's 30-second refresh. A new application takes a few minutes longer: its first sync creates its namespace, which OpenCost has no data for yet, so the backend measures it again after 1, 2, 4 and 8 minutes.
+Then open any Application in Argo CD. It has a **Cost Intelligence** tab. When the backend starts, it measures every application that has no cost yet, so most tabs show a cost within a few minutes, marked "Measured at install". If OpenCost has no data yet for an application's namespace, or doesn't answer, the backend tries again for about a quarter of an hour; after that the tab stays empty until the application's next successful sync. Each sync measures it again: Argo CD Notifications calls the webhook, the backend waits 5 seconds, asks OpenCost and stores the result, and the tab shows it within the UI's 30-second refresh. A new application takes a few minutes longer: its first sync creates its namespace, which OpenCost has no data for yet, so the backend measures it again after 1, 2, 4 and 8 minutes.
 
 ## Optional: rightsizing
 

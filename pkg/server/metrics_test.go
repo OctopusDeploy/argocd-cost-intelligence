@@ -64,6 +64,21 @@ func TestMetrics_CountWebhooksByResultAndTheMeasurementsThatFollow(t *testing.T)
 	assert.InDelta(t, 1, measured["success"]+measured["error"], 0, "one measurement, for the accepted webhook only")
 }
 
+func TestMetrics_CountMeasurementsWithoutOpenCostData(t *testing.T) {
+	t.Parallel()
+
+	reg := prometheus.NewRegistry()
+	srv := newTestAPIServer(t, &mockStorage{}, WithMetrics(telemetry.NewMetrics(reg)))
+
+	// The test OpenCost reports no measured period for "ns": it has no data for it.
+	payload, _ := json.Marshal(models.SyncNotification{ApplicationName: "redis", ApplicationNamespace: "argocd", Namespace: "ns", SyncResult: "Succeeded"})
+	require.Equal(t, http.StatusAccepted, doRequest(t, srv, http.MethodPost, "/api/cost-analysis/on-sync", payload).Code)
+	require.Eventually(t, func() bool {
+		return counterValues(t, reg, "argocd_cost_intelligence_sync_measurements_total", "result")["no_data"] == 1
+	}, 5*time.Second, 10*time.Millisecond)
+	assert.Equal(t, map[string]float64{"success": 0, "error": 0, "no_data": 1}, counterValues(t, reg, "argocd_cost_intelligence_sync_measurements_total", "result"))
+}
+
 func TestMetrics_TimeRequestsByRoute(t *testing.T) {
 	t.Parallel()
 

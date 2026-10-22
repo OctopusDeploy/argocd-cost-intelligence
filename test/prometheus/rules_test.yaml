@@ -95,6 +95,25 @@ tests:
               summary: "75% of ArgoCD Cost Intelligence's measurements after a sync fail"
               description: "Syncs are not being measured. Check OpenCost (opencost_request_duration_seconds by code) and PostgreSQL (database_operation_duration_seconds by result)."
 
+  # Three measurements in four fail, among many that found no OpenCost data yet.
+  - interval: 1m
+    input_series:
+      - series: 'argocd_cost_intelligence_sync_measurements_total{result="error"}'
+        values: '0+3x60'
+      - series: 'argocd_cost_intelligence_sync_measurements_total{result="success"}'
+        values: '0+1x60'
+      - series: 'argocd_cost_intelligence_sync_measurements_total{result="no_data"}'
+        values: '0+12x60'
+    alert_rule_test:
+      - alertname: ArgoCDCostIntelligenceMeasurementsFailing
+        eval_time: 40m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "75% of ArgoCD Cost Intelligence's measurements after a sync fail"
+              description: "Syncs are not being measured. Check OpenCost (opencost_request_duration_seconds by code) and PostgreSQL (database_operation_duration_seconds by result)."
+
   # One measurement in four fails.
   - interval: 1m
     input_series:

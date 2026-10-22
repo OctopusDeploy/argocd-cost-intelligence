@@ -33,6 +33,15 @@ const (
 	WebhookIgnored      = "ignored"
 )
 
+// Measurement results, for ObserveMeasurement.
+const (
+	MeasurementSuccess = "success"
+	MeasurementError   = "error"
+	// MeasurementNoData is a measurement of a namespace OpenCost has no data for yet, which records
+	// nothing.
+	MeasurementNoData = "no_data"
+)
+
 // latencyBuckets suit calls to OpenCost and PostgreSQL: a few milliseconds to the 10s timeout.
 var latencyBuckets = []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10}
 
@@ -57,8 +66,10 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 	for _, result := range []string{WebhookAccepted, WebhookUnauthorized, WebhookInvalid, WebhookOverloaded, WebhookRemote, WebhookIgnored} {
 		m.webhooks.WithLabelValues(result)
 	}
-	for _, result := range []string{"success", "error"} {
+	for _, result := range []string{MeasurementSuccess, MeasurementError, MeasurementNoData} {
 		m.measurements.WithLabelValues(result)
+	}
+	for _, result := range []string{"success", "error"} {
 		m.historyRuns.WithLabelValues(result)
 	}
 	return m
@@ -96,12 +107,12 @@ func newMetrics() *Metrics {
 		measurements: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: Namespace,
 			Name:      "sync_measurements_total",
-			Help:      "Cost measurements made after accepted sync notifications, by result: success or error.",
+			Help:      "Cost measurements made after accepted sync notifications, and again while OpenCost had no data for the namespace, by result: success, error, or no_data when OpenCost had no data for the namespace yet and nothing was recorded.",
 		}, []string{"result"}),
 		measurementDuration: prometheus.NewHistogram(prometheus.HistogramOpts{
 			Namespace: Namespace,
 			Name:      "sync_measurement_duration_seconds",
-			Help:      "Duration of a cost measurement after a sync, including the wait for metrics to settle.",
+			Help:      "Duration of a cost measurement after a sync, including the wait for metrics to settle. Measurements made again while OpenCost had no data are not included.",
 			Buckets:   []float64{5, 6, 7.5, 10, 15, 20, 30, 45, 60},
 		}),
 		opencostRequests: prometheus.NewHistogramVec(prometheus.HistogramOpts{
@@ -144,12 +155,22 @@ func (m *Metrics) ObserveWebhook(result string) {
 }
 
 // ObserveMeasurement records a cost measurement made after a sync, with how long it took.
-func (m *Metrics) ObserveMeasurement(err error, took time.Duration) {
+func (m *Metrics) ObserveMeasurement(result string, took time.Duration) {
 	if m == nil {
 		return
 	}
-	m.measurements.WithLabelValues(result(err)).Inc()
+	m.measurements.WithLabelValues(result).Inc()
 	m.measurementDuration.Observe(took.Seconds())
+}
+
+// ObserveRetry counts a measurement made again, without a new sync, because OpenCost had no data for
+// the namespace the last time. Only its result is counted: its duration has no wait for metrics to
+// settle, which the measurement duration includes.
+func (m *Metrics) ObserveRetry(result string) {
+	if m == nil {
+		return
+	}
+	m.measurements.WithLabelValues(result).Inc()
 }
 
 // ObserveDatabase records a storage operation. Its signature matches storage.Observer.

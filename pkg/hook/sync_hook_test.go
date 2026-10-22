@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -148,10 +150,10 @@ func newOpenCostTestServer(t *testing.T) *httptest.Server {
 					Code: 200,
 					Data: []map[string]opencost.AllocationData{
 						{
-							"test-ns": {
+							"test-ns": measuredDay(opencost.AllocationData{
 								CPUCost: 10.0, RAMCost: 5.0,
 								RawAllocationOnly: &opencost.RawAllocationOnly{CPUCoreUsageMax: 0.8, RAMByteUsageMax: 400 * 1024 * 1024},
-							},
+							}),
 						},
 					},
 				})
@@ -177,6 +179,14 @@ func newOpenCostTestServer(t *testing.T) *httptest.Server {
 			http.NotFound(w, r)
 		}
 	}))
+}
+
+// measuredDay is a namespace's allocation with a whole day of OpenCost data, which projects onto a
+// month by 30.
+func measuredDay(a opencost.AllocationData) opencost.AllocationData {
+	a.End = time.Now()
+	a.Start = a.End.Add(-24 * time.Hour)
+	return a
 }
 
 func newTestHook(t *testing.T, srv *httptest.Server, store storage.CostStorage) *SyncHook {
@@ -444,7 +454,7 @@ func TestOnApplicationSync_WithResources_PodFailure_MeasuresNamespaceOnly(t *tes
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(opencost.AllocationResponse{Code: 200, Data: []map[string]opencost.AllocationData{
-			{"test-ns": {CPUCost: 10.0, RAMCost: 5.0}},
+			{"test-ns": measuredDay(opencost.AllocationData{CPUCost: 10.0, RAMCost: 5.0})},
 		}})
 	}))
 	defer srv.Close()
@@ -462,6 +472,274 @@ func TestOnApplicationSync_WithResources_PodFailure_MeasuresNamespaceOnly(t *tes
 	require.NoError(t, err)
 	require.NotNil(t, saved)
 	assert.Nil(t, saved.App, "without pods the application cannot be told apart from its namespace")
+}
+
+func TestOnApplicationSync_NoData_RecordsNothing(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		data []map[string]opencost.AllocationData
+	}{
+		{name: "no window", data: nil},
+		{name: "namespace missing from the window", data: []map[string]opencost.AllocationData{{}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(opencost.AllocationResponse{Code: 200, Data: tt.data})
+			}))
+			defer srv.Close()
+
+			saved := false
+			store := &mockStorage{saveActualFn: func(context.Context, *models.CostActual) error { saved = true; return nil }}
+
+			err := newTestHook(t, srv, store).OnApplicationSync(context.Background(), &models.SyncNotification{
+				ApplicationName:      "my-app",
+				ApplicationNamespace: "argocd",
+				Namespace:            "test-ns",
+				SyncResult:           "Succeeded",
+			})
+			require.ErrorIs(t, err, ErrNoData)
+			assert.False(t, saved, "a namespace OpenCost has no data for has an unknown cost, not $0")
+		})
+	}
+}
+
+// newOpenCostWithDataAfter is an OpenCost that has no data for test-ns for the first noData queries of
+// its cost, and a day of data after them.
+func newOpenCostWithDataAfter(t *testing.T, noData int32) *httptest.Server {
+	t.Helper()
+	var queries atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/allocation" || r.URL.Query().Get("aggregate") != "namespace" {
+			http.NotFound(w, r) // no efficiency or pods: a record has neither
+			return
+		}
+		window := map[string]opencost.AllocationData{}
+		if queries.Add(1) > noData {
+			window["test-ns"] = measuredDay(opencost.AllocationData{CPUCost: 10.0, RAMCost: 5.0})
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(opencost.AllocationResponse{Code: 200, Data: []map[string]opencost.AllocationData{window}})
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// observedResults collects the results of a hook's retries.
+type observedResults struct {
+	mu      sync.Mutex
+	results []string
+}
+
+func (o *observedResults) observe(result string) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.results = append(o.results, result)
+}
+
+func (o *observedResults) get() []string {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return append([]string(nil), o.results...)
+}
+
+func newRetryingHook(ctx context.Context, t *testing.T, srv *httptest.Server, store storage.CostStorage, delays ...time.Duration) (*SyncHook, *observedResults) {
+	t.Helper()
+	h := newTestHook(t, srv, store)
+	observed := &observedResults{}
+	h.RetryWithoutData(ctx, delays, observed.observe)
+	return h, observed
+}
+
+func pendingRetries(h *SyncHook) int {
+	h.retries.mu.Lock()
+	defer h.retries.mu.Unlock()
+	return len(h.retries.pending)
+}
+
+// savedRecords is a store that hands each saved record to a channel.
+func savedRecords() (*mockStorage, chan *models.CostActual) {
+	saved := make(chan *models.CostActual, 8)
+	return &mockStorage{saveActualFn: func(_ context.Context, actual *models.CostActual) error {
+		saved <- actual
+		return nil
+	}}, saved
+}
+
+func succeededSync() *models.SyncNotification {
+	return &models.SyncNotification{
+		ApplicationName:      myApp.Name,
+		ApplicationNamespace: myApp.Namespace,
+		Namespace:            "test-ns",
+		SyncResult:           "Succeeded",
+		SyncTimestamp:        time.Date(2026, 10, 22, 9, 30, 0, 0, time.UTC),
+	}
+}
+
+func TestOnApplicationSync_NoData_MeasuresAgainUntilOpenCostHasData(t *testing.T) {
+	t.Parallel()
+
+	store, saved := savedRecords()
+	h, observed := newRetryingHook(context.Background(), t, newOpenCostWithDataAfter(t, 2), store,
+		time.Millisecond, time.Millisecond, time.Millisecond)
+
+	require.ErrorIs(t, h.OnApplicationSync(context.Background(), succeededSync()), ErrNoData)
+
+	select {
+	case actual := <-saved:
+		assert.Equal(t, models.AppRef{Namespace: actual.ApplicationNamespace, Name: actual.ApplicationName}, myApp)
+		assert.Equal(t, models.MeasuredOnSync, actual.MeasuredOn, "a retry's record is the sync's")
+		assert.True(t, succeededSync().SyncTimestamp.Equal(actual.SyncTimestamp), "a retry keeps the sync's timestamp")
+		assert.Positive(t, actual.TotalMonthlyCost)
+	case <-time.After(5 * time.Second):
+		t.Fatal("no record after OpenCost had data")
+	}
+	require.Eventually(t, func() bool { return pendingRetries(h) == 0 }, 5*time.Second, time.Millisecond)
+	assert.Equal(t, []string{"no_data", "success"}, observed.get(), "the first retry found no data, the second recorded")
+	assert.Empty(t, saved, "nothing measured after the record")
+}
+
+func TestOnApplicationSync_NoData_GivesUpAfterTheLastRetry(t *testing.T) {
+	t.Parallel()
+
+	store, saved := savedRecords()
+	h, observed := newRetryingHook(context.Background(), t, newOpenCostWithDataAfter(t, 1000), store,
+		time.Millisecond, time.Millisecond)
+
+	require.ErrorIs(t, h.OnApplicationSync(context.Background(), succeededSync()), ErrNoData)
+
+	require.Eventually(t, func() bool { return pendingRetries(h) == 0 }, 5*time.Second, time.Millisecond)
+	assert.Equal(t, []string{"no_data", "no_data"}, observed.get())
+	assert.Empty(t, saved)
+}
+
+func TestOnApplicationSync_NoData_RetryEndsWithTheContext(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	store, saved := savedRecords()
+	h, observed := newRetryingHook(ctx, t, newOpenCostWithDataAfter(t, 1), store, time.Hour)
+
+	require.ErrorIs(t, h.OnApplicationSync(context.Background(), succeededSync()), ErrNoData)
+	require.Equal(t, 1, pendingRetries(h))
+	cancel()
+
+	require.Eventually(t, func() bool { return pendingRetries(h) == 0 }, 5*time.Second, time.Millisecond)
+	assert.Empty(t, observed.get())
+	assert.Empty(t, saved)
+}
+
+func TestOnApplicationSync_LaterSyncReplacesPendingRetry(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		later       func(*models.SyncNotification)
+		failSave    bool
+		wantPending int
+		wantSaved   int
+	}{
+		{name: "a succeeded sync measures instead", later: func(*models.SyncNotification) {}, wantPending: 0, wantSaved: 1},
+		{name: "a succeeded sync that fails to record takes it over", later: func(*models.SyncNotification) {}, failSave: true, wantPending: 1},
+		{name: "a move to another cluster", later: func(n *models.SyncNotification) { n.DestinationServer = "https://prod.example.com" }, wantPending: 0},
+		{name: "a failed sync leaves it", later: func(n *models.SyncNotification) { n.SyncResult = "Failed" }, wantPending: 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			store, saved := savedRecords()
+			h, observed := newRetryingHook(context.Background(), t, newOpenCostWithDataAfter(t, 1), store, time.Hour)
+			require.ErrorIs(t, h.OnApplicationSync(context.Background(), succeededSync()), ErrNoData)
+			require.Equal(t, 1, pendingRetries(h))
+
+			later := succeededSync()
+			later.SyncTimestamp = later.SyncTimestamp.Add(time.Minute)
+			tt.later(later)
+			if tt.failSave {
+				store.saveActualFn = func(context.Context, *models.CostActual) error { return errors.New("database down") }
+				require.Error(t, h.OnApplicationSync(context.Background(), later))
+			} else {
+				require.NoError(t, h.OnApplicationSync(context.Background(), later))
+			}
+
+			assert.Equal(t, tt.wantPending, pendingRetries(h))
+			assert.Len(t, saved, tt.wantSaved)
+			assert.Empty(t, observed.get())
+		})
+	}
+}
+
+func TestOnApplicationSync_EarlierSyncFinishingLaterLeavesNoRetry(t *testing.T) {
+	t.Parallel()
+
+	store, saved := savedRecords()
+	h, observed := newRetryingHook(context.Background(), t, newOpenCostWithDataAfter(t, 0), store, time.Hour)
+
+	// An earlier sync of the app starts, and finds no data only after a later sync has recorded.
+	earlier, _ := h.beginSync(myApp)
+	later := succeededSync()
+	later.SyncTimestamp = later.SyncTimestamp.Add(time.Minute)
+	require.NoError(t, h.OnApplicationSync(context.Background(), later))
+	h.scheduleRetry(myApp, *succeededSync(), earlier)
+
+	assert.Equal(t, 0, pendingRetries(h), "the later sync's record is newer than anything the earlier sync's retry would save")
+	assert.Len(t, saved, 1)
+	assert.Empty(t, observed.get())
+}
+
+func TestOnApplicationSync_FailureWithoutPendingRetry_SchedulesNone(t *testing.T) {
+	t.Parallel()
+
+	store := &mockStorage{saveActualFn: func(context.Context, *models.CostActual) error { return errors.New("database down") }}
+	h, _ := newRetryingHook(context.Background(), t, newOpenCostWithDataAfter(t, 0), store, time.Hour)
+
+	require.Error(t, h.OnApplicationSync(context.Background(), succeededSync()))
+	assert.Equal(t, 0, pendingRetries(h), "only a sync without OpenCost data starts retrying")
+}
+
+func TestRetry_PanicReleasesItsSlot(t *testing.T) {
+	t.Parallel()
+
+	var panicking atomic.Bool
+	panicking.Store(true)
+	saved := make(chan *models.CostActual, 1)
+	store := &mockStorage{saveActualFn: func(_ context.Context, actual *models.CostActual) error {
+		if panicking.Load() {
+			panic("storage bug")
+		}
+		saved <- actual
+		return nil
+	}}
+	h, _ := newRetryingHook(context.Background(), t, newOpenCostWithDataAfter(t, 0), store, time.Millisecond)
+
+	for i := range maxConcurrentRetries {
+		n := succeededSync()
+		n.ApplicationName = fmt.Sprintf("app-%d", i)
+		h.scheduleRetry(models.AppRef{Namespace: n.ApplicationNamespace, Name: n.ApplicationName}, *n, 0)
+	}
+	require.Eventually(t, func() bool { return pendingRetries(h) == 0 }, 5*time.Second, time.Millisecond)
+	panicking.Store(false)
+	h.scheduleRetry(myApp, *succeededSync(), 0)
+
+	select {
+	case <-saved:
+	case <-time.After(5 * time.Second):
+		t.Fatal("a retry after others panicked never got to measure")
+	}
+}
+
+func TestMeasurementResult(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, "success", MeasurementResult(nil))
+	assert.Equal(t, "no_data", MeasurementResult(ErrNoData))
+	assert.Equal(t, "error", MeasurementResult(errors.New("connection refused")))
 }
 
 func TestOnApplicationSync_MissingNamespace_FallsBackToAppNamespace(t *testing.T) {
@@ -526,7 +804,7 @@ func TestOnApplicationSync_PodFailure_IsNonFatal(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(opencost.AllocationResponse{
 				Code: 200,
 				Data: []map[string]opencost.AllocationData{
-					{"test-ns": {CPUCost: 10.0, RAMCost: 5.0}},
+					{"test-ns": measuredDay(opencost.AllocationData{CPUCost: 10.0, RAMCost: 5.0})},
 				},
 			})
 		case "/allocation/summary":
@@ -576,7 +854,7 @@ func TestOnApplicationSync_EfficiencyFailure_IsNonFatal(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(opencost.AllocationResponse{
 				Code: 200,
 				Data: []map[string]opencost.AllocationData{
-					{"test-ns": {CPUCost: 10.0, RAMCost: 5.0}},
+					{"test-ns": measuredDay(opencost.AllocationData{CPUCost: 10.0, RAMCost: 5.0})},
 				},
 			})
 		default:
@@ -742,7 +1020,7 @@ func TestOnApplicationSync_NoPods_IdleCost(t *testing.T) {
 
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
-				data := map[string]opencost.AllocationData{"test-ns": tt.namespace}
+				data := map[string]opencost.AllocationData{"test-ns": measuredDay(tt.namespace)}
 				if r.URL.Query().Get("aggregate") == "pod" {
 					data = map[string]opencost.AllocationData{"__idle__": {CPUCost: 3}}
 				}

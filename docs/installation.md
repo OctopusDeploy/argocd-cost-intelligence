@@ -202,7 +202,7 @@ kubectl port-forward svc/argocd-cost-intelligence 18080:8080 -n argocd-cost-inte
 curl -s http://localhost:18080/health      # {"status":"ok"}
 ```
 
-Then open any Application in Argo CD. It has a **Cost Intelligence** tab, which stays empty until the application's next successful sync. At that point Argo CD Notifications calls the webhook, the backend waits 5 seconds, asks OpenCost and stores the result. Sync an application and the tab fills within the UI's 30-second refresh.
+Then open any Application in Argo CD. It has a **Cost Intelligence** tab, which stays empty until the application's next successful sync. At that point Argo CD Notifications calls the webhook, the backend waits 5 seconds, asks OpenCost and stores the result. Sync an application and the tab fills within the UI's 30-second refresh. A new application takes a few minutes longer: its first sync creates its namespace, which OpenCost has no data for yet, so the backend measures it again after 1, 2, 4 and 8 minutes.
 
 ## Optional: rightsizing
 

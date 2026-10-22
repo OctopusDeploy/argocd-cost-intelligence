@@ -56,11 +56,12 @@ groups:
           summary: "The ArgoCD Cost Intelligence exporter's {{ $labels.stage }} step keeps failing"
           description: "Applications it cannot measure are left out of the cost series. The exporter's log names the namespace or error."
 
-      # Most measurements after a sync fail, so syncs go unrecorded.
+      # Most measurements after a sync fail, so syncs go unrecorded. A measurement OpenCost had no data
+      # for yet is not a failure, and it is left out so a burst of new applications can't hide one.
       - alert: ArgoCDCostIntelligenceMeasurementsFailing
         expr: |
           sum(rate(argocd_cost_intelligence_sync_measurements_total{result="error"}[30m]))
-            / sum(rate(argocd_cost_intelligence_sync_measurements_total[30m])) > 0.5
+            / sum(rate(argocd_cost_intelligence_sync_measurements_total{result=~"success|error"}[30m])) > 0.5
         for: 15m
         labels:
           severity: warning

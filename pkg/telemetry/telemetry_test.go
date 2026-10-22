@@ -32,9 +32,10 @@ argocd_cost_intelligence_sync_webhooks_total{result="invalid"} 0
 argocd_cost_intelligence_sync_webhooks_total{result="overloaded"} 0
 argocd_cost_intelligence_sync_webhooks_total{result="remote"} 0
 argocd_cost_intelligence_sync_webhooks_total{result="unauthorized"} 0
-# HELP argocd_cost_intelligence_sync_measurements_total Cost measurements made after accepted sync notifications, by result: success or error.
+# HELP argocd_cost_intelligence_sync_measurements_total Cost measurements made after accepted sync notifications, and again while OpenCost had no data for the namespace, by result: success, error, or no_data when OpenCost had no data for the namespace yet and nothing was recorded.
 # TYPE argocd_cost_intelligence_sync_measurements_total counter
 argocd_cost_intelligence_sync_measurements_total{result="error"} 0
+argocd_cost_intelligence_sync_measurements_total{result="no_data"} 0
 argocd_cost_intelligence_sync_measurements_total{result="success"} 0
 # HELP argocd_cost_intelligence_history_runs_total Runs of the daily cost history recorder, by result: success, or error when any application failed.
 # TYPE argocd_cost_intelligence_history_runs_total counter
@@ -72,17 +73,22 @@ func TestObserve_CountsByResult(t *testing.T) {
 	m.ObserveWebhook(WebhookAccepted)
 	m.ObserveWebhook(WebhookAccepted)
 	m.ObserveWebhook(WebhookUnauthorized)
-	m.ObserveMeasurement(nil, 6*time.Second)
-	m.ObserveMeasurement(errors.New("opencost down"), 5*time.Second)
-	m.ObserveMeasurement(nil, 7*time.Second)
+	m.ObserveMeasurement(MeasurementSuccess, 6*time.Second)
+	m.ObserveMeasurement(MeasurementError, 5*time.Second)
+	m.ObserveMeasurement(MeasurementSuccess, 7*time.Second)
+	m.ObserveMeasurement(MeasurementNoData, 6*time.Second)
+	m.ObserveRetry(MeasurementNoData)
+	m.ObserveRetry(MeasurementSuccess)
 	m.ObserveDatabase("SaveActual", errors.New("connection refused"), time.Millisecond)
 	m.ObserveHistoryRun(time.Unix(1_791_000_000, 0), nil)
 
 	assert.InDelta(t, 2, testutil.ToFloat64(m.webhooks.WithLabelValues(WebhookAccepted)), 0)
 	assert.InDelta(t, 1, testutil.ToFloat64(m.webhooks.WithLabelValues(WebhookUnauthorized)), 0)
-	assert.InDelta(t, 2, testutil.ToFloat64(m.measurements.WithLabelValues("success")), 0)
+	assert.InDelta(t, 3, testutil.ToFloat64(m.measurements.WithLabelValues("success")), 0)
 	assert.InDelta(t, 1, testutil.ToFloat64(m.measurements.WithLabelValues("error")), 0)
-	assert.Equal(t, map[string]uint64{"": 3}, histogramCounts(t, reg, "argocd_cost_intelligence_sync_measurement_duration_seconds"))
+	assert.InDelta(t, 2, testutil.ToFloat64(m.measurements.WithLabelValues("no_data")), 0)
+	assert.Equal(t, map[string]uint64{"": 4}, histogramCounts(t, reg, "argocd_cost_intelligence_sync_measurement_duration_seconds"),
+		"retries are counted but not timed")
 	assert.Equal(t, 1, testutil.CollectAndCount(m.databaseOperations), "one series: SaveActual, error")
 	assert.InDelta(t, 1_791_000_000, testutil.ToFloat64(m.historyLastRun), 0)
 	assert.InDelta(t, 1, testutil.ToFloat64(m.historyRuns.WithLabelValues("success")), 0)
@@ -156,7 +162,8 @@ func TestNilMetrics_RecordNothing(t *testing.T) {
 
 	var m *Metrics
 	m.ObserveWebhook(WebhookAccepted)
-	m.ObserveMeasurement(nil, time.Second)
+	m.ObserveMeasurement(MeasurementSuccess, time.Second)
+	m.ObserveRetry(MeasurementSuccess)
 	m.ObserveDatabase("SaveActual", nil, time.Second)
 	m.ObserveHistoryRun(time.Now(), nil)
 

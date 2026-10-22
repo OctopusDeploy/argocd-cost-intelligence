@@ -22,10 +22,17 @@ function stubFetch(...routes: Route[]) {
 const headersOf = (fetchMock: ReturnType<typeof stubFetch>, fragment: string) =>
   fetchMock.mock.calls.filter(([url]) => String(url).includes(fragment)).map(([, init]) => init?.headers);
 
+// withFields answers like Argo CD 3.4, which returns an application's spec only when the fields
+// ask for all of it: a nested field such as items.spec.project drops the spec.
+const withFields = (url: string, items: { metadata: object; spec: object }[]) => {
+  const fields = new URL(url, 'http://x').searchParams.get('fields')?.split(',');
+  return { items: items.map(({ metadata, spec }) => (fields && !fields.includes('items.spec') ? { metadata } : { metadata, spec })) };
+};
+
 // The viewer can see the application shop-web, which the borrowed headers name.
 const anyApp: Route = url =>
   url.startsWith('/api/v1/applications?limit=1')
-    ? { body: { items: [{ metadata: { namespace: 'argocd', name: 'shop-web' }, spec: { project: 'shop' } }] } }
+    ? { body: withFields(url, [{ metadata: { namespace: 'argocd', name: 'shop-web' }, spec: { project: 'shop' } }]) }
     : undefined;
 
 const config =
@@ -39,7 +46,7 @@ const gateApp =
   (project: string | null): Route =>
   url =>
     url.startsWith('/api/v1/applications?name=')
-      ? { body: { items: project ? [{ metadata: { name: 'cost-intel' }, spec: { project } }] : [] } }
+      ? { body: withFields(url, project ? [{ metadata: { name: 'cost-intel' }, spec: { project } }] : []) }
       : undefined;
 
 const namespaces: Route = url =>

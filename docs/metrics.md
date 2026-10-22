@@ -206,6 +206,8 @@ metrics:
           app.kubernetes.io/name: prometheus
 ```
 
+The list replaces the default, so it must name every Prometheus that scrapes these pods. One it doesn't name gets no answer on the metrics port: its scrapes usually time out (`context deadline exceeded`), every Cost Intelligence target shows as down, and, if you load the chart's alert rules, `ArgoCDCostIntelligenceExporterAbsent` fires. Kubernetes sets the `kubernetes.io/metadata.name` label on every namespace, so a namespace selector on it needs no labels of your own.
+
 With an empty list, nothing may reach the metrics port. `/metrics` holds no secrets and needs no authentication; it carries no pod names, labels or annotations.
 
 The exporter lists Argo CD Applications with the chart's ServiceAccount, which already may (`argoproj.io` `applications`, `get`/`list`), and reads cloud estimates from PostgreSQL. It runs no migrations and serves no API.

@@ -91,6 +91,11 @@ spec:
         #   baseURL: http://opencost.opencost.svc.cluster.local:9003
         # argoCd:
         #   namespace: argocd
+        # metrics:
+        #   allowedFrom:
+        #     - namespaceSelector:
+        #         matchLabels:
+        #           kubernetes.io/metadata.name: prometheus-system
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd-cost-intel
@@ -98,7 +103,7 @@ spec:
     automated: {}
 ```
 
-Set `openCost.baseURL` if OpenCost isn't at `http://opencost.opencost:9003`, and `argoCd.namespace` if Argo CD isn't in `argocd`. The chart's NetworkPolicy uses that namespace to let `argocd-server` and the notifications controller in. Other settings are in [configuration.md](configuration.md).
+Set `openCost.baseURL` if OpenCost isn't at `http://opencost.opencost:9003`, and `argoCd.namespace` if Argo CD isn't in `argocd`. The chart's NetworkPolicy uses that namespace to let `argocd-server` and the notifications controller in. It lets Prometheus reach the metrics port only from the namespaces in `metrics.allowedFrom`, by default `monitoring`. If your Prometheus runs in another namespace, set `metrics.allowedFrom` to it, or its scrapes time out and every Cost Intelligence target shows as down. Setting it replaces `monitoring`; see [metrics.md](metrics.md#security). Other settings are in [configuration.md](configuration.md).
 
 The chart creates a ClusterRole, so the project must allow cluster-scoped resources. The `default` project does.
 

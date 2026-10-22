@@ -86,7 +86,7 @@ The chart can't keep the PVC on uninstall, and it has no switch to run without o
 | `metrics.enabled` | `true` | Serve `/metrics` from the API replicas (`METRICS_PORT`) and deploy the exporter. `false` turns both off. |
 | `metrics.port` | `9102` | The metrics port. It's separate from the API port, which Prometheus must never reach, and must differ from `costIntelligence.port`. |
 | `metrics.podAnnotations` | `true` | Add `prometheus.io/*` scrape annotations to the API and exporter pods. |
-| `metrics.allowedFrom` | the `monitoring` namespace | NetworkPolicy `from` entries that may reach the metrics port, and only that port. An empty list admits nobody. Anyone who can query that Prometheus sees every Application's cost. |
+| `metrics.allowedFrom` | the `monitoring` namespace | NetworkPolicy `from` entries that may reach the metrics port, and only that port. Setting it replaces the default, so list every namespace a Prometheus scrapes from; any other Prometheus sees the targets as down. An empty list admits nobody. Anyone who can query that Prometheus sees every Application's cost. See [Security](metrics.md#security). |
 | `metrics.exporter.enabled` | `true` | Deploy the exporter: one replica, `Recreate`, the backend image with `MODE=exporter`. |
 | `metrics.exporter.interval` | `5m` | How often every Application is measured (`EXPORTER_INTERVAL`), at least `1m`. It costs one OpenCost query per namespace. |
 | `metrics.exporter.resources` | 20m / 64Mi requested, 200m / 256Mi limit | |

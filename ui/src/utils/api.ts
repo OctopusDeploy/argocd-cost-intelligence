@@ -315,8 +315,9 @@ class CostIntelligenceAPI {
   private async anyAppHeaders(): Promise<HeadersInit> {
     if (this.cachedProxyAppRef === undefined) {
       try {
+        // Argo CD 3.4 returns no spec at all for a nested field such as items.spec.project.
         const resp = await fetch(
-          '/api/v1/applications?limit=1&fields=items.metadata.name,items.metadata.namespace,items.spec.project'
+          '/api/v1/applications?limit=1&fields=items.metadata.name,items.metadata.namespace,items.spec'
         );
         if (resp.ok) {
           const data = await resp.json();
@@ -372,7 +373,8 @@ class CostIntelligenceAPI {
     const params = new URLSearchParams({
       name,
       appNamespace: namespace,
-      fields: 'items.metadata.name,items.spec.project',
+      // Not items.spec.project: Argo CD 3.4 drops the whole spec for a nested field.
+      fields: 'items.metadata.name,items.spec',
     });
     const apps = await fetch(`/api/v1/applications?${params}`);
     const project = apps.ok ? (await apps.json()).items?.[0]?.spec?.project : undefined;

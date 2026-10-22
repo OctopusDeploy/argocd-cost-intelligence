@@ -40,6 +40,8 @@ Every value, with defaults, is in [`values.yaml`](https://github.com/OctopusDepl
 
 ## Documentation
 
+Every guide is on the [docs site](https://argocd-cost-intelligence.readthedocs.io/). The ones for running the chart:
+
 - [Installation](https://github.com/OctopusDeploy/argocd-cost-intelligence/blob/main/docs/installation.md): prerequisites, install, upgrade, uninstall
 - [Configuration](https://github.com/OctopusDeploy/argocd-cost-intelligence/blob/main/docs/configuration.md): every value, secrets, profiles
 - [Operations](https://github.com/OctopusDeploy/argocd-cost-intelligence/blob/main/docs/operations.md): troubleshooting, NetworkPolicy, database backups

@@ -139,11 +139,24 @@ listed, so the port stays closed.
 {{- end }}
 
 {{/*
+costIntelligence.clusterScopeApp as a string. An unquoted off (or no, or false) in a values file is
+a YAML bool, which would otherwise read as empty and turn the pages on instead of off.
+*/}}
+{{- define "argocd-cost-intelligence.clusterScopeApp" -}}
+{{- $scope := .Values.costIntelligence.clusterScopeApp -}}
+{{- if and (kindIs "bool" $scope) (not $scope) -}}
+off
+{{- else -}}
+{{- $scope | default "" | toString -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 "true" when the chart creates the access Application: Helm, not Argo CD, renders the chart (lookup
 answers only when Helm talks to the cluster) and no gate Application is configured.
 */}}
 {{- define "argocd-cost-intelligence.accessApplication.enabled" -}}
-{{- if and .Values.costIntelligence.accessApplication.create (not .Values.costIntelligence.clusterScopeApp) (lookup "apiextensions.k8s.io/v1" "CustomResourceDefinition" "" "applications.argoproj.io") -}}
+{{- if and .Values.costIntelligence.accessApplication.create (not (include "argocd-cost-intelligence.clusterScopeApp" .)) (lookup "apiextensions.k8s.io/v1" "CustomResourceDefinition" "" "applications.argoproj.io") -}}
 true
 {{- end -}}
 {{- end }}

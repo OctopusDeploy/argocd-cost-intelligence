@@ -46,6 +46,12 @@ func (s *instrumented) SaveActual(ctx context.Context, actual *models.CostActual
 	return s.next.SaveActual(ctx, actual)
 }
 
+func (s *instrumented) SaveActualUnlessSuperseded(ctx context.Context, actual *models.CostActual) (_ bool, err error) {
+	done := s.track("SaveActualUnlessSuperseded")
+	defer func() { done(err) }()
+	return s.next.SaveActualUnlessSuperseded(ctx, actual)
+}
+
 func (s *instrumented) SaveFirstActual(ctx context.Context, actual *models.CostActual) (_ bool, err error) {
 	done := s.track("SaveFirstActual")
 	defer func() { done(err) }()

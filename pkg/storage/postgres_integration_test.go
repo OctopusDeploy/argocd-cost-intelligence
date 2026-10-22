@@ -1120,6 +1120,53 @@ func TestSaveFirstActual_NeverReplacesARecord(t *testing.T) {
 	assert.True(t, saved)
 }
 
+func TestSaveActualUnlessSuperseded_StoresNothingOnceALaterSyncHasARecord(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Second)
+	synced := func(id string, at time.Time) *models.CostActual {
+		return &models.CostActual{
+			ID: id, ApplicationName: "my-app", ApplicationNamespace: "argocd", DeploymentNamespace: "shop",
+			SyncTimestamp: at, MeasuredAt: now, TotalMonthlyCost: 50,
+		}
+	}
+	saved, err := testStorage.SaveFirstActual(ctx, installRecord("install-1", now))
+	require.NoError(t, err)
+	require.True(t, saved)
+
+	saved, err = testStorage.SaveActualUnlessSuperseded(ctx, synced("retry-1", now.Add(-time.Hour)))
+	require.NoError(t, err)
+	assert.True(t, saved, "a record measured at install is no sync, though its column holds a later time")
+
+	require.NoError(t, testStorage.SaveActual(ctx, synced("sync-2", now.Add(-time.Minute))))
+	saved, err = testStorage.SaveActualUnlessSuperseded(ctx, synced("retry-2", now.Add(-time.Hour)))
+	require.NoError(t, err)
+	assert.False(t, saved, "a later sync has a record")
+
+	saved, err = testStorage.SaveActualUnlessSuperseded(ctx, synced("retry-3", now.Add(-time.Minute)))
+	require.NoError(t, err)
+	assert.True(t, saved, "the latest sync is not superseded by its own record")
+
+	// The same name in another namespace is another application.
+	other := synced("retry-4", now.Add(-time.Hour))
+	other.ApplicationNamespace = "team-a"
+	saved, err = testStorage.SaveActualUnlessSuperseded(ctx, other)
+	require.NoError(t, err)
+	assert.True(t, saved)
+
+	var ids []string
+	rows, err := testStorage.db.QueryContext(ctx, "SELECT id FROM cost_actuals ORDER BY id")
+	require.NoError(t, err)
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		require.NoError(t, rows.Scan(&id))
+		ids = append(ids, id)
+	}
+	require.NoError(t, rows.Err())
+	assert.Equal(t, []string{"install-1", "retry-1", "retry-3", "retry-4", "sync-2"}, ids)
+}
+
 func TestLock_IsHeldByOneSessionAtATime(t *testing.T) {
 	ctx := context.Background()
 	unlock, err := testStorage.Lock(ctx, "test-lock")

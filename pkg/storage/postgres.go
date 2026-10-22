@@ -189,6 +189,42 @@ func (p *PostgresCostStorage) SaveFirstActual(ctx context.Context, actual *model
 	return stored == 1, nil
 }
 
+// SaveActualUnlessSuperseded stores actual only when no later sync of its application has a record,
+// checked and inserted in one statement. It reports whether it stored it.
+func (p *PostgresCostStorage) SaveActualUnlessSuperseded(ctx context.Context, actual *models.CostActual) (bool, error) {
+	// Parameters in a SELECT list have no column to take their type from, so each is cast.
+	query := `
+	INSERT INTO cost_actuals
+	(id, application_name, application_namespace, deployment_namespace, sync_timestamp, measured_at,
+	 total_monthly_cost, estimate_accuracy, estimate_vs_actual,
+	 resources_json, opencost_output_json, efficiency_json, pods_json, app_json, measured_on,
+	 idle_monthly_cost)
+	SELECT $1::varchar, $2::varchar, $3::varchar, $4::varchar, $5::timestamp, $6::timestamp,
+	       $7::numeric, $8::numeric, $9::numeric,
+	       $10::jsonb, $11::jsonb, $12::jsonb, $13::jsonb, $14::jsonb, $15::varchar,
+	       $16::numeric
+	WHERE NOT EXISTS (
+	    SELECT 1 FROM cost_actuals
+	    WHERE application_namespace = $3 AND application_name = $2
+	      AND measured_on <> 'install' AND sync_timestamp > $5::timestamp
+	)
+	`
+
+	args, err := actualColumns(actual)
+	if err != nil {
+		return false, err
+	}
+	result, err := p.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return false, fmt.Errorf("failed to save actual cost: %w", err)
+	}
+	stored, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("failed to save actual cost: %w", err)
+	}
+	return stored == 1, nil
+}
+
 // actualColumns returns actual's values in the column order of the cost_actuals inserts. A record that
 // does not say what measured it was measured on a sync. A measurement taken at install has no sync
 // timestamp; its measurement time is stored in its place, so the column stays NOT NULL and a replica

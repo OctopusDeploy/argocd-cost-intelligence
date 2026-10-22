@@ -268,8 +268,10 @@ func (s *CostAPIServer) handleOnSync(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// OpenCost measures only this cluster, so an application deploying elsewhere has nothing to
-	// measure here. Answered before the pool, as nothing runs in the background.
+	// measure here, nor does a retry of its earlier sync here. Answered before the pool, as nothing runs
+	// in the background.
 	if !hook.DeploysHere(&notification) {
+		s.syncHook.OnRemoteSync(models.AppRef{Namespace: notification.ApplicationNamespace, Name: notification.ApplicationName})
 		s.logger.Printf("Not measuring sync notification for %s/%s: the application deploys to another cluster (server %q, name %q)\n",
 			notification.ApplicationNamespace, notification.ApplicationName, notification.DestinationServer, notification.DestinationName)
 		s.metrics.ObserveWebhook(telemetry.WebhookRemote)

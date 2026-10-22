@@ -22,6 +22,10 @@ import (
 // the sync itself. Its cost is unknown rather than zero, so nothing is recorded.
 var ErrNoData = errors.New("OpenCost has no data for the namespace yet")
 
+// errSuperseded is returned for a retry's measurement once a later sync of the application has a record,
+// which is newer than anything the retry would store.
+var errSuperseded = errors.New("a later sync of the application has a record")
+
 // RetryDelays are the waits before measuring a sync again while OpenCost has no data for its
 // namespace, the schedule the measurement at install retries on.
 var RetryDelays = []time.Duration{time.Minute, 2 * time.Minute, 4 * time.Minute, 8 * time.Minute}
@@ -52,6 +56,10 @@ type retries struct {
 	// newer one started leaves no retry.
 	syncs   map[models.AppRef]uint64
 	pending map[models.AppRef]*pendingRetry
+	// owed are the applications whose pending retry a sync replaced and no later sync has settled. The
+	// newest sync of such an application retries even when its measurement failed outright, so syncs
+	// that overlap a pending retry and fail don't drop it.
+	owed map[models.AppRef]bool
 }
 
 type pendingRetry struct{ cancel context.CancelFunc }
@@ -89,6 +97,7 @@ func (h *SyncHook) RetryWithoutData(ctx context.Context, delays []time.Duration,
 		slots:   make(chan struct{}, maxConcurrentRetries),
 		syncs:   map[models.AppRef]uint64{},
 		pending: map[models.AppRef]*pendingRetry{},
+		owed:    map[models.AppRef]bool{},
 	}
 }
 
@@ -113,7 +122,7 @@ func (h *SyncHook) OnApplicationSync(ctx context.Context, notification *models.S
 
 	app := models.AppRef{Namespace: notification.ApplicationNamespace, Name: notification.ApplicationName}
 	if !DeploysHere(notification) {
-		h.beginSync(app)
+		h.OnRemoteSync(app)
 		h.logger.Printf("Not measuring %s/%s: it deploys to another cluster (%s), and OpenCost measures only this one\n",
 			notification.ApplicationNamespace, notification.ApplicationName, cluster(notification))
 		return nil
@@ -130,22 +139,37 @@ func (h *SyncHook) OnApplicationSync(ctx context.Context, notification *models.S
 	}
 
 	// This sync's measurement replaces an earlier one still waiting to retry.
-	seq, replaced := h.beginSync(app)
+	seq := h.beginSync(app)
 
 	// Wait for metrics to propagate
 	h.logger.Printf("Waiting %v for metrics to propagate...\n", h.measureDelay)
 	time.Sleep(h.measureDelay)
 
-	err := h.record(ctx, notification)
-	// A sync that failed outright takes over the retry it replaced rather than leave the app unmeasured.
-	if errors.Is(err, ErrNoData) || (err != nil && replaced) {
-		h.scheduleRetry(app, *notification, seq) //nolint:contextcheck // a retry outlives this sync; it ends with the hook's own context
-	}
+	err := h.record(ctx, notification, false)
+	h.endSync(app, *notification, seq, err) //nolint:contextcheck // a retry outlives this sync; it ends with the hook's own context
 	return err
 }
 
-// record measures the namespace of a sync and stores its cost record.
-func (h *SyncHook) record(ctx context.Context, notification *models.SyncNotification) error {
+// OnRemoteSync handles a sync of app to another cluster, which is not measured: it replaces the retry
+// pending for app, as the namespace that retry measures is no longer the application's.
+func (h *SyncHook) OnRemoteSync(app models.AppRef) {
+	r := h.retries
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.syncs[app]++
+	if p := r.pending[app]; p != nil {
+		p.cancel()
+		delete(r.pending, app)
+	}
+	delete(r.owed, app)
+}
+
+// record measures the namespace of a sync and stores its cost record. A retry stores it only while no
+// later sync of the application has a record, which another replica may have stored.
+func (h *SyncHook) record(ctx context.Context, notification *models.SyncNotification, retry bool) error {
 	actual, err := h.measureActualCosts(ctx, notification)
 	if err != nil {
 		if errors.Is(err, ErrNoData) {
@@ -158,7 +182,16 @@ func (h *SyncHook) record(ctx context.Context, notification *models.SyncNotifica
 	}
 
 	// Store the actual cost record
-	if err := h.costStorage.SaveActual(ctx, actual); err != nil {
+	if retry {
+		saved, err := h.costStorage.SaveActualUnlessSuperseded(ctx, actual)
+		if err != nil {
+			h.logger.Printf("Error saving actual costs: %v\n", err)
+			return fmt.Errorf("failed to save actual costs: %w", err)
+		}
+		if !saved {
+			return errSuperseded
+		}
+	} else if err := h.costStorage.SaveActual(ctx, actual); err != nil {
 		h.logger.Printf("Error saving actual costs: %v\n", err)
 		return fmt.Errorf("failed to save actual costs: %w", err)
 	}
@@ -174,27 +207,40 @@ func (h *SyncHook) record(ctx context.Context, notification *models.SyncNotifica
 	return nil
 }
 
-// scheduleRetry measures a sync recorded without OpenCost data again later, replacing a retry pending
-// for the same application. seq is the number beginSync gave the sync: once a newer sync of the application
-// has started, it schedules nothing.
-func (h *SyncHook) scheduleRetry(app models.AppRef, notification models.SyncNotification, seq uint64) {
+// endSync settles the retry of app once the sync beginSync numbered seq has measured, with err its
+// result. A sync without OpenCost data retries, and so does one that failed outright while a retry it
+// replaced is owed, rather than leave the application unmeasured. Only the newest sync of app settles
+// it: an older one leaves it to that sync, which takes over any retry owed.
+func (h *SyncHook) endSync(app models.AppRef, notification models.SyncNotification, seq uint64, err error) {
 	r := h.retries
-	if r == nil || len(r.delays) == 0 {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if seq < r.syncs[app] {
+		return
+	}
+	owed := r.owed[app]
+	delete(r.owed, app)
+	if errors.Is(err, ErrNoData) || (err != nil && owed) {
+		h.startRetry(app, notification)
+	}
+}
+
+// startRetry measures notification's namespace again later, replacing a retry pending for app. r.mu must
+// be held.
+func (h *SyncHook) startRetry(app models.AppRef, notification models.SyncNotification) {
+	r := h.retries
+	if len(r.delays) == 0 {
 		return
 	}
 	ctx, cancel := context.WithCancel(r.ctx)
 	p := &pendingRetry{cancel: cancel}
-	r.mu.Lock()
-	if seq < r.syncs[app] {
-		r.mu.Unlock()
-		cancel()
-		return
-	}
 	if old := r.pending[app]; old != nil {
 		old.cancel()
 	}
 	r.pending[app] = p
-	r.mu.Unlock()
 
 	h.logger.Printf("Measuring %s/%s again in %v\n", app.Namespace, app.Name, r.delays[0])
 	go func() {
@@ -227,7 +273,7 @@ func (h *SyncHook) retry(ctx context.Context, app models.AppRef, notification *m
 		}
 		err := func() error {
 			defer func() { <-r.slots }()
-			return h.record(ctx, notification)
+			return h.record(ctx, notification, true)
 		}()
 		if err == nil {
 			r.observe(MeasurementResult(err))
@@ -235,6 +281,10 @@ func (h *SyncHook) retry(ctx context.Context, app models.AppRef, notification *m
 		}
 		if ctx.Err() != nil {
 			// Replaced by a newer sync, or shutting down: this attempt measured nothing of use.
+			return
+		}
+		if errors.Is(err, errSuperseded) {
+			h.logger.Printf("Not measuring %s/%s again: a later sync of it has a record\n", app.Namespace, app.Name)
 			return
 		}
 		r.observe(MeasurementResult(err))
@@ -250,11 +300,11 @@ func (h *SyncHook) retry(ctx context.Context, app models.AppRef, notification *m
 }
 
 // beginSync numbers a new sync of app and stops the retry pending for it, if any, which the sync
-// replaces. It returns the sync's number and whether it replaced a retry.
-func (h *SyncHook) beginSync(app models.AppRef) (seq uint64, replaced bool) {
+// replaces and then owes. It returns the sync's number.
+func (h *SyncHook) beginSync(app models.AppRef) uint64 {
 	r := h.retries
 	if r == nil {
-		return 0, false
+		return 0
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -262,9 +312,9 @@ func (h *SyncHook) beginSync(app models.AppRef) (seq uint64, replaced bool) {
 	if p := r.pending[app]; p != nil {
 		p.cancel()
 		delete(r.pending, app)
-		replaced = true
+		r.owed[app] = true
 	}
-	return r.syncs[app], replaced
+	return r.syncs[app]
 }
 
 // finish forgets p once its retry has ended, unless a newer retry has replaced it.

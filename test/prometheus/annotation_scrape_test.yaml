@@ -1,0 +1,132 @@
+# Unit tests for helm/files/prometheus-rules.yaml with the exporter scraped through its pod
+# annotations by the prometheus-community/prometheus chart's kubernetes-pods job. That job keeps the
+# exporter's namespace label (honor_labels: true) and adds job, instance, pod, the pod's own labels
+# and, in recent chart versions, node, so the series carry labels the exporter never sets, and a new exporter pod starts new
+# series. Run from the repository root:
+#   docker run --rm -v "$PWD:/w" -w /w --entrypoint promtool prom/prometheus:v3.15.0 test rules test/prometheus/*_test.yaml
+rule_files:
+  - ../../helm/files/prometheus-rules.yaml
+
+evaluation_interval: 1m
+
+tests:
+  # The recording rule leaves the scrape's labels out and keeps the Application's namespace.
+  - interval: 1m
+    input_series:
+      - series: 'argocd_cost_intelligence_application_hourly_cost{namespace="team-a",name="web",resource="cpu",job="kubernetes-pods",instance="10.42.0.20:9102",pod="argocd-cost-intelligence-exporter-7d9f8b6c5-x2k4p",node="k3d-node-0",pod_template_hash="7d9f8b6c5",app_kubernetes_io_name="argocd-cost-intelligence",app_kubernetes_io_instance="argocd-cost-intelligence",component="exporter"}'
+        values: '0.04x10'
+      - series: 'argocd_cost_intelligence_application_hourly_cost{namespace="team-a",name="web",resource="memory",job="kubernetes-pods",instance="10.42.0.20:9102",pod="argocd-cost-intelligence-exporter-7d9f8b6c5-x2k4p",node="k3d-node-0",pod_template_hash="7d9f8b6c5",app_kubernetes_io_name="argocd-cost-intelligence",app_kubernetes_io_instance="argocd-cost-intelligence",component="exporter"}'
+        values: '0.01x10'
+      - series: 'argocd_cost_intelligence_application_hourly_cost{namespace="team-b",name="web",resource="cpu",job="kubernetes-pods",instance="10.42.0.20:9102",pod="argocd-cost-intelligence-exporter-7d9f8b6c5-x2k4p",node="k3d-node-0",pod_template_hash="7d9f8b6c5",app_kubernetes_io_name="argocd-cost-intelligence",app_kubernetes_io_instance="argocd-cost-intelligence",component="exporter"}'
+        values: '0.5x10'
+    promql_expr_test:
+      - expr: namespace_name:argocd_cost_intelligence_application_hourly_cost:sum
+        eval_time: 5m
+        exp_samples:
+          - labels: 'namespace_name:argocd_cost_intelligence_application_hourly_cost:sum{namespace="team-a",name="web"}'
+            value: 0.05
+          - labels: 'namespace_name:argocd_cost_intelligence_application_hourly_cost:sum{namespace="team-b",name="web"}'
+            value: 0.5
+
+  # The exporter pod is replaced at minute 10 (Recreate). Prometheus marks the old pod's series stale
+  # when its target goes, so the new pod's series are not added to them.
+  - interval: 1m
+    input_series:
+      - series: 'argocd_cost_intelligence_application_hourly_cost{namespace="team-a",name="web",resource="cpu",job="kubernetes-pods",instance="10.42.0.20:9102",pod="argocd-cost-intelligence-exporter-7d9f8b6c5-x2k4p",node="k3d-node-0"}'
+        values: '0.04x9 stale'
+      - series: 'argocd_cost_intelligence_application_hourly_cost{namespace="team-a",name="web",resource="cpu",job="kubernetes-pods",instance="10.42.0.31:9102",pod="argocd-cost-intelligence-exporter-7d9f8b6c5-q8r2m",node="k3d-node-1"}'
+        values: '_x10 0.04x10'
+    promql_expr_test:
+      - expr: namespace_name:argocd_cost_intelligence_application_hourly_cost:sum
+        eval_time: 9m
+        exp_samples:
+          - labels: 'namespace_name:argocd_cost_intelligence_application_hourly_cost:sum{namespace="team-a",name="web"}'
+            value: 0.04
+      - expr: namespace_name:argocd_cost_intelligence_application_hourly_cost:sum
+        eval_time: 12m
+        exp_samples:
+          - labels: 'namespace_name:argocd_cost_intelligence_application_hourly_cost:sum{namespace="team-a",name="web"}'
+            value: 0.04
+
+  # The joins in docs/metrics.md: by Argo CD project, Kubernetes plus cloud services, and an
+  # Application's Deployments from kube-state-metrics.
+  - interval: 1m
+    input_series:
+      - series: 'argocd_cost_intelligence_application_hourly_cost{namespace="argocd",name="web",resource="cpu",job="kubernetes-pods",instance="10.42.0.20:9102",pod="argocd-cost-intelligence-exporter-7d9f8b6c5-x2k4p",node="k3d-node-0",component="exporter"}'
+        values: '0.04x10'
+      - series: 'argocd_cost_intelligence_application_hourly_cost{namespace="argocd",name="api",resource="cpu",job="kubernetes-pods",instance="10.42.0.20:9102",pod="argocd-cost-intelligence-exporter-7d9f8b6c5-x2k4p",node="k3d-node-0",component="exporter"}'
+        values: '0.06x10'
+      - series: 'argocd_cost_intelligence_application_estimated_hourly_cost{namespace="argocd",name="web",source="infracost",job="kubernetes-pods",instance="10.42.0.20:9102",pod="argocd-cost-intelligence-exporter-7d9f8b6c5-x2k4p",node="k3d-node-0",component="exporter"}'
+        values: '0.1x10'
+      - series: 'argocd_cost_intelligence_application_workload_info{namespace="argocd",name="web",workload_namespace="shop",workload_kind="Deployment",workload_name="web",job="kubernetes-pods",instance="10.42.0.20:9102",pod="argocd-cost-intelligence-exporter-7d9f8b6c5-x2k4p",node="k3d-node-0",component="exporter"}'
+        values: '1x10'
+      - series: 'argocd_app_info{namespace="argocd",name="web",project="shop",job="argocd-metrics",instance="10.42.0.9:8082"}'
+        values: '1x10'
+      - series: 'argocd_app_info{namespace="argocd",name="api",project="shop",job="argocd-metrics",instance="10.42.0.9:8082"}'
+        values: '1x10'
+      - series: 'kube_deployment_spec_replicas{namespace="shop",deployment="web",job="kubernetes-service-endpoints",instance="10.42.0.7:8080"}'
+        values: '3x10'
+    promql_expr_test:
+      - expr: |
+          sum by (project) (
+            namespace_name:argocd_cost_intelligence_application_hourly_cost:sum
+            * on (namespace, name) group_left (project) argocd_app_info
+          )
+        eval_time: 5m
+        exp_samples:
+          - labels: '{project="shop"}'
+            value: 0.1
+      - expr: |
+          namespace_name:argocd_cost_intelligence_application_hourly_cost:sum
+            + on (namespace, name) group_left
+              sum by (namespace, name) (argocd_cost_intelligence_application_estimated_hourly_cost)
+        eval_time: 5m
+        exp_samples:
+          - labels: '{namespace="argocd",name="web"}'
+            value: 0.14
+      - expr: |
+          sum by (app_namespace, app_name) (
+            kube_deployment_spec_replicas
+            * on (namespace, deployment) group_left (app_namespace, app_name)
+              label_replace(label_replace(label_replace(label_replace(
+                group by (namespace, name, workload_namespace, workload_name) (
+                  argocd_cost_intelligence_application_workload_info{workload_kind="Deployment"}
+                ),
+                "app_namespace", "$1", "namespace", "(.*)"),
+                "app_name", "$1", "name", "(.*)"),
+                "namespace", "$1", "workload_namespace", "(.*)"),
+                "deployment", "$1", "workload_name", "(.*)")
+          )
+        eval_time: 5m
+        exp_samples:
+          - labels: '{app_namespace="argocd",app_name="web"}'
+            value: 3
+
+  # The old exporter pod's series end without a staleness marker (Prometheus missed the pod going),
+  # so for the lookback they are visible beside the new pod's. The workload join still answers once.
+  - interval: 1m
+    input_series:
+      - series: 'argocd_cost_intelligence_application_workload_info{namespace="argocd",name="web",workload_namespace="shop",workload_kind="Deployment",workload_name="web",job="kubernetes-pods",instance="10.42.0.20:9102",pod="argocd-cost-intelligence-exporter-7d9f8b6c5-x2k4p",node="k3d-node-0"}'
+        values: '1x9'
+      - series: 'argocd_cost_intelligence_application_workload_info{namespace="argocd",name="web",workload_namespace="shop",workload_kind="Deployment",workload_name="web",job="kubernetes-pods",instance="10.42.0.31:9102",pod="argocd-cost-intelligence-exporter-7d9f8b6c5-q8r2m",node="k3d-node-1"}'
+        values: '_x10 1x10'
+      - series: 'kube_deployment_spec_replicas{namespace="shop",deployment="web",job="kubernetes-service-endpoints",instance="10.42.0.7:8080"}'
+        values: '3x20'
+    promql_expr_test:
+      - expr: |
+          sum by (app_namespace, app_name) (
+            kube_deployment_spec_replicas
+            * on (namespace, deployment) group_left (app_namespace, app_name)
+              label_replace(label_replace(label_replace(label_replace(
+                group by (namespace, name, workload_namespace, workload_name) (
+                  argocd_cost_intelligence_application_workload_info{workload_kind="Deployment"}
+                ),
+                "app_namespace", "$1", "namespace", "(.*)"),
+                "app_name", "$1", "name", "(.*)"),
+                "namespace", "$1", "workload_namespace", "(.*)"),
+                "deployment", "$1", "workload_name", "(.*)")
+          )
+        eval_time: 12m
+        exp_samples:
+          - labels: '{app_namespace="argocd",app_name="web"}'
+            value: 3

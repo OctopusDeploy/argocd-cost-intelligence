@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -113,7 +114,9 @@ func runAPI(cfg *config.Config, logger *log.Logger) {
 			logger.Printf("VPA rightsizing off: not running in a Kubernetes cluster (%v)\n", err)
 		} else {
 			serverOpts = append(serverOpts, server.WithVPALister(rightsizing.NewCachedLister(lister, time.Minute)))
-			logger.Print("VPA rightsizing on")
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			logVPAAvailability(ctx, lister, logger)
+			cancel()
 		}
 	} else {
 		logger.Print("VPA rightsizing off (VPA_ENABLED=false)")
@@ -308,6 +311,25 @@ func runExporter(cfg *config.Config, logger *log.Logger) {
 	serveUntilSignal(logger, []*http.Server{metricsServer(cfg.MetricsPort, mux)}, stop)
 }
 
+// vpaChecker tells whether the VPA API can be read.
+type vpaChecker interface {
+	Check(ctx context.Context) error
+}
+
+// logVPAAvailability logs whether rightsizing can read VPA recommendations now. The lister keeps
+// asking, so a VPA installed later is picked up without a restart.
+func logVPAAvailability(ctx context.Context, vpa vpaChecker, logger *log.Logger) {
+	err := vpa.Check(ctx)
+	switch {
+	case err == nil:
+		logger.Print("VPA rightsizing on")
+	case errors.Is(err, rightsizing.ErrUnavailable):
+		logger.Printf("VPA rightsizing waiting for the VerticalPodAutoscaler API (%v); the app tab suggests CPU from OpenCost data until it can be read\n", err)
+	default:
+		logger.Printf("VPA rightsizing on, but checking the VerticalPodAutoscaler API failed: %v\n", err)
+	}
+}
+
 // newOpenCostClient creates the OpenCost client, timing its requests when metrics are on.
 func newOpenCostClient(cfg *config.Config, metrics *telemetry.Metrics, logger *log.Logger) *opencost.Client {
 	var opts []opencost.ClientOption
@@ -316,7 +338,16 @@ func newOpenCostClient(cfg *config.Config, metrics *telemetry.Metrics, logger *l
 		base, _ := url.Parse(cfg.OpenCost.BaseURL)
 		opts = append(opts, opencost.WithTransport(metrics.InstrumentRoundTripper(base.Path, http.DefaultTransport)))
 	}
-	return opencost.NewClient(cfg.OpenCost.BaseURL, cfg.OpenCost.Timeout, logger, opts...)
+	return opencost.NewClient(cfg.OpenCost.BaseURL, cfg.OpenCost.Timeout, openCostLogger(cfg, logger), opts...)
+}
+
+// openCostLogger is the logger the OpenCost client writes to: none unless LOG_LEVEL is debug, as it
+// logs every request URL and response body.
+func openCostLogger(cfg *config.Config, logger *log.Logger) *log.Logger {
+	if !cfg.Debug() {
+		return nil
+	}
+	return logger
 }
 
 // metricsServer serves handler on port. Scrapes are small and quick, so the timeouts are short.

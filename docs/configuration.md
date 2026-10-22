@@ -60,6 +60,7 @@ The chart can't keep the PVC on uninstall, and it has no switch to run without o
 | `costIntelligence.backfillConcurrency` | `4` | How many namespaces to measure at once when the service starts and finds Applications without a cost record (`BACKFILL_CONCURRENCY`). Replicas take turns, so OpenCost never sees more than this many queries from the backfill. `0` turns it off, and applications then show costs only after their next sync. |
 | `costIntelligence.pruneRemoteCost` | `false` | Delete the cost records and daily history stored for Applications that deploy to another cluster (`PRUNE_REMOTE_COST`). It can't be undone, and an Application that targets this cluster by its API server URL counts as remote; see [Known limitations](architecture.md#known-limitations). |
 | `costIntelligence.vpa.enabled` | `true` | Read VPA recommendations for rightsizing (`VPA_ENABLED`) and give the ClusterRole read access to `verticalpodautoscalers`. See [installation.md](installation.md#optional-rightsizing). |
+| `costIntelligence.logLevel` | `info` | `debug` also logs each OpenCost request URL and response body, in the API and the exporter (`LOG_LEVEL`). These name every namespace and its cost; turn it on only while troubleshooting. |
 | `costIntelligence.database.maxOpenConns` / `maxIdleConns` | `25` / `5` | Connection pool size per replica. Keep replicas times `maxOpenConns` below PostgreSQL's `max_connections`. |
 | `costIntelligence.server.readTimeout` / `writeTimeout` / `idleTimeout` | `10s` / `10s` / `120s` | HTTP server timeouts. Raise `writeTimeout` if large Trends queries get cut off. |
 | `costIntelligence.image.tag` | chart `appVersion` | Pin a release. |
@@ -181,3 +182,4 @@ The chart sets these variables from its values, so you only need them when you r
 | `BACKFILL_CONCURRENCY` | `4` | How many namespaces to measure at once when the service starts; `0` turns it off. See [Measuring at install](architecture.md#measuring-at-install-pkgbackfill). |
 | `PRUNE_REMOTE_COST` | `false` | Delete stored cost for Applications that deploy to another cluster, which can't be undone; see [Known limitations](architecture.md#known-limitations). |
 | `VPA_ENABLED` | `true` | Read Vertical Pod Autoscaler recommendations for rightsizing; see [Optional: rightsizing](installation.md#optional-rightsizing). |
+| `LOG_LEVEL` | `info` | `info` or `debug`. `debug` also logs each OpenCost request URL and response body, which name every namespace and its cost. |

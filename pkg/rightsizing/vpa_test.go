@@ -31,8 +31,9 @@ func goldilocksVPA(namespace, name, targetKind, target string) *unstructured.Uns
 		},
 		"status": map[string]any{
 			"conditions": []any{
-				map[string]any{"type": "RecommendationProvided", "status": "True"},
+				map[string]any{"type": "RecommendationProvided", "status": "True", "lastTransitionTime": "2026-10-20T09:30:00Z"},
 				map[string]any{"type": "LowConfidence", "status": "True"},
+				map[string]any{"type": "NoPodsMatched", "status": "False", "lastTransitionTime": "2026-10-21T00:00:00Z"},
 			},
 			"recommendation": map[string]any{"containerRecommendations": []any{
 				map[string]any{
@@ -58,6 +59,7 @@ func TestParseVPA_ReadsTargetModeConfidenceAndRecommendations(t *testing.T) {
 	assert.Equal(t, "Off", vpa.UpdateMode)
 	assert.True(t, vpa.Recommends())
 	assert.True(t, vpa.LowConfidence)
+	assert.Equal(t, time.Date(2026, 10, 20, 9, 30, 0, 0, time.UTC), vpa.RecommendingSince.UTC())
 	require.Len(t, vpa.Containers, 1)
 	rec := vpa.Containers[0]
 	assert.Equal(t, "web", rec.Name)
@@ -80,7 +82,21 @@ func TestParseVPA_DefaultsToAutoWithoutAnUpdatePolicy(t *testing.T) {
 	assert.Equal(t, "Auto", vpa.UpdateMode)
 	assert.False(t, vpa.Recommends(), "a VPA in Auto mode sets requests itself")
 	assert.False(t, vpa.LowConfidence)
+	assert.True(t, vpa.RecommendingSince.IsZero())
 	assert.Empty(t, vpa.Containers)
+}
+
+func TestParseVPA_KnowsNoStartWithoutARecommendation(t *testing.T) {
+	t.Parallel()
+
+	obj := goldilocksVPA("shop", "web", "Deployment", "web")
+	require.NoError(t, unstructured.SetNestedSlice(obj.Object, []any{
+		map[string]any{"type": "RecommendationProvided", "status": "False", "lastTransitionTime": "2026-10-20T09:30:00Z"},
+	}, "status", "conditions"))
+
+	vpa, err := parseVPA(obj.Object)
+	require.NoError(t, err)
+	assert.True(t, vpa.RecommendingSince.IsZero(), "the condition is false: the VPA is not recommending")
 }
 
 func newFakeDynamic(objects ...runtime.Object) *dynamicfake.FakeDynamicClient {
@@ -128,6 +144,33 @@ func TestKubeLister_AMissingOrForbiddenVPAAPIIsUnavailable(t *testing.T) {
 
 			_, err := NewKubeLister(client).List(context.Background(), "shop")
 			assert.ErrorIs(t, err, ErrUnavailable)
+		})
+	}
+}
+
+func TestKubeLister_CheckFindsTheVPAAPI(t *testing.T) {
+	t.Parallel()
+
+	require.NoError(t, NewKubeLister(newFakeDynamic()).Check(context.Background()))
+
+	for name, tt := range map[string]struct {
+		apiErr      error
+		unavailable bool
+	}{
+		"no VPA installed":      {apiErr: apierrors.NewNotFound(vpaResource.GroupResource(), ""), unavailable: true},
+		"no permission to list": {apiErr: apierrors.NewForbidden(vpaResource.GroupResource(), "", errors.New("RBAC")), unavailable: true},
+		"API server down":       {apiErr: errors.New("connection refused")},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			client := newFakeDynamic()
+			client.PrependReactor("list", "verticalpodautoscalers", func(k8stesting.Action) (bool, runtime.Object, error) {
+				return true, nil, tt.apiErr
+			})
+
+			err := NewKubeLister(client).Check(context.Background())
+			require.Error(t, err)
+			assert.Equal(t, tt.unavailable, errors.Is(err, ErrUnavailable))
 		})
 	}
 }

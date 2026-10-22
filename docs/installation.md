@@ -167,7 +167,7 @@ Then assign the roles to your groups as you normally do.
 
 If Git also manages Argo CD itself, follow [Install when Git manages Argo CD](gitops-install.md) instead. It covers this section too.
 
-For an example Application, see [Step 2 of that guide](gitops-install.md#step-2-add-the-cost-intelligence-application). It sets `features.autoPatchArgoCd: false`, because in that guide Git holds Argo CD's settings and Step 3 changes them there.
+For an example Application, see [Step 2 of that guide](gitops-install.md#step-2-add-the-cost-intelligence-application). It sets `features.autoPatchArgoCd: false`, because in that guide Git holds Argo CD's settings and Step 3 changes them there. If you apply it with `kubectl`, Kubernetes may print a warning that `resources-finalizer.argocd.argoproj.io` should be "a domain-qualified finalizer name". It is harmless: the Application is created and the finalizer still works. That guide shows the full warning.
 
 The chart generates the sync webhook's token and reads it back on `helm upgrade`, so it stays the same. Argo CD and `helm template` render without cluster access, so they'd generate a new token on every render. That restarts the backend each time and leaves the Application permanently out of sync. Create the Secret yourself instead:
 
@@ -239,7 +239,8 @@ You need three things:
 
 What to expect:
 
-- The VPA needs some usage history. Until it has it, the **Resources** tab shows no recommendation. For about the first day the upper bound is far above the target, so the recommendation is marked low confidence, the upper bound is hidden and there's no memory-limit warning. A container that uses almost nothing gets the VPA's minimum, not a measured figure.
+- The VPA needs some usage history. Until it has a recommendation, the **Resources** tab says so. For its first day the recommendation is shown as **Not enough data yet**, with no requests to set and no saving, because minutes or hours of use miss the daily peak. After that, while the upper bound is still far above the target, the recommendation is marked low confidence, the upper bound is hidden and there's no memory-limit warning. A container that uses almost nothing gets the VPA's minimum, not a measured figure.
+- By default each recommendation leaves 15% headroom over the 90th percentile of use, which the VPA recommender sets with `--recommendation-margin-fraction`.
 - Once there is a recommendation, **Actual costs** names the workloads to change and the monthly saving or cost, when it's at least $1. **Resources** shows each container's requests next to the VPA's range, and the requests to paste into your manifest.
 - Only requests are suggested. Limits are left alone, except for a warning when a memory limit is below the most the VPA expects the container to need.
 - The application must have synced since you installed or upgraded Cost Intelligence, so that its cost record lists the workloads it manages.

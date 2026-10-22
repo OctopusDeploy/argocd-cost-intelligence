@@ -763,7 +763,7 @@ func (s *CostAPIServer) handleGetRightsizing(w http.ResponseWriter, r *http.Requ
 			return
 		}
 	}
-	render.JSON(w, r, rightsizing.Recommend(namespace, resources, vpas, containers))
+	render.JSON(w, r, rightsizing.Recommend(namespace, resources, vpas, containers, time.Now()))
 }
 
 // GET /api/cost-analysis/{appName}/orphaned-pods

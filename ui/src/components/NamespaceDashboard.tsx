@@ -23,7 +23,7 @@ import { UrlWrite, useUrlState } from '../hooks/useUrlState';
 import { useWasteRanking } from '../hooks/useWasteRanking';
 import { Tokens, useTokens } from '../theme/tokens';
 import { ClusterOverhead, CostData, NamespaceSummary } from '../utils/api';
-import { efficiencyLevel, recommendCpuRequest } from '../utils/costInsights';
+import { efficiencyLevel, hasRequests, recommendCpuRequest } from '../utils/costInsights';
 import { formatMoney, formatPercent, pluralize } from '../utils/format';
 import { PAIRED_ROW_MIN, SIDE_LIST_MIN } from '../utils/layout';
 import { ArgoApplication, splitNamespaceByApp } from '../utils/namespaceApps';
@@ -314,7 +314,8 @@ const NamespaceDetail: React.FC<NamespaceDetailProps> = ({
     [namespace.namespace, records, argoApps]
   );
   const efficiency = breakdown.latest?.efficiency;
-  const level = efficiency ? efficiencyLevel(efficiency.totalEfficiency) : null;
+  const requested = efficiency ? hasRequests(efficiency) : false;
+  const level = efficiency && requested ? efficiencyLevel(efficiency.totalEfficiency) : null;
   const recommendation = recommendCpuRequest(efficiency, breakdown.latest?.opencostOutput?.allocationTotals?.cpuCost ?? 0);
   const controllerCount = breakdown.apps.reduce((sum, app) => sum + app.controllers.length, 0);
 
@@ -343,7 +344,7 @@ const NamespaceDetail: React.FC<NamespaceDetailProps> = ({
             ) : (
               '—'
             ),
-          detail: level ? `${LEVEL_LABELS[level]} use of requests` : 'Not measured',
+          detail: level ? `${LEVEL_LABELS[level]} use of requests` : efficiency ? 'No requests set' : 'Not measured',
         },
       ]}
     />

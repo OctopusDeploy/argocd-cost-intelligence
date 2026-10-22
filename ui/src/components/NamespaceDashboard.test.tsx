@@ -180,6 +180,20 @@ describe('NamespaceDashboard', () => {
     });
   });
 
+  it('gives no efficiency verdict when the pods set no requests', () => {
+    const unrequested = (name: string): CostData => {
+      const r = record(name);
+      return {
+        ...r,
+        efficiency: { ...r.efficiency!, cpuEfficiency: 0, ramEfficiency: 0, totalEfficiency: 0, cpuCoresRequested: 0, ramBytesRequested: 0 },
+      };
+    };
+    withNamespaceData({ apps: [unrequested('redis'), unrequested('test-app')] });
+    render(<NamespaceDashboard />);
+
+    expect(stat('Efficiency')).toEqual({ value: '—', detail: 'No requests set' });
+  });
+
   it('shows the selected namespace and lets another be picked', () => {
     render(<NamespaceDashboard />);
     const list = screen.getByRole('navigation', { name: 'Namespaces' });

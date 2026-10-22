@@ -197,6 +197,12 @@ export function efficiencyLevel(ratio: number): EfficiencyLevel {
   return 'over-provisioned';
 }
 
+// hasRequests reports whether the pods request any CPU or memory. Use measured against no request
+// is no efficiency at all, so it gets no level and no percentage.
+export function hasRequests(efficiency: EfficiencyMetrics): boolean {
+  return efficiency.cpuCoresRequested > 0 || efficiency.ramBytesRequested > 0;
+}
+
 export interface CostSlice {
   id: 'cpu' | 'memory' | 'storage' | 'network' | 'cloud' | 'loadBalancer' | 'gpu';
   label: string;

@@ -57,6 +57,13 @@ describe('hasAdvice and hasVpa', () => {
     expect(hasVpa(rightsizing)).toBe(true);
   });
 
+  it('gives no advice from recommendations with too little history', () => {
+    const rightsizing = shopRightsizing();
+    rightsizing.workloads = rightsizing.workloads.map(w => (w.status === 'recommended' ? { ...w, status: 'learning' } : w));
+    expect(hasAdvice(rightsizing)).toBe(false);
+    expect(hasVpa(rightsizing)).toBe(true);
+  });
+
   it('gives no advice for a recommendation none of whose containers ran', () => {
     const rightsizing = shopRightsizing();
     rightsizing.workloads = rightsizing.workloads.map(w => ({ ...w, containers: [] }));

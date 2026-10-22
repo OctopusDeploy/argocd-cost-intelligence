@@ -36,11 +36,12 @@ export const RightsizingCard: React.FC<Props> = ({ rightsizing, onShowResources,
       notes={
         <>
           <AdviceNote icon={<InfoIcon color={t.textMuted} />}>
-            From the Vertical Pod Autoscaler, per container. Requests only; limits are left as they are.
+            From the Vertical Pod Autoscaler, per container. By default it leaves 15% headroom over the 90th
+            percentile of use. Requests only; limits are left as they are.
           </AdviceNote>
           {lowConfidence && (
             <AdviceNote icon={<WarningIcon color={t.warning} />}>
-              Low confidence: the VPA has little usage history yet, so check again in a few days.
+              Low confidence: the VPA&apos;s range is still wide for some containers, so check again in a few days.
             </AdviceNote>
           )}
         </>

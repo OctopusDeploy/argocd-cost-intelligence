@@ -63,6 +63,21 @@ type Config struct {
 
 	// ExporterInterval is how often the exporter measures every Application's cost.
 	ExporterInterval time.Duration `envconfig:"EXPORTER_INTERVAL" default:"5m"`
+
+	// LogLevel is LogLevelInfo or LogLevelDebug. Debug also logs each OpenCost request URL and
+	// response body, which name every namespace and cost in the cluster.
+	LogLevel string `envconfig:"LOG_LEVEL" default:"info"`
+}
+
+// Log levels.
+const (
+	LogLevelInfo  = "info"
+	LogLevelDebug = "debug"
+)
+
+// Debug reports whether LOG_LEVEL asks for debug logging.
+func (c *Config) Debug() bool {
+	return c.LogLevel == LogLevelDebug
 }
 
 // ClusterScopeOff, as CLUSTER_SCOPE_APP, turns cluster-wide endpoints off.
@@ -128,6 +143,11 @@ func (c *Config) Validate() error {
 	}
 	if c.MetricsPort < 0 || c.MetricsPort > 65535 {
 		return fmt.Errorf("METRICS_PORT %d is not a port; 0 turns metrics off", c.MetricsPort)
+	}
+	switch c.LogLevel {
+	case LogLevelInfo, LogLevelDebug, "": // the zero value is info, the default
+	default:
+		return fmt.Errorf("LOG_LEVEL %q is not %q or %q", c.LogLevel, LogLevelInfo, LogLevelDebug)
 	}
 	switch c.Mode {
 	case ModeExporter:

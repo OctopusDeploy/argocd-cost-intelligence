@@ -32,6 +32,9 @@ type Resources struct {
 const (
 	// RightsizingRecommended: a VPA in recommendation-only mode has a recommendation for it.
 	RightsizingRecommended = "recommended"
+	// RightsizingLearning: a VPA in recommendation-only mode has a recommendation for it, but from too
+	// little usage history to act on yet.
+	RightsizingLearning = "learning"
 	// RightsizingManaged: a VPA that sets the requests itself covers it.
 	RightsizingManaged = "managed"
 	// RightsizingPending: a VPA covers it but has no recommendation yet.
@@ -58,7 +61,7 @@ type WorkloadRightsizing struct {
 	Status string `json:"status"`
 	// UpdateMode is the VPA's update mode (Off, Initial, Recreate, Auto, ...), empty without a VPA.
 	UpdateMode string `json:"updateMode,omitempty"`
-	// LowConfidence is set when the VPA says it has too little history for a reliable recommendation.
+	// LowConfidence is set when a recommendation's upper bound is still far above its target.
 	LowConfidence bool                   `json:"lowConfidence"`
 	Pods          int                    `json:"pods"`
 	Containers    []ContainerRightsizing `json:"containers"`

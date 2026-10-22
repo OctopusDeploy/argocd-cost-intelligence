@@ -13,6 +13,7 @@ describe('RightsizingCard', () => {
     expect(within(card).getByRole('heading').textContent).toBe('Right-size web and worker to save about $38/mo');
     expect(card.textContent).toContain('The VPA suggests lower requests for web and worker (−$41.31/mo).');
     expect(card.textContent).toContain('worker uses more than it requests (+$3.69/mo), so its pods can run short.');
+    expect(card.textContent).toContain('By default it leaves 15% headroom over the 90th percentile of use.');
     expect(card.textContent).toContain('Requests only; limits are left as they are.');
     expect(card.textContent).not.toContain('Low confidence');
 
@@ -48,11 +49,11 @@ describe('RightsizingCard', () => {
     expect(screen.getByRole('heading').textContent).toBe('Raise the requests of worker');
   });
 
-  it('says when the VPA has too little history', () => {
+  it("says when the VPA's range is still wide", () => {
     const rightsizing = shopRightsizing();
     rightsizing.workloads[2].lowConfidence = true;
     render(<RightsizingCard rightsizing={rightsizing} />);
 
-    expect(screen.getByText(/^Low confidence: the VPA has little usage history yet/)).toBeTruthy();
+    expect(screen.getByText(/^Low confidence: the VPA's range is still wide for some containers/)).toBeTruthy();
   });
 });

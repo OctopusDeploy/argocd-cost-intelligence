@@ -110,6 +110,15 @@ export function fromFirstCost(days: DailyCost[]): DailyCost[] {
   return first < 0 ? [] : days.slice(first);
 }
 
+// completeDays is the part of a series asked for from `from` whose days were measured in full: the
+// days before today, from the first one with any cost. When that first day comes after `from`,
+// measuring began on it, when the pods started or where OpenCost's Prometheus retention ends, so
+// it covers only part of the day and is left out too.
+export function completeDays(days: DailyCost[], today: string, from: string): DailyCost[] {
+  const measured = fromFirstCost(days.filter(day => day.date < today));
+  return measured.length > 0 && measured[0].date > from ? measured.slice(1) : measured;
+}
+
 export interface PeriodBucket {
   // start and end are the whole week (Monday to Sunday) or calendar month.
   start: string;
@@ -122,7 +131,8 @@ export interface PeriodBucket {
 }
 
 // bucketDays sums a daily series into one bucket per week or month overlapping the range, empty
-// ones included, so the bars keep their places. firstDataDay is where the data starts.
+// ones included, so the bars keep their places. firstDataDay is where the data starts; when that is
+// after range.from, measuring began on it, so it is partial too, as completeDays has it.
 export function bucketDays(
   days: DailyCost[],
   range: DayRange,
@@ -140,7 +150,8 @@ export function bucketDays(
   const buckets: PeriodBucket[] = [];
   for (let start = startOf(range.from); start <= range.to; start = addDays(endOf(start), 1)) {
     const end = endOf(start);
-    const cut = start < range.from || end > range.to || end >= today || (firstDataDay !== null && start < firstDataDay);
+    const beforeData = firstDataDay !== null && firstDataDay > range.from && start <= firstDataDay;
+    const cut = start < range.from || end > range.to || end >= today || beforeData;
     buckets.push({ start, end, cost: 0, measuredDays: 0, complete: !cut });
   }
   for (const day of days) {

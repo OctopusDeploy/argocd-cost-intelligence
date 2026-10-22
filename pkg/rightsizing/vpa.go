@@ -31,9 +31,13 @@ type VPA struct {
 	TargetName string
 	// UpdateMode is "Off" when the VPA only recommends; the VPA's default, when unset, is "Auto".
 	UpdateMode string
-	// LowConfidence is the VPA's own flag for a recommendation based on too little history.
+	// LowConfidence is the VPA's own flag for a recommendation based on too little history. The
+	// upstream recommender never sets it, but the API defines it.
 	LowConfidence bool
-	Containers    []ContainerRecommendation
+	// RecommendingSince is when the VPA's RecommendationProvided condition last turned true: how long
+	// it has had a recommendation. It is zero when the VPA does not say.
+	RecommendingSince time.Time
+	Containers        []ContainerRecommendation
 }
 
 // Recommends reports whether the VPA leaves requests to people, only recommending them.
@@ -79,6 +83,19 @@ func NewInClusterLister() (*KubeLister, error) {
 	return NewKubeLister(client), nil
 }
 
+// Check lists one VPA in any namespace, to tell whether the cluster serves the VPA API and the
+// service may read it. It returns ErrUnavailable when the API is missing or forbidden.
+func (l *KubeLister) Check(ctx context.Context) error {
+	_, err := l.client.Resource(vpaResource).List(ctx, metav1.ListOptions{Limit: 1})
+	if apierrors.IsNotFound(err) || apierrors.IsForbidden(err) {
+		return fmt.Errorf("%w: %w", ErrUnavailable, err)
+	}
+	if err != nil {
+		return fmt.Errorf("listing VerticalPodAutoscalers: %w", err)
+	}
+	return nil
+}
+
 // List returns the VPAs in namespace, or ErrUnavailable when the VPA API is missing or forbidden.
 func (l *KubeLister) List(ctx context.Context, namespace string) ([]VPA, error) {
 	list, err := l.client.Resource(vpaResource).Namespace(namespace).List(ctx, metav1.ListOptions{})
@@ -113,8 +130,9 @@ type vpaObject struct {
 	} `json:"spec"`
 	Status struct {
 		Conditions []struct {
-			Type   string `json:"type"`
-			Status string `json:"status"`
+			Type               string      `json:"type"`
+			Status             string      `json:"status"`
+			LastTransitionTime metav1.Time `json:"lastTransitionTime"`
 		} `json:"conditions"`
 		Recommendation *struct {
 			ContainerRecommendations []struct {
@@ -142,8 +160,14 @@ func parseVPA(object map[string]any) (VPA, error) {
 		vpa.UpdateMode = obj.Spec.UpdatePolicy.UpdateMode
 	}
 	for _, condition := range obj.Status.Conditions {
-		if condition.Type == "LowConfidence" && strings.EqualFold(condition.Status, "True") {
+		if !strings.EqualFold(condition.Status, "True") {
+			continue
+		}
+		switch condition.Type {
+		case "LowConfidence":
 			vpa.LowConfidence = true
+		case "RecommendationProvided":
+			vpa.RecommendingSince = condition.LastTransitionTime.Time
 		}
 	}
 	if obj.Status.Recommendation != nil {

@@ -19,6 +19,7 @@ import {
 
 const STATUS_LABELS: Record<WorkloadRightsizing['status'], string> = {
   recommended: 'VPA recommends',
+  learning: 'Not enough data yet',
   managed: 'Managed by VPA',
   pending: 'VPA has no recommendation yet',
   none: 'No VPA',
@@ -41,8 +42,9 @@ export const RightsizingSection: React.FC<{ rightsizing: Rightsizing | null }> =
           title="Rightsizing"
           detail={
             <>
-              Requests the Vertical Pod Autoscaler recommends, per container. On each bar, the shaded band is the
-              VPA&apos;s range, the tick its target and the line today&apos;s request.
+              Requests the Vertical Pod Autoscaler recommends, per container. By default they leave 15% headroom over
+              the 90th percentile of use. On each bar, the shaded band is the VPA&apos;s range, the tick its target and
+              the line today&apos;s request.
             </>
           }
         />
@@ -82,6 +84,11 @@ const Workload: React.FC<{ workload: WorkloadRightsizing; t: Tokens }> = ({ work
           )}
         </span>
       </div>
+      {workload.status === 'learning' && (
+        <p style={{ margin: '8px 0 0', color: t.textMuted, fontSize: '12px' }}>
+          The VPA has had too little use to go on. Its recommendation shows here once it has a day of history.
+        </p>
+      )}
       {advised && workload.containers.length === 0 && (
         <p style={{ margin: '8px 0 0', color: t.textMuted, fontSize: '12px' }}>
           None of the containers the VPA recommends for ran in the last 24 hours.

@@ -120,6 +120,35 @@ func TestPodEfficiency_PricesTheUnusedShareOfEachRequest(t *testing.T) {
 	assert.InDelta(t, 600.0, got.RAMBytesUsedMax, 1e-9)
 }
 
+func TestPodEfficiency_LeavesAResourceWithoutRequestsOutOfTheTotal(t *testing.T) {
+	t.Parallel()
+
+	// Requests CPU but no memory: memory has no efficiency, not 0%.
+	web := podAlloc("web-1", "deployment", "web", 10, 4)
+	web.CPUCoreRequestAverage, web.CPUCoreUsageAverage = 1, 0.9
+	web.RAMByteUsageAverage = 500
+
+	got := podEfficiency(AllocationResponse{Data: []map[string]AllocationData{{"web-1": web}}})
+
+	require.NotNil(t, got)
+	assert.Zero(t, got.RAMEfficiency)
+	assert.InDelta(t, 0.9, got.TotalEfficiency, 1e-9, "only CPU has a request")
+	assert.Zero(t, got.RAMIdleCost)
+}
+
+func TestPodEfficiency_NoTotalWithoutRequests(t *testing.T) {
+	t.Parallel()
+
+	web := podAlloc("web-1", "deployment", "web", 10, 4)
+	web.CPUCoreUsageAverage, web.RAMByteUsageAverage = 0.5, 500
+
+	got := podEfficiency(AllocationResponse{Data: []map[string]AllocationData{{"web-1": web}}})
+
+	require.NotNil(t, got)
+	assert.Zero(t, got.TotalEfficiency)
+	assert.Zero(t, got.CPUIdleCost+got.RAMIdleCost)
+}
+
 func TestEfficiency_MeasuresTheNamespacesIdleCostFromItsPods(t *testing.T) {
 	t.Parallel()
 

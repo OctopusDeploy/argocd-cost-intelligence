@@ -105,7 +105,9 @@ Some choices worth knowing:
 
 - Current requests come from OpenCost, not from manifests. That needs no permission on workloads, and the saving is priced the same way the cost is.
 - Only requests are suggested. Limits never are, but a memory limit below the VPA's upper bound gets a warning.
-- A new VPA is unsettled. Its upper bound starts at the VPA's maximum and narrows over about a day. A container whose upper bound is more than 3x its target is marked `unsettled` and its workload low confidence, and the UI shows neither the bound nor the limit warning.
+- A recommendation is advice only after a day of history (`minHistory`): a day covers a daily load cycle and the 24h window the change is priced over. The age is taken from when the VPA's `RecommendationProvided` condition last turned true, which the recommender keeps across its own restarts. Before that the workload is `learning` ("Not enough data yet" in the UI), with no containers and no saving or increase. A VPA that does not say when falls back to the settled check below, and one the VPA itself flags `LowConfidence` is always `learning`.
+- A new VPA is unsettled. Its upper bound starts far above the target and narrows as history builds up: about 3x the target after half a day and 2x after a day. A container whose upper bound is more than 3x its target is marked `unsettled` and its workload low confidence, and the UI shows neither the bound nor the limit warning.
+- By default the VPA's target is the 90th percentile of use plus 15% (the recommender's `--recommendation-margin-fraction`). The UI says so in the same words as the CPU suggestion's headroom.
 - Without a VPA nothing shows. The UI shows the section only when a workload has one, and the VPA card replaces the CPU suggestion only when it saves or costs at least $1 a month (`hasAdvice` in `ui/src/utils/rightsizing.ts`).
 
 ### Waste ranking (`pkg/server/waste.go`)

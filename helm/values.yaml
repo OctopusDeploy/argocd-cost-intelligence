@@ -77,6 +77,10 @@ costIntelligence:
   vpa:
     enabled: true
 
+  # info, or debug to also log each OpenCost request URL and response body (LOG_LEVEL), for the API
+  # and the exporter. Debug logs name every namespace and its cost, so leave it at info.
+  logLevel: info
+
   # Resource limits
   resources:
     requests:

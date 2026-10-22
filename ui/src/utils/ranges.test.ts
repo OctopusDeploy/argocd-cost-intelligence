@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DailyCost } from './api';
 import {
   bucketDays,
+  completeDays,
   customRangeError,
   fromFirstCost,
   granularity,
@@ -85,6 +86,19 @@ describe('fromFirstCost', () => {
   });
 });
 
+describe('completeDays', () => {
+  const days = [day('2026-10-01', 0), day('2026-10-02', 0), day('2026-10-03', 2), day('2026-10-04', 0), day('2026-10-05', 3), day('2026-10-06', 1)];
+
+  it('drops today, the $0 days before the first cost, and that first day when measuring began on it', () => {
+    expect(completeDays(days, '2026-10-06', '2026-10-01').map(d => d.date)).toEqual(['2026-10-04', '2026-10-05']);
+    expect(completeDays(days.slice(0, 2), '2026-10-06', '2026-10-01')).toEqual([]);
+  });
+
+  it('keeps the first day when the series was asked for from that day on', () => {
+    expect(completeDays(days.slice(2), '2026-10-06', '2026-10-03').map(d => d.date)).toEqual(['2026-10-03', '2026-10-04', '2026-10-05']);
+  });
+});
+
 describe('bucketDays', () => {
   it('sums weeks from Monday to Sunday, marking the ones the range or today cuts short', () => {
     // Thu Sep 17 – Sat Oct 3: a cut week, two whole weeks, then the current week.
@@ -121,5 +135,15 @@ describe('bucketDays', () => {
 
     const withHistory = bucketDays(days, range, 'month', TODAY, '2025-10-04');
     expect(withHistory[11].complete).toBe(true);
+  });
+
+  it('marks the week whose first day is the partly measured first day of the data', () => {
+    const range = { from: '2026-09-07', to: TODAY };
+    const days = Array.from({ length: 7 }, (_, i) => day(`2026-09-${String(14 + i).padStart(2, '0')}`, 1));
+    const buckets = bucketDays(days, range, 'week', TODAY, '2026-09-14');
+
+    expect(buckets.find(b => b.start === '2026-09-14')!.complete).toBe(false);
+    // From the range's own first day, the data's first day was measured in full.
+    expect(bucketDays(days, { ...range, from: '2026-09-14' }, 'week', TODAY, '2026-09-14')[0].complete).toBe(true);
   });
 });

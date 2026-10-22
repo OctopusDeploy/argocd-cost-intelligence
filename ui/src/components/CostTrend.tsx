@@ -9,10 +9,11 @@ import { StatStrip } from './StatStrip';
 import { cardStyle, Tokens, useTokens } from '../theme/tokens';
 import { DailyCost } from '../utils/api';
 import { summarizeDaily } from '../utils/dailyStats';
-import { forecastMonthEnd, MIN_TREND_DAYS, trendDays, utcDay } from '../utils/forecast';
+import { forecastMonthEnd, MIN_TREND_DAYS, utcDay } from '../utils/forecast';
 import { formatDay, formatDayIn, formatEstimate, formatMoney, pluralize } from '../utils/format';
 import {
   bucketDays,
+  completeDays,
   customRangeError,
   DayRange,
   fromFirstCost,
@@ -20,6 +21,7 @@ import {
   includesToday,
   MAX_RANGE_DAYS,
   PRESETS,
+  presetRange,
   queryRange,
   RangeId,
 } from '../utils/ranges';
@@ -67,7 +69,9 @@ export const CostTrendComponent: React.FC<CostTrendProps> = ({ loading, error, d
   if (recent.length === 0) return <Notice>No daily cost data yet.</Notice>;
   const now = new Date();
   const today = utcDay(now);
-  const forecast = forecastMonthEnd(recent, now);
+  // The tab's own series is the last 30 days, asked for from this day.
+  const recentFrom = presetRange('30d', today).from;
+  const forecast = forecastMonthEnd(recent, recentFrom, now);
 
   // The range on screen, and its series: the tab's own for the last 30 days, else fetched for it.
   const ownSeries = !range || range.id === '30d';
@@ -80,13 +84,14 @@ export const CostTrendComponent: React.FC<CostTrendProps> = ({ loading, error, d
   const reachesToday = !range || includesToday(shown, today);
   const showForecast = reachesToday ? forecast : null;
   const unit = range ? granularity(shown) : 'day';
-  // Today is still being measured, so it would read as the cheapest day: the per-day figures leave
-  // it out, while the total, which is money already spent, keeps it.
-  const complete = data.filter(day => day.date < today);
+  // Today is still being measured, and so was the first day measured, so either would read as the
+  // cheapest day: the per-day figures leave them out, while the total, which is money already
+  // spent, keeps them.
+  const complete = completeDays(inRange, today, range?.range.from ?? recentFrom);
   const summary = summarizeDaily(complete.length > 0 ? complete : data);
   const total = data.reduce((sum, day) => sum + day.totalCost, 0);
   // Without a forecast, say how many more days of data it needs, so its absence is not a mystery.
-  const daysToForecast = forecast || !reachesToday ? 0 : MIN_TREND_DAYS - trendDays(recent, today).length;
+  const daysToForecast = forecast || !reachesToday ? 0 : MIN_TREND_DAYS - completeDays(recent, today, recentFrom).length;
   const axisTo = showForecast && showForecast.monthEnd > shown.to ? showForecast.monthEnd : shown.to;
   // The days there can be data for; a span crossing a year names the year with each day.
   const shownDays = queryRange(shown, today);

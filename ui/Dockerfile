@@ -31,5 +31,6 @@ USER 1000
 
 EXPOSE 3000
 
-# Serve the built plugin
-CMD ["http-server", "dist", "-p", "3000", "--cors"]
+# Serve the built plugin. Only argocd-server's init container fetches it, by its path, so no
+# directory listing and no CORS headers.
+CMD ["http-server", "dist", "-p", "3000", "-d", "false"]

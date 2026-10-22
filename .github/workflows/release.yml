@@ -142,8 +142,6 @@ jobs:
           # labels, which sit in each platform's config. An unlinked package can refuse a later push.
           annotations: |
             index:org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-          cache-from: type=gha,scope=backend
-          cache-to: type=gha,mode=max,scope=backend
 
   docker-ui:
     needs: verify
@@ -203,8 +201,6 @@ jobs:
           # labels, which sit in each platform's config. An unlinked package can refuse a later push.
           annotations: |
             index:org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-          cache-from: type=gha,scope=ui
-          cache-to: type=gha,mode=max,scope=ui
 
   # ── Helm chart ──────────────────────────────────────────────────────────────
   helm-publish:

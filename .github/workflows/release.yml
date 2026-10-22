@@ -39,6 +39,21 @@ jobs:
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
+      # The README's quick start names a chart version so it can be pasted as it is, and the other
+      # docs say <chart-version>. A release must not leave the README installing an older one.
+      # Pre-releases don't move it.
+      - name: README installs this version
+        if: ${{ !contains(github.ref_name, '-') }}
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          VERSION="${VERSION#v}"
+          readme=$(sed -n 's/^[[:space:]]*--version \([^[:space:]]*\).*/\1/p' README.md)
+          if [ "$readme" != "$VERSION" ]; then
+            echo "::error file=README.md::The quick start installs chart version '${readme}', not ${VERSION}. Update it before tagging."
+            exit 1
+          fi
+
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
         with:
           go-version-file: go.mod

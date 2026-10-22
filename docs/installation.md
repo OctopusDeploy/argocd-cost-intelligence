@@ -117,12 +117,12 @@ Per-application costs work either way. You can change it later with `helm upgrad
 
 ### Run the install
 
-The chart creates its own namespace (`namespace.create=true`), so tell Helm not to create it, or the two collide:
+The chart creates its own namespace (`namespace.create=true`), so tell Helm not to create it, or the two collide. Replace `<chart-version>` with the newest version on the [Releases page](https://github.com/OctopusDeploy/argocd-cost-intelligence/releases):
 
 ```bash
 helm install argocd-cost-intelligence \
   oci://ghcr.io/octopusdeploy/charts/argocd-cost-intelligence \
-  --version 0.1.0 \
+  --version <chart-version> \
   --namespace argocd-cost-intel --create-namespace \
   --set namespace.create=false \
   --set postgres.auth.password=<your-secure-password> \

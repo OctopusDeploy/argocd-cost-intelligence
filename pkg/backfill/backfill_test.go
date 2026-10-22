@@ -408,6 +408,18 @@ func TestRun_WithoutTheLockMeasuresNothing(t *testing.T) {
 	assert.Empty(t, store.records)
 }
 
+func TestRun_NamespaceWithoutCostYetIsNoData(t *testing.T) {
+	t.Parallel()
+
+	store := newFakeStore()
+	oc := &fakeOpenCost{pods: map[string][]pod{"shop": {{"web-1", "deployment", "web", 0}}}}
+
+	result := run(t, oc, store, 1, app("web", local("shop"), deployment("shop", "web")))
+
+	assert.Equal(t, Result{NoData: 1}, result, "a cost OpenCost hasn't measured yet is unknown, not $0")
+	assert.Empty(t, store.records)
+}
+
 func newTestBackfill(t *testing.T, oc *fakeOpenCost, store *fakeStore, apps ...exporter.Application) *Backfill {
 	t.Helper()
 	srv := httptest.NewServer(oc)

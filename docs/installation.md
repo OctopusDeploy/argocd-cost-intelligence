@@ -94,7 +94,7 @@ It runs as `opencost` in the `opencost` namespace, so the default OpenCost URL w
 
 **Argo CD namespace**, if it isn't `argocd`: `--set argoCd.namespace=<namespace>`.
 
-**Who sees cluster-wide costs.** The Namespaces and Chargeback pages show what every team spends. Argo CD's extension proxy can only check whether a viewer may `get` one Application, so one Application acts as the gate: anyone who can view it sees cluster-wide costs. You don't have to pick one:
+**Who sees cluster-wide costs.** The Namespaces, Idle spend and Chargeback pages show what every team spends. Argo CD's extension proxy can only check whether a viewer may `get` one Application, so one Application acts as the gate: anyone who can view it sees cluster-wide costs. You don't have to pick one:
 
 - If an Argo CD Application installs Cost Intelligence, that Application is the gate. The service finds it from the tracking annotation Argo CD puts on its Deployment.
 - If you install with `helm install`, as below, the chart creates an Application called `cost-intelligence-access` in the Argo CD namespace, in an AppProject of the same name that permits no resources. It deploys nothing and is never measured; it exists only to be the gate. Its chart is an empty one the service itself serves, so it needs no repository.

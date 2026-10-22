@@ -10,7 +10,7 @@ costIntelligence:
   image:
     repository: argocd-cost-intelligence
     tag: latest
-  # Cluster-wide pages (Namespaces, Chargeback) need an Application whose viewers may see them.
+  # Cluster-wide pages (Namespaces, Idle spend, Chargeback) need an Application whose viewers may see them.
   # redis exists in the local test cluster; point this at any Application in yours.
   clusterScopeApp: argocd:redis
 

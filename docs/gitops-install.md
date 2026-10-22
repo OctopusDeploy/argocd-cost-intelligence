@@ -102,7 +102,7 @@ Set `openCost.baseURL` if OpenCost isn't at `http://opencost.opencost:9003`, and
 
 The chart creates a ClusterRole, so the project must allow cluster-scoped resources. The `default` project does.
 
-Who sees the cluster-wide Namespaces and Chargeback pages is decided by this Application: anyone your Argo CD RBAC lets `get` it. See [Choose your settings](installation.md#choose-your-settings) to pick another Application or turn those pages off.
+Who sees the cluster-wide Namespaces, Idle spend and Chargeback pages is decided by this Application: anyone your Argo CD RBAC lets `get` it. See [Choose your settings](installation.md#choose-your-settings) to pick another Application or turn those pages off.
 
 Check that it runs before you change Argo CD:
 

@@ -36,8 +36,7 @@ export const RightsizingCard: React.FC<Props> = ({ rightsizing, onShowResources,
       notes={
         <>
           <AdviceNote icon={<InfoIcon color={t.textMuted} />}>
-            From the Vertical Pod Autoscaler, per container. By default it leaves 15% headroom over the 90th
-            percentile of use. Requests only; limits are left as they are.
+            From the Vertical Pod Autoscaler, per container. Requests only; limits are left as they are.
           </AdviceNote>
           {lowConfidence && (
             <AdviceNote icon={<WarningIcon color={t.warning} />}>

@@ -48,9 +48,8 @@ describe('RightsizingSection', () => {
     const web = screen.getByRole('heading', { level: 4, name: 'web · Deployment' }).closest('div')!.parentElement!;
 
     expect(web.textContent).toContain('Not enough data yet');
-    expect(web.textContent).toContain('once it has a day of history');
+    expect(web.textContent).toContain('once it has about a day of history');
     expect(web.textContent).not.toContain('/mo');
-    expect(section().textContent).toContain('By default they leave 15% headroom over the 90th percentile of use.');
   });
 
   it("puts each request against the VPA's range in words", () => {

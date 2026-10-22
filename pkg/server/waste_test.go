@@ -24,10 +24,14 @@ func measuredApp(namespace, name string, cpuIdle, ramIdle float64) models.CostAc
 		DeploymentNamespace:  "shop",
 		MeasuredAt:           time.Date(2026, 10, 20, 9, 0, 0, 0, time.UTC),
 		TotalMonthlyCost:     5000,
+		OpenCostOutput:       models.OpenCostMetrics{MeasuredHours: 2},
 		Efficiency:           &models.EfficiencyMetrics{CPUIdleCost: 900, RAMIdleCost: 900},
 		App: &models.AppMeasurement{
 			TotalMonthlyCost: 400,
-			OpenCostOutput:   models.OpenCostMetrics{AllocationTotals: models.AllocationTotal{CPUCost: 250}},
+			OpenCostOutput: models.OpenCostMetrics{
+				AllocationTotals: models.AllocationTotal{CPUCost: 250},
+				MeasuredHours:    24,
+			},
 			Efficiency: &models.EfficiencyMetrics{
 				CPUEfficiency: 0.3, CPUCoresRequested: 2, CPUCoresUsed: 0.6,
 				CPUIdleCost: cpuIdle, RAMIdleCost: ramIdle,
@@ -53,6 +57,7 @@ func TestRankWaste_RanksApplicationsByTheirOwnIdleCost(t *testing.T) {
 	assert.InDelta(t, 400, top.MonthlyCost, 1e-9)
 	assert.InDelta(t, 250, top.CPUCost, 1e-9)
 	assert.InDelta(t, 2, top.Efficiency.CPUCoresRequested, 1e-9)
+	assert.InDelta(t, 24, top.MeasuredHours, 1e-9, "the application's measured period, which its CPU advice needs")
 	assert.Equal(t, "shop", top.DeploymentNamespace)
 	assert.InDelta(t, 255, ranking.IdleCost, 1e-9, "the total is the sum of the ranked applications")
 }

@@ -272,6 +272,8 @@ export interface AppWaste {
   cpuCost: number;
   idleCost: number;
   efficiency: EfficiencyMetrics;
+  // measuredHours is how much of the day OpenCost had data for; absent when it did not say.
+  measuredHours?: number;
 }
 
 // WasteRanking ranks the applications deploying to this cluster by idle spend, most first.

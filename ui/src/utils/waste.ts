@@ -29,7 +29,7 @@ export function wasteRow(app: AppWaste): WasteRow {
   return {
     ...app,
     share: app.monthlyCost > 0 ? app.idleCost / app.monthlyCost : 0,
-    saving: recommendCpuRequest(app.efficiency, app.cpuCost)?.monthlySavings ?? null,
+    saving: recommendCpuRequest(app.efficiency, app.cpuCost, app.measuredHours)?.monthlySavings ?? null,
   };
 }
 

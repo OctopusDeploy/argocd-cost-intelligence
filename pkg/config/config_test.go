@@ -378,3 +378,14 @@ func TestLoadConfig_Overrides(t *testing.T) {
 	assert.Equal(t, "remote-db", cfg.Database.Host)
 	assert.Equal(t, "http://my-opencost:9003", cfg.OpenCost.BaseURL)
 }
+
+func TestLoadConfig_LogLevelIgnoresCaseAndSpaces(t *testing.T) {
+	t.Setenv("DB_PASSWORD", "test-password")
+	t.Setenv("LOG_LEVEL", " DEBUG ")
+
+	cfg, err := LoadConfig()
+	require.NoError(t, err)
+
+	assert.True(t, cfg.Debug())
+	assert.Equal(t, LogLevelDebug, cfg.LogLevel, "read as debug")
+}

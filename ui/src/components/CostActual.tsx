@@ -78,7 +78,11 @@ export const CostActual: React.FC<CostActualProps> = ({
   const drivers = previous ? changeDrivers(latest, previous) : null;
   const efficiency = data.efficiency;
   const idle = efficiency ? efficiency.cpuIdleCost + efficiency.ramIdleCost : null;
-  const recommendation = recommendCpuRequest(efficiency, data.opencostOutput?.allocationTotals?.cpuCost ?? 0);
+  const recommendation = recommendCpuRequest(
+    efficiency,
+    data.opencostOutput?.allocationTotals?.cpuCost ?? 0,
+    data.opencostOutput?.measuredHours
+  );
   const controllers = new Set((data.pods ?? []).map(pod => pod.controller || pod.name));
   const controllerName = !shared && controllers.size === 1 ? [...controllers][0] : null;
   // In a shared namespace the advice is about every pod in it, which the Resources tab does not list.

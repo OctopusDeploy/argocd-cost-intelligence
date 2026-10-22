@@ -34,9 +34,14 @@ describe('wasteRow', () => {
   it("prices the lower CPU request with the rule the app's tab uses", () => {
     const row = wasteRow(app('web', 100));
 
-    expect(row.saving).toBe(recommendCpuRequest(row.efficiency, 250)?.monthlySavings);
+    expect(row.saving).toBe(recommendCpuRequest(row.efficiency, 250, row.measuredHours)?.monthlySavings);
     expect(row.saving).toBeGreaterThan(0);
     expect(row.share).toBe(0.25);
+  });
+
+  it('suggests no saving from less than a day of data, as its tab does', () => {
+    expect(wasteRow({ ...app('web', 100), measuredHours: 0.05 }).saving).toBeNull();
+    expect(wasteRow({ ...app('web', 100), measuredHours: 24 }).saving).toBeGreaterThan(0);
   });
 
   it('suggests no saving when the app uses most of its CPU request', () => {

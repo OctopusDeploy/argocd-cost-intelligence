@@ -316,7 +316,11 @@ const NamespaceDetail: React.FC<NamespaceDetailProps> = ({
   const efficiency = breakdown.latest?.efficiency;
   const requested = efficiency ? hasRequests(efficiency) : false;
   const level = efficiency && requested ? efficiencyLevel(efficiency.totalEfficiency) : null;
-  const recommendation = recommendCpuRequest(efficiency, breakdown.latest?.opencostOutput?.allocationTotals?.cpuCost ?? 0);
+  const recommendation = recommendCpuRequest(
+    efficiency,
+    breakdown.latest?.opencostOutput?.allocationTotals?.cpuCost ?? 0,
+    breakdown.latest?.opencostOutput?.measuredHours
+  );
   const controllerCount = breakdown.apps.reduce((sum, app) => sum + app.controllers.length, 0);
 
   let applications: React.ReactNode;

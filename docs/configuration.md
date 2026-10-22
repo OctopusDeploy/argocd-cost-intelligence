@@ -182,4 +182,4 @@ The chart sets these variables from its values, so you only need them when you r
 | `BACKFILL_CONCURRENCY` | `4` | How many namespaces to measure at once when the service starts; `0` turns it off. See [Measuring at install](architecture.md#measuring-at-install-pkgbackfill). |
 | `PRUNE_REMOTE_COST` | `false` | Delete stored cost for Applications that deploy to another cluster, which can't be undone; see [Known limitations](architecture.md#known-limitations). |
 | `VPA_ENABLED` | `true` | Read Vertical Pod Autoscaler recommendations for rightsizing; see [Optional: rightsizing](installation.md#optional-rightsizing). |
-| `LOG_LEVEL` | `info` | `info` or `debug`. `debug` also logs each OpenCost request URL and response body, which name every namespace and its cost. |
+| `LOG_LEVEL` | `info` | `info` or `debug`, in any case. `debug` also logs each OpenCost request URL and response body, which name every namespace and its cost. |

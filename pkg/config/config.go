@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/kelseyhightower/envconfig"
@@ -118,6 +119,8 @@ func LoadConfig() (*Config, error) {
 	if err := envconfig.Process("", &cfg); err != nil {
 		return nil, fmt.Errorf("failed to process environment config: %w", err)
 	}
+	// "DEBUG" or "Debug " mean debug too, rather than stopping the service.
+	cfg.LogLevel = strings.ToLower(strings.TrimSpace(cfg.LogLevel))
 
 	return &cfg, nil
 }

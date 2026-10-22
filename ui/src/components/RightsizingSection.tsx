@@ -42,9 +42,8 @@ export const RightsizingSection: React.FC<{ rightsizing: Rightsizing | null }> =
           title="Rightsizing"
           detail={
             <>
-              Requests the Vertical Pod Autoscaler recommends, per container. By default they leave 15% headroom over
-              the 90th percentile of use. On each bar, the shaded band is the VPA&apos;s range, the tick its target and
-              the line today&apos;s request.
+              Requests the Vertical Pod Autoscaler recommends, per container. On each bar, the shaded band is the
+              VPA&apos;s range, the tick its target and the line today&apos;s request.
             </>
           }
         />
@@ -86,7 +85,7 @@ const Workload: React.FC<{ workload: WorkloadRightsizing; t: Tokens }> = ({ work
       </div>
       {workload.status === 'learning' && (
         <p style={{ margin: '8px 0 0', color: t.textMuted, fontSize: '12px' }}>
-          The VPA has had too little use to go on. Its recommendation shows here once it has a day of history.
+          The VPA has had too little use to go on. Its recommendation shows here once it has about a day of history.
         </p>
       )}
       {advised && workload.containers.length === 0 && (

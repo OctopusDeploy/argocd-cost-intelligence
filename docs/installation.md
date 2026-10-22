@@ -240,7 +240,6 @@ You need three things:
 What to expect:
 
 - The VPA needs some usage history. Until it has a recommendation, the **Resources** tab says so. For its first day the recommendation is shown as **Not enough data yet**, with no requests to set and no saving, because minutes or hours of use miss the daily peak. After that, while the upper bound is still far above the target, the recommendation is marked low confidence, the upper bound is hidden and there's no memory-limit warning. A container that uses almost nothing gets the VPA's minimum, not a measured figure.
-- By default each recommendation leaves 15% headroom over the 90th percentile of use, which the VPA recommender sets with `--recommendation-margin-fraction`.
 - Once there is a recommendation, **Actual costs** names the workloads to change and the monthly saving or cost, when it's at least $1. **Resources** shows each container's requests next to the VPA's range, and the requests to paste into your manifest.
 - Only requests are suggested. Limits are left alone, except for a warning when a memory limit is below the most the VPA expects the container to need.
 - The application must have synced since you installed or upgraded Cost Intelligence, so that its cost record lists the workloads it manages.

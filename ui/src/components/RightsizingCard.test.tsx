@@ -13,7 +13,6 @@ describe('RightsizingCard', () => {
     expect(within(card).getByRole('heading').textContent).toBe('Right-size web and worker to save about $38/mo');
     expect(card.textContent).toContain('The VPA suggests lower requests for web and worker (−$41.31/mo).');
     expect(card.textContent).toContain('worker uses more than it requests (+$3.69/mo), so its pods can run short.');
-    expect(card.textContent).toContain('By default it leaves 15% headroom over the 90th percentile of use.');
     expect(card.textContent).toContain('Requests only; limits are left as they are.');
     expect(card.textContent).not.toContain('Low confidence');
 

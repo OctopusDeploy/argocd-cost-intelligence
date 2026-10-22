@@ -78,6 +78,7 @@ func rankWaste(records []models.CostActual, local map[models.AppRef]bool) models
 			CPUCost:              record.App.OpenCostOutput.AllocationTotals.CPUCost,
 			IdleCost:             idle,
 			Efficiency:           efficiency,
+			MeasuredHours:        record.App.OpenCostOutput.MeasuredHours,
 		})
 		ranking.IdleCost += idle
 	}

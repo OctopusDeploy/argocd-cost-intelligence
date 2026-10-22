@@ -531,6 +531,9 @@ func TestOnApplicationSync_NoData_RecordsNothing(t *testing.T) {
 	}{
 		{name: "no window", data: nil},
 		{name: "namespace missing from the window", data: []map[string]opencost.AllocationData{{}}},
+		{name: "seconds of data and no cost yet", data: []map[string]opencost.AllocationData{{
+			"test-ns": {Start: time.Now().Add(-5 * time.Second), End: time.Now()},
+		}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

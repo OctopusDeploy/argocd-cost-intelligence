@@ -17,7 +17,7 @@ From fastest to most realistic:
 | 5. Docker Compose | The whole backend against the mock OpenCost | Docker | `docker-compose up -d` |
 | 6. Kubernetes (k3d) | A real Argo CD, Notifications, the extension proxy and the Helm chart | k3d, kubectl, Helm 3 | `make helm-deploy` |
 
-CI (`.github/workflows/ci.yml`) runs levels 1, 3 and 4, plus `go vet`, golangci-lint, `helm lint` and `helm template`, `actionlint`, `kubeconform`, `hadolint`, `shellcheck`, a check that `deploy/mock-opencost.yaml` matches `mock-opencost-server.js`, `govulncheck`, `npm audit` and gitleaks. `make lint` runs every linter locally, and each has its own target (`make help`). Levels 2, 5 and 6 are manual.
+CI (`.github/workflows/ci.yml`) runs levels 1, 3 and 4, plus `go vet`, golangci-lint, `helm lint` and `helm template`, `actionlint`, `kubeconform`, `hadolint`, `shellcheck`, a check that `deploy/mock-opencost.yaml` matches `mock-opencost-server.js`, `govulncheck`, `npm audit` and gitleaks. It runs on pull requests and on pushes to `main`; a branch is checked once it has a pull request, and a newer commit on a pull request cancels the run for the older one. `make lint` runs every linter locally, and each has its own target (`make help`). Levels 2, 5 and 6 are manual.
 
 ## Go unit tests
 

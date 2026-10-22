@@ -40,7 +40,7 @@ export const RightsizingCard: React.FC<Props> = ({ rightsizing, onShowResources,
           </AdviceNote>
           {lowConfidence && (
             <AdviceNote icon={<WarningIcon color={t.warning} />}>
-              Low confidence: the VPA has little usage history yet, so check again in a few days.
+              Low confidence: the VPA&apos;s range is still wide for some containers, so check again in a few days.
             </AdviceNote>
           )}
         </>

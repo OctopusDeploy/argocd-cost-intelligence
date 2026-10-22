@@ -413,6 +413,20 @@ describe('CostActual', () => {
     expect(onShowResources).toHaveBeenCalledTimes(1);
   });
 
+  it('suggests no CPU request from a few minutes of data', () => {
+    const data = fixture();
+    render(
+      <CostActual
+        data={{ ...data, opencostOutput: { ...data.opencostOutput!, measuredHours: 0.05 } }}
+        trend={null}
+        loading={false}
+        error={null}
+      />
+    );
+
+    expect(screen.queryByRole('region', { name: 'Recommendation' })).toBeNull();
+  });
+
   it("replaces the CPU suggestion with the VPA's recommendation when it has one", () => {
     render(<CostActual data={fixture()} trend={null} loading={false} error={null} rightsizing={shopRightsizing()} />);
     const cards = screen.getAllByRole('region', { name: 'Recommendation' });

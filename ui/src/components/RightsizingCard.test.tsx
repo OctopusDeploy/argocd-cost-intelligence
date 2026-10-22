@@ -48,11 +48,11 @@ describe('RightsizingCard', () => {
     expect(screen.getByRole('heading').textContent).toBe('Raise the requests of worker');
   });
 
-  it('says when the VPA has too little history', () => {
+  it("says when the VPA's range is still wide", () => {
     const rightsizing = shopRightsizing();
     rightsizing.workloads[2].lowConfidence = true;
     render(<RightsizingCard rightsizing={rightsizing} />);
 
-    expect(screen.getByText(/^Low confidence: the VPA has little usage history yet/)).toBeTruthy();
+    expect(screen.getByText(/^Low confidence: the VPA's range is still wide for some containers/)).toBeTruthy();
   });
 });

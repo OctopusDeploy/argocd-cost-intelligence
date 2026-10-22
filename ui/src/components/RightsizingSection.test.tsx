@@ -41,6 +41,17 @@ describe('RightsizingSection', () => {
     expect(section().textContent).toContain('−$37.21/mo');
   });
 
+  it('gives no advice from a recommendation with less than a day of history', () => {
+    const rightsizing = shopRightsizing();
+    rightsizing.workloads[2] = { ...rightsizing.workloads[2], status: 'learning', containers: [], monthlyChange: 0 };
+    render(<RightsizingSection rightsizing={rightsizing} />);
+    const web = screen.getByRole('heading', { level: 4, name: 'web · Deployment' }).closest('div')!.parentElement!;
+
+    expect(web.textContent).toContain('Not enough data yet');
+    expect(web.textContent).toContain('once it has about a day of history');
+    expect(web.textContent).not.toContain('/mo');
+  });
+
   it("puts each request against the VPA's range in words", () => {
     render(<RightsizingSection rightsizing={shopRightsizing()} />);
     const text = section().textContent;

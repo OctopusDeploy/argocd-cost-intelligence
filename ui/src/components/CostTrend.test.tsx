@@ -107,12 +107,13 @@ describe('CostTrendComponent', () => {
     });
 
     it('is left out until there are enough complete days for a trend', () => {
+      // Oct 12 – 18: Oct 12, where the data starts, was only partly measured, and Oct 18 still is.
       renderOn('2026-10-18T09:00:00Z', fortnight.slice(-7));
 
       expect(screen.queryByText('Month-end forecast')).toBeNull();
       expect(screen.queryByText(/Est\. month-end/)).toBeNull();
       expect(screen.getByText(/forecast appears after/).textContent).toBe(
-        'A month-end forecast appears after 7 complete days of cost data, 1 more day to go.'
+        'A month-end forecast appears after 7 complete days of cost data, 2 more days to go.'
       );
     });
 
@@ -126,7 +127,8 @@ describe('CostTrendComponent', () => {
         day('2026-10-03', 0.01),
       ]);
 
-      expect(screen.getByText(/forecast appears after/).textContent).toContain('5 more days to go');
+      // Measuring began during Oct 1, so Oct 2 is the only complete day.
+      expect(screen.getByText(/forecast appears after/).textContent).toContain('6 more days to go');
       fireEvent.keyDown(screen.getByRole('group', { name: /daily cost chart/i }), { key: 'ArrowLeft' });
       expect(screen.getByRole('status').textContent).toBe('Sat, Oct 3, still being measured: $0.01 so far');
     });
@@ -227,10 +229,28 @@ describe('CostTrendComponent', () => {
       fireEvent.keyDown(chart, { key: 'ArrowRight' });
       expect(screen.getByRole('status').textContent).toBe('Sat, Sep 5: no cost data');
       // Neither the empty days nor today, still being measured at $4, is the cheapest day; the total
-      // keeps today's spend.
+      // keeps today's spend. Sep 18, where measuring began, is not a complete day either.
       expect(statValue('Lowest day')).toBe('$10.00');
       expect(statValue('Total')).toBe('$154.00');
+      expect(screen.getByText('Average per day').parentElement?.textContent).toContain('Over 14 complete days');
+    });
+
+    it('leaves the partly measured first day out of the per-day figures but not the total', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-10-03T12:00:00Z'));
+      const startedLate = [day('2026-09-17', 1), ...recent];
+      render(<CostTrendComponent loading={false} error={null} dailyCosts={startedLate} range={view('30d')} />);
+
+      expect(statValue('Lowest day')).toBe('$10.00');
+      expect(statValue('Average per day')).toBe('$10.00');
+      expect(statValue('Total')).toBe('$155.00');
       expect(screen.getByText('Average per day').parentElement?.textContent).toContain('Over 15 complete days');
+    });
+
+    it('counts the first day in the range as complete when the data starts before it', () => {
+      renderRange(view('custom', { range: { from: '2026-09-18', to: '2026-09-25' } }));
+
+      expect(screen.getByText('Average per day').parentElement?.textContent).toContain('Over 8 complete days');
     });
 
     it('draws a year as one bar a month', () => {

@@ -465,6 +465,12 @@ func (n *Namespace) Record(app models.AppRef, owners models.ManagedResources, sy
 			if actual.Efficiency != nil {
 				actual.Efficiency.CPUIdleCost = pods.CPUIdleCost
 				actual.Efficiency.RAMIdleCost = pods.RAMIdleCost
+				// OpenCost drops the peak from any allocation it aggregates, so the namespace's
+				// summary has none: its peak is its pods', as the application's is.
+				if pods.CPUCoresUsedMax > 0 {
+					actual.Efficiency.CPUCoresUsedMax = pods.CPUCoresUsedMax
+					actual.Efficiency.RAMBytesUsedMax = pods.RAMBytesUsedMax
+				}
 			}
 		} else if totals := n.metrics.AllocationTotals; totals.CPUCost+totals.MemoryCost == 0 {
 			idle := 0.0

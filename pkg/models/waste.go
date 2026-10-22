@@ -30,4 +30,7 @@ type AppWaste struct {
 	// IdleCost is the part of the CPU and memory cost paid for requests that went unused.
 	IdleCost   float64           `json:"idleCost"`
 	Efficiency EfficiencyMetrics `json:"efficiency"`
+	// MeasuredHours is how much of the window OpenCost had data for, zero when it did not say. The
+	// UI suggests no lower CPU request from less than a day.
+	MeasuredHours float64 `json:"measuredHours,omitempty"`
 }

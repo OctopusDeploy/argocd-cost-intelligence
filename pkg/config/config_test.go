@@ -91,6 +91,26 @@ func TestValidate(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "debug log level",
+			cfg: Config{
+				Database:      DatabaseConfig{Password: "secret"},
+				WebhookSecret: testWebhookSecret,
+				OpenCost:      OpenCostConfig{BaseURL: "http://opencost:9003"},
+				LogLevel:      LogLevelDebug,
+			},
+			wantErr: false,
+		},
+		{
+			name: "unknown log level",
+			cfg: Config{
+				Database:      DatabaseConfig{Password: "secret"},
+				WebhookSecret: testWebhookSecret,
+				OpenCost:      OpenCostConfig{BaseURL: "http://opencost:9003"},
+				LogLevel:      "trace",
+			},
+			wantErr: true,
+		},
+		{
 			name: "missing database password",
 			cfg: Config{
 				Database:      DatabaseConfig{Password: ""},
@@ -336,6 +356,8 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	assert.Equal(t, 9102, cfg.MetricsPort)
 	assert.Equal(t, 5*time.Minute, cfg.ExporterInterval)
 	assert.Equal(t, 4, cfg.BackfillConcurrency)
+	assert.Equal(t, LogLevelInfo, cfg.LogLevel)
+	assert.False(t, cfg.Debug())
 }
 
 func TestLoadConfig_Overrides(t *testing.T) {
@@ -344,12 +366,26 @@ func TestLoadConfig_Overrides(t *testing.T) {
 	t.Setenv("DB_HOST", "remote-db")
 	t.Setenv("OPENCOST_BASE_URL", "http://my-opencost:9003")
 	t.Setenv("BACKFILL_CONCURRENCY", "0")
+	t.Setenv("LOG_LEVEL", "debug")
 
 	cfg, err := LoadConfig()
 	require.NoError(t, err)
+
+	assert.True(t, cfg.Debug())
 
 	assert.Equal(t, 9090, cfg.Server.Port)
 	assert.Equal(t, 0, cfg.BackfillConcurrency)
 	assert.Equal(t, "remote-db", cfg.Database.Host)
 	assert.Equal(t, "http://my-opencost:9003", cfg.OpenCost.BaseURL)
+}
+
+func TestLoadConfig_LogLevelIgnoresCaseAndSpaces(t *testing.T) {
+	t.Setenv("DB_PASSWORD", "test-password")
+	t.Setenv("LOG_LEVEL", " DEBUG ")
+
+	cfg, err := LoadConfig()
+	require.NoError(t, err)
+
+	assert.True(t, cfg.Debug())
+	assert.Equal(t, LogLevelDebug, cfg.LogLevel, "read as debug")
 }

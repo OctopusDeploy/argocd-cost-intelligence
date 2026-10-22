@@ -200,9 +200,10 @@ export interface ContainerRightsizing {
   monthlyChange: { cpu: number; memory: number };
 }
 
-// recommended: a recommendation-only VPA has advice; managed: a VPA sets the requests itself;
-// pending: the VPA has no recommendation yet; none: no VPA covers the workload.
-export type RightsizingStatus = 'recommended' | 'managed' | 'pending' | 'none';
+// recommended: a recommendation-only VPA has advice; learning: it has a recommendation, but from less
+// than a day of history, so no advice yet; managed: a VPA sets the requests itself; pending: the VPA
+// has no recommendation yet; none: no VPA covers the workload.
+export type RightsizingStatus = 'recommended' | 'learning' | 'managed' | 'pending' | 'none';
 
 export interface WorkloadRightsizing {
   kind: string;
@@ -271,6 +272,8 @@ export interface AppWaste {
   cpuCost: number;
   idleCost: number;
   efficiency: EfficiencyMetrics;
+  // measuredHours is how much of the day OpenCost had data for; absent when it did not say.
+  measuredHours?: number;
 }
 
 // WasteRanking ranks the applications deploying to this cluster by idle spend, most first.

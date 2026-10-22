@@ -558,15 +558,21 @@ func podEfficiency(resp AllocationResponse) *models.EfficiencyMetrics {
 		return nil
 	}
 
+	// Weighted by cost, as OpenCost weighs its own total efficiency. A resource the pods request none
+	// of has no efficiency, so it stays out of the total rather than counting as 0%.
+	var weighted, weight float64
 	if e.CPUCoresRequested > 0 {
 		e.CPUEfficiency = e.CPUCoresUsed / e.CPUCoresRequested
+		weighted += e.CPUEfficiency * cpuCost
+		weight += cpuCost
 	}
 	if e.RAMBytesRequested > 0 {
 		e.RAMEfficiency = e.RAMBytesUsed / e.RAMBytesRequested
+		weighted += e.RAMEfficiency * ramCost
+		weight += ramCost
 	}
-	// Weighted by cost, as OpenCost weighs its own total efficiency.
-	if cpuCost+ramCost > 0 {
-		e.TotalEfficiency = (e.CPUEfficiency*cpuCost + e.RAMEfficiency*ramCost) / (cpuCost + ramCost)
+	if weight > 0 {
+		e.TotalEfficiency = weighted / weight
 	}
 
 	monthlyMultiplier := monthlyFactor(periodStart, periodEnd)

@@ -3,6 +3,7 @@ package rightsizing
 import (
 	"math"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -16,6 +17,9 @@ const (
 	memPrice = 3.10 / 720
 	gi       = 1024 * mi
 )
+
+// now is when the tests ask for advice.
+var now = time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
 
 // usage is one container's run: its requests, usage and memory limit (in cores and Mi).
 type usage struct {
@@ -64,7 +68,7 @@ var shopVPAs = []VPA{
 	{TargetKind: "Deployment", TargetName: "web", UpdateMode: "Off", Containers: []ContainerRecommendation{
 		rec("web", 0.114, 371), rec("istio-proxy", 0.023, 90),
 	}},
-	{TargetKind: "Deployment", TargetName: "worker", UpdateMode: "Off", LowConfidence: true, Containers: []ContainerRecommendation{
+	{TargetKind: "Deployment", TargetName: "worker", UpdateMode: "Off", RecommendingSince: now.Add(-72 * time.Hour), Containers: []ContainerRecommendation{
 		rec("worker", 1.38, 1490),
 	}},
 	{TargetKind: "StatefulSet", TargetName: "redis", UpdateMode: "Auto", Containers: []ContainerRecommendation{rec("redis", 0.1, 256)}},
@@ -106,7 +110,7 @@ func workload(t *testing.T, result models.Rightsizing, name string) models.Workl
 func TestRecommend_MatchesVPAsToTheApplicationsWorkloads(t *testing.T) {
 	t.Parallel()
 
-	result := Recommend("shop", shopResources, shopVPAs, shopContainers())
+	result := Recommend("shop", shopResources, shopVPAs, shopContainers(), now)
 
 	assert.True(t, result.Available)
 	names := make([]string, 0, len(result.Workloads))
@@ -125,7 +129,6 @@ func TestRecommend_MatchesVPAsToTheApplicationsWorkloads(t *testing.T) {
 	assert.Equal(t, models.RightsizingNone, none.Status)
 	assert.Empty(t, none.UpdateMode)
 	assert.Equal(t, 1, none.Pods, "a CronJob's run counts as a pod, through its Job")
-	assert.True(t, workload(t, result, "worker").LowConfidence)
 }
 
 func TestRecommend_AWideUpperBoundIsUnsettled(t *testing.T) {
@@ -136,15 +139,20 @@ func TestRecommend_AWideUpperBoundIsUnsettled(t *testing.T) {
 		run(usage{"api-1", "api", "deployment", "api", 24, 0.5, 0.01, 256, 50, 0}),
 		run(usage{"api-1", "sidecar", "deployment", "api", 24, 0.1, 0.01, 64, 10, 0}),
 	}
-	// A VPA with a few minutes of history: its upper bounds are far above the targets.
+	// A VPA recommending for two days whose upper bounds are still far above the targets, as for a
+	// spiky container.
 	young := rec("api", 0.015, 100)
 	young.UpperBound = models.Resources{CPUCores: 16.4, MemoryBytes: 3 * 100 * mi}
 	wideMemory := rec("sidecar", 0.015, 100)
 	wideMemory.UpperBound.MemoryBytes = 301 * mi
-	vpas := []VPA{{TargetKind: "Deployment", TargetName: "api", UpdateMode: "Off", Containers: []ContainerRecommendation{young, wideMemory}}}
+	vpas := []VPA{{
+		TargetKind: "Deployment", TargetName: "api", UpdateMode: "Off", RecommendingSince: now.Add(-48 * time.Hour),
+		Containers: []ContainerRecommendation{young, wideMemory},
+	}}
 
-	api := Recommend("shop", resources, vpas, containers).Workloads[0]
+	api := Recommend("shop", resources, vpas, containers, now).Workloads[0]
 
+	assert.Equal(t, models.RightsizingRecommended, api.Status)
 	require.Len(t, api.Containers, 2)
 	assert.True(t, api.Containers[0].Unsettled, "CPU's upper bound is a thousand times the target")
 	assert.True(t, api.Containers[1].Unsettled, "memory's upper bound is just over three times the target")
@@ -153,7 +161,7 @@ func TestRecommend_AWideUpperBoundIsUnsettled(t *testing.T) {
 	settled := Recommend("shop", resources, []VPA{{
 		TargetKind: "Deployment", TargetName: "api", UpdateMode: "Off",
 		Containers: []ContainerRecommendation{rec("api", 0.015, 100)},
-	}}, containers).Workloads[0]
+	}}, containers, now).Workloads[0]
 	assert.False(t, settled.Containers[0].Unsettled)
 	assert.False(t, settled.LowConfidence)
 }
@@ -161,7 +169,7 @@ func TestRecommend_AWideUpperBoundIsUnsettled(t *testing.T) {
 func TestRecommend_ComparesEachContainerWithItsRequests(t *testing.T) {
 	t.Parallel()
 
-	web := workload(t, Recommend("shop", shopResources, shopVPAs, shopContainers()), "web")
+	web := workload(t, Recommend("shop", shopResources, shopVPAs, shopContainers(), now), "web")
 
 	assert.Equal(t, 3, web.Pods)
 	require.Len(t, web.Containers, 2)
@@ -180,7 +188,7 @@ func TestRecommend_ComparesEachContainerWithItsRequests(t *testing.T) {
 func TestRecommend_PricesTheChangeTheWayOpenCostCharges(t *testing.T) {
 	t.Parallel()
 
-	result := Recommend("shop", shopResources, shopVPAs, shopContainers())
+	result := Recommend("shop", shopResources, shopVPAs, shopContainers(), now)
 	web, worker := workload(t, result, "web"), workload(t, result, "worker")
 
 	// web: 500m → 120m on 3 pods all month; 1Gi → 384Mi.
@@ -221,7 +229,7 @@ func TestRecommend_LoweringARequestBelowUsageSavesOnlyDownToUsage(t *testing.T) 
 	vpas := []VPA{{TargetKind: "Deployment", TargetName: "api", UpdateMode: "Off", Containers: []ContainerRecommendation{rec("api", 0.5, 512)}}}
 	containers := []models.ContainerAllocation{run(usage{"api-1", "api", "deployment", "api", 24, 1, 0.6, 1024, 600, 0})}
 
-	api := Recommend("shop", resources, vpas, containers).Workloads[0]
+	api := Recommend("shop", resources, vpas, containers, now).Workloads[0]
 
 	assert.InDelta(t, cpuPrice*(0.6-1)*24*30, api.Containers[0].MonthlyChange.CPU, 1e-6)
 	assert.InDelta(t, memPrice*(600.0-1024)/1024*24*30, api.Containers[0].MonthlyChange.Memory, 1e-6)
@@ -235,7 +243,7 @@ func TestRecommend_LeavesOutContainersItCannotCompare(t *testing.T) {
 	vpas := []VPA{{TargetKind: "Deployment", TargetName: "api", UpdateMode: "Off", Containers: []ContainerRecommendation{rec("init-only", 0.1, 64)}}}
 	containers := []models.ContainerAllocation{run(usage{"api-1", "sidecar", "deployment", "api", 24, 0.1, 0.01, 64, 10, 0})}
 
-	api := Recommend("shop", resources, vpas, containers).Workloads[0]
+	api := Recommend("shop", resources, vpas, containers, now).Workloads[0]
 
 	assert.Equal(t, models.RightsizingRecommended, api.Status)
 	assert.Empty(t, api.Containers)
@@ -252,7 +260,7 @@ func TestRecommend_CountsAPodReplacedDuringTheDayOnce(t *testing.T) {
 		run(usage{"api-new", "api", "deployment", "api", 14, 0.5, 0.01, 64, 10, 0}),
 	}
 
-	api := Recommend("shop", resources, vpas, containers).Workloads[0]
+	api := Recommend("shop", resources, vpas, containers, now).Workloads[0]
 
 	assert.Equal(t, 1, api.Pods)
 	assert.InDelta(t, 0.5, api.Containers[0].Requests.CPUCores, 1e-9, "the run that lasted longest gives the current request")
@@ -266,7 +274,7 @@ func TestRecommend_FindsARolloutsPodsThroughItsReplicaSets(t *testing.T) {
 	vpas := []VPA{{TargetKind: "Rollout", TargetName: "api", UpdateMode: "Off", Containers: []ContainerRecommendation{rec("api", 0.1, 64)}}}
 	containers := []models.ContainerAllocation{run(usage{"api-7d9fbc6d5b-x1", "api", "replicaset", "api-7d9fbc6d5b", 24, 0.5, 0.01, 64, 10, 0})}
 
-	api := Recommend("shop", resources, vpas, containers).Workloads[0]
+	api := Recommend("shop", resources, vpas, containers, now).Workloads[0]
 
 	require.Len(t, api.Containers, 1)
 	assert.Negative(t, api.MonthlyChange)
@@ -280,9 +288,53 @@ func TestRecommend_IgnoresResourcesInOtherNamespaces(t *testing.T) {
 		{Kind: "Deployment", Name: "web"},
 	}
 
-	result := Recommend("shop", resources, nil, nil)
+	result := Recommend("shop", resources, nil, nil, now)
 
 	require.Len(t, result.Workloads, 1)
 	assert.Equal(t, "web", result.Workloads[0].Name, "a resource listed without a namespace is in the app's own")
 	assert.Equal(t, 0, result.Workloads[0].Pods)
+}
+
+func TestRecommend_GivesNoAdviceFromLessThanADayOfHistory(t *testing.T) {
+	t.Parallel()
+
+	resources := models.ManagedResources{{Kind: "Deployment", Name: "api", Namespace: "shop"}}
+	containers := []models.ContainerAllocation{run(usage{"api-1", "api", "deployment", "api", 24, 0.5, 0.01, 256, 50, 0})}
+	// A VPA with a few minutes of history: its upper bound is far above its target.
+	unsettledRec := rec("api", 0.015, 100)
+	unsettledRec.UpperBound.CPUCores = 16.4
+
+	tests := []struct {
+		name string
+		vpa  VPA
+		want string
+	}{
+		{"recommending for three minutes", VPA{RecommendingSince: now.Add(-3 * time.Minute), Containers: []ContainerRecommendation{rec("api", 0.015, 100)}}, models.RightsizingLearning},
+		{"recommending for just under a day", VPA{RecommendingSince: now.Add(-minHistory + time.Minute), Containers: []ContainerRecommendation{rec("api", 0.015, 100)}}, models.RightsizingLearning},
+		{"recommending for a day", VPA{RecommendingSince: now.Add(-minHistory), Containers: []ContainerRecommendation{rec("api", 0.015, 100)}}, models.RightsizingRecommended},
+		{"the VPA flags low confidence", VPA{RecommendingSince: now.Add(-72 * time.Hour), LowConfidence: true, Containers: []ContainerRecommendation{rec("api", 0.015, 100)}}, models.RightsizingLearning},
+		{"no start time and an unsettled upper bound", VPA{Containers: []ContainerRecommendation{unsettledRec}}, models.RightsizingLearning},
+		{"no start time and settled upper bounds", VPA{Containers: []ContainerRecommendation{rec("api", 0.015, 100)}}, models.RightsizingRecommended},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			vpa := tt.vpa
+			vpa.TargetKind, vpa.TargetName, vpa.UpdateMode = "Deployment", "api", "Off"
+
+			result := Recommend("shop", resources, []VPA{vpa}, containers, now)
+
+			api := result.Workloads[0]
+			assert.Equal(t, tt.want, api.Status)
+			if tt.want == models.RightsizingLearning {
+				assert.Empty(t, api.Containers, "no requests to copy before there is advice")
+				assert.Zero(t, api.MonthlyChange)
+				assert.Zero(t, result.MonthlySaving, "nothing to save before there is advice")
+				assert.Zero(t, result.MonthlyIncrease)
+			} else {
+				assert.Len(t, api.Containers, 1)
+				assert.Positive(t, result.MonthlySaving)
+			}
+		})
+	}
 }

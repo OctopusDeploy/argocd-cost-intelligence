@@ -1,5 +1,5 @@
 import { DailyCost } from './api';
-import { fromFirstCost } from './ranges';
+import { completeDays } from './ranges';
 
 // MIN_TREND_DAYS is how many complete days a trend needs before it is worth drawing: fewer than a
 // week cannot tell a slope from a weekend.
@@ -37,21 +37,14 @@ export function utcDay(now: Date = new Date()): string {
   return now.toISOString().slice(0, 10);
 }
 
-// trendDays is the part of a series, ordered oldest first, that a trend can be fitted to: the
-// complete days, from the first one with any cost. OpenCost's day for today is still accumulating,
-// and counting the $0 days before it had data would drag the trend down for anything it only
-// recently started measuring.
-export function trendDays(days: DailyCost[], today: string): DailyCost[] {
-  return fromFirstCost(days.filter(day => day.date < today));
-}
-
-// forecastMonthEnd estimates what the current calendar month will cost: the month's complete days as
-// measured, plus a least-squares trend over trendDays for each day left, today included. Days the
-// series skips (an application none of whose controllers ran) count as costing nothing, and are
-// placed by date, not by position. It returns null with fewer than MIN_TREND_DAYS days to fit.
-export function forecastMonthEnd(days: DailyCost[], now: Date = new Date()): MonthForecast | null {
+// forecastMonthEnd estimates what the current calendar month will cost: what the month's days before
+// today cost as measured, plus a least-squares trend over the completeDays for each day left, today
+// included. Days the series skips (an application none of whose controllers ran) count as costing
+// nothing, and are placed by date, not by position. It returns null with fewer than MIN_TREND_DAYS
+// days to fit. `from` is the first day the series was asked for.
+export function forecastMonthEnd(days: DailyCost[], from: string, now: Date = new Date()): MonthForecast | null {
   const today = utcDay(now);
-  const fitted = trendDays(days, today);
+  const fitted = completeDays(days, today, from);
   if (fitted.length < MIN_TREND_DAYS) return null;
 
   const xs = fitted.map(day => dayNumber(day.date));
@@ -72,8 +65,10 @@ export function forecastMonthEnd(days: DailyCost[], now: Date = new Date()): Mon
   const monthStart = `${today.slice(0, 8)}01`;
   const monthEnd = dateOf(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0) / DAY_MS);
 
-  // The $0 days trendDays leaves out add nothing to what was spent.
-  const spent = fitted.filter(day => day.date >= monthStart).reduce((sum, day) => sum + day.totalCost, 0);
+  // A partial first day is too short to fit a trend to, but its cost was still spent.
+  const spent = days
+    .filter(day => day.date >= monthStart && day.date < today)
+    .reduce((sum, day) => sum + day.totalCost, 0);
   const lastComplete = xs[xs.length - 1];
   const trend: ForecastDay[] = [];
   let projected = 0;

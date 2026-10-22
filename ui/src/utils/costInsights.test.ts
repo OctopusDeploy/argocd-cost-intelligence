@@ -311,14 +311,14 @@ describe('recommendCpuRequest', () => {
   };
 
   it('suggests 25% headroom over average use when peaks are not collected', () => {
-    const recommendation = recommendCpuRequest(efficiency, 325.5);
+    const recommendation = recommendCpuRequest(efficiency, 325.5, 24);
 
     expect(recommendation).toMatchObject({ requestedCores: 1, averageCores: 0.4, peakCores: null, suggestedCores: 0.5 });
     expect(recommendation?.monthlySavings).toBeCloseTo(162.75);
   });
 
   it('sizes from the peak when it is known, rounding up to 50m', () => {
-    const recommendation = recommendCpuRequest({ ...efficiency, cpuCoresUsedMax: 0.7 }, 325.5);
+    const recommendation = recommendCpuRequest({ ...efficiency, cpuCoresUsedMax: 0.7 }, 325.5, 24);
 
     expect(recommendation?.peakCores).toBe(0.7);
     expect(recommendation?.suggestedCores).toBe(0.9);
@@ -326,20 +326,29 @@ describe('recommendCpuRequest', () => {
   });
 
   it('suggests at least 50m for idle pods', () => {
-    expect(recommendCpuRequest({ ...efficiency, cpuEfficiency: 0, cpuCoresUsed: 0 }, 325.5)?.suggestedCores).toBe(0.05);
+    expect(recommendCpuRequest({ ...efficiency, cpuEfficiency: 0, cpuCoresUsed: 0 }, 325.5, 24)?.suggestedCores).toBe(0.05);
   });
 
   it('stays quiet unless usage is below half the request', () => {
-    expect(recommendCpuRequest({ ...efficiency, cpuEfficiency: 0.6, cpuCoresUsed: 0.6 }, 325.5)).toBeNull();
+    expect(recommendCpuRequest({ ...efficiency, cpuEfficiency: 0.6, cpuCoresUsed: 0.6 }, 325.5, 24)).toBeNull();
   });
 
   it('stays quiet when headroom over the peak would not lower the request', () => {
-    expect(recommendCpuRequest({ ...efficiency, cpuEfficiency: 0.1, cpuCoresUsed: 0.1, cpuCoresUsedMax: 0.9 }, 325.5)).toBeNull();
+    expect(recommendCpuRequest({ ...efficiency, cpuEfficiency: 0.1, cpuCoresUsed: 0.1, cpuCoresUsedMax: 0.9 }, 325.5, 24)).toBeNull();
+  });
+
+  it('waits for a day of data before suggesting anything', () => {
+    expect(recommendCpuRequest(efficiency, 325.5, 0.05)).toBeNull();
+    expect(recommendCpuRequest(efficiency, 325.5, 20)).toBeNull();
+    // OpenCost reports a full day as just under 24 hours.
+    expect(recommendCpuRequest(efficiency, 325.5, 23.9)).not.toBeNull();
+    // A record from before the measured period was stored has none to go by.
+    expect(recommendCpuRequest(efficiency, 325.5, undefined)).not.toBeNull();
   });
 
   it('stays quiet when the saving is under a dollar a month, or data is missing', () => {
-    expect(recommendCpuRequest(efficiency, 1)).toBeNull();
-    expect(recommendCpuRequest(undefined, 325.5)).toBeNull();
-    expect(recommendCpuRequest({ ...efficiency, cpuCoresRequested: 0 }, 325.5)).toBeNull();
+    expect(recommendCpuRequest(efficiency, 1, 24)).toBeNull();
+    expect(recommendCpuRequest(undefined, 325.5, 24)).toBeNull();
+    expect(recommendCpuRequest({ ...efficiency, cpuCoresRequested: 0 }, 325.5, 24)).toBeNull();
   });
 });

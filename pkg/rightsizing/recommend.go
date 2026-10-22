@@ -2,8 +2,10 @@ package rightsizing
 
 import (
 	"math"
+	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
 )
@@ -18,17 +20,22 @@ const (
 	monthFactor = 30.0
 	// settledRange is how far above its target the VPA's upper bound may be before the recommendation
 	// counts as unsettled. The VPA widens its upper bound by a factor of 1 + 1/(days of history), so it
-	// starts at the VPA's maximum and comes within this of the target after about a day.
+	// starts at the VPA's maximum and comes within this of the target after about half a day.
 	settledRange = 3.0
+	// minHistory is how long a VPA must have been recommending before its recommendation is advice:
+	// a day of use covers a daily cycle of load and the 24 hours the change is priced over. Before
+	// that the VPA's first figures come from minutes or hours of use.
+	minHistory = 24 * time.Hour
 )
 
 // Recommend matches the VPAs of an application's deployment namespace to the pod-owning resources
 // it manages, and prices each recommendation with what its containers cost over the last 24 hours.
-// VPAs for anything else in the namespace are ignored.
+// VPAs for anything else in the namespace are ignored. A recommendation from too little history
+// (enoughHistory) is reported as learning, with no containers and no change.
 //
 // The change is priced the way OpenCost charges: for the larger of a container's request and its
 // usage. A request lowered below what a container uses saves nothing beyond its usage.
-func Recommend(namespace string, resources models.ManagedResources, vpas []VPA, containers []models.ContainerAllocation) models.Rightsizing {
+func Recommend(namespace string, resources models.ManagedResources, vpas []VPA, containers []models.ContainerAllocation, now time.Time) models.Rightsizing {
 	result := models.Rightsizing{Available: true, Workloads: []models.WorkloadRightsizing{}}
 	for _, owner := range resources.PodOwners() {
 		if owner.Namespace != "" && owner.Namespace != namespace {
@@ -51,6 +58,8 @@ func Recommend(namespace string, resources models.ManagedResources, vpas []VPA, 
 				workload.Status = models.RightsizingManaged
 			case len(vpa.Containers) == 0:
 				workload.Status = models.RightsizingPending
+			case !enoughHistory(vpa, now):
+				workload.Status = models.RightsizingLearning
 			default:
 				workload.Status = models.RightsizingRecommended
 				workload.Containers = containerAdvice(vpa, owned)
@@ -155,6 +164,20 @@ func containerAdvice(vpa VPA, owned []models.ContainerAllocation) []models.Conta
 		})
 	}
 	return advice
+}
+
+// enoughHistory reports whether the VPA has had enough use to go on for its recommendation to be
+// advice: it has been recommending for minHistory. A VPA that does not say since when has enough once
+// none of its upper bounds is unsettled, about half a day. The VPA's own LowConfidence flag always
+// means not enough.
+func enoughHistory(vpa VPA, now time.Time) bool {
+	if vpa.LowConfidence {
+		return false
+	}
+	if !vpa.RecommendingSince.IsZero() {
+		return now.Sub(vpa.RecommendingSince) >= minHistory
+	}
+	return !slices.ContainsFunc(vpa.Containers, unsettled)
 }
 
 // unsettled reports whether either upper bound of rec is more than settledRange times its target.

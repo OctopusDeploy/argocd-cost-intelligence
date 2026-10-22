@@ -76,4 +76,40 @@ describe('EfficiencyCard', () => {
     expect(screen.getByText('Healthy')).toBeTruthy();
     expect(screen.getByText('$240.57 / mo')).toBeTruthy();
   });
+
+  it('gives no verdict or percentage for a resource the pods request none of', () => {
+    render(
+      <EfficiencyCard
+        efficiency={efficiency({ cpuEfficiency: 0, cpuCoresRequested: 0, cpuCoresLimit: 0, cpuCoresUsedMax: 0.6, cpuIdleCost: 0, totalEfficiency: 0.7 })}
+      />
+    );
+
+    expect(meter('CPU')).toEqual({ name: 'CPU: Avg 0.40 cores, Peak 0.60 cores, No request', fill: '66.66666666666667%', markers: ['100%'] });
+    expect(screen.getByText('No request set')).toBeTruthy();
+    expect(screen.queryByText('Over-provisioned')).toBeNull();
+    expect(screen.queryByText(/Peak use is above the request/)).toBeNull();
+    expect(screen.getByText('Moderate')).toBeTruthy();
+    expect(screen.getByText('70% of requested resources used')).toBeTruthy();
+  });
+
+  it('shows no efficiency when the pods set no requests at all', () => {
+    render(
+      <EfficiencyCard
+        efficiency={efficiency({
+          cpuEfficiency: 0,
+          ramEfficiency: 0,
+          totalEfficiency: 0,
+          cpuCoresRequested: 0,
+          ramBytesRequested: 0,
+          cpuIdleCost: 0,
+          ramIdleCost: 0,
+        })}
+      />
+    );
+
+    expect(screen.getByText('The pods set no CPU or memory requests')).toBeTruthy();
+    expect(screen.queryByText(/0% of requested/)).toBeNull();
+    expect(screen.getAllByText('No request set')).toHaveLength(2);
+    expect(screen.queryByText('Request')).toBeNull();
+  });
 });

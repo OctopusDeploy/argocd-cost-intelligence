@@ -132,27 +132,35 @@ func (m *mockStorage) Lock(context.Context, string) (func(), error) { return fun
 // allocation and summary responses. Caller must call Close() when done.
 func newOpenCostTestServer(t *testing.T) *httptest.Server {
 	t.Helper()
+	return newOpenCostTestServerWithPodPeaks(t, true)
+}
+
+// newOpenCostTestServerWithPodPeaks is newOpenCostTestServer, with or without the pods' peak usage.
+// The namespace's allocation has a peak of its own (0.8 cores, 400 MiB), as the mock OpenCost sends.
+func newOpenCostTestServerWithPodPeaks(t *testing.T, podPeaks bool) *httptest.Server {
+	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/allocation":
 			if r.URL.Query().Get("aggregate") == "pod" {
+				redis := opencost.AllocationData{
+					CPUCost: 6.0, RAMCost: 3.0, TotalCost: 9.0,
+					CPUCoreRequestAverage: 1, CPUCoreUsageAverage: 0.25,
+					RAMByteRequestAverage: 100, RAMByteUsageAverage: 50,
+					Properties: opencost.AllocationProperties{Pod: "redis-0", Namespace: "test-ns", ControllerKind: "statefulset", Controller: "redis"},
+				}
+				nginx := opencost.AllocationData{
+					CPUCost: 4.0, RAMCost: 2.0, TotalCost: 6.0,
+					Properties: opencost.AllocationProperties{Pod: "nginx-abc", Namespace: "test-ns", ControllerKind: "deployment", Controller: "nginx"},
+				}
+				if podPeaks {
+					redis.RawAllocationOnly = &opencost.RawAllocationOnly{CPUCoreUsageMax: 0.5, RAMByteUsageMax: 300 * 1024 * 1024}
+					nginx.RawAllocationOnly = &opencost.RawAllocationOnly{CPUCoreUsageMax: 0.2, RAMByteUsageMax: 200 * 1024 * 1024}
+				}
 				_ = json.NewEncoder(w).Encode(opencost.AllocationResponse{
 					Code: 200,
-					Data: []map[string]opencost.AllocationData{
-						{
-							"redis-0": {
-								CPUCost: 6.0, RAMCost: 3.0, TotalCost: 9.0,
-								CPUCoreRequestAverage: 1, CPUCoreUsageAverage: 0.25,
-								RAMByteRequestAverage: 100, RAMByteUsageAverage: 50,
-								Properties: opencost.AllocationProperties{Pod: "redis-0", Namespace: "test-ns", ControllerKind: "statefulset", Controller: "redis"},
-							},
-							"nginx-abc": {
-								CPUCost: 4.0, RAMCost: 2.0, TotalCost: 6.0,
-								Properties: opencost.AllocationProperties{Pod: "nginx-abc", Namespace: "test-ns", ControllerKind: "deployment", Controller: "nginx"},
-							},
-						},
-					},
+					Data: []map[string]opencost.AllocationData{{"redis-0": redis, "nginx-abc": nginx}},
 				})
 			} else {
 				_ = json.NewEncoder(w).Encode(opencost.AllocationResponse{
@@ -399,7 +407,9 @@ func TestOnApplicationSync_Success_StoresCostAndEfficiency(t *testing.T) {
 	require.NotNil(t, saved.Efficiency, "efficiency should be populated")
 	assert.InDelta(t, 0.4, saved.Efficiency.CPUEfficiency, 1e-9)
 	assert.InDelta(t, 0.55, saved.Efficiency.TotalEfficiency, 1e-9)
-	assert.InDelta(t, 0.8, saved.Efficiency.CPUCoresUsedMax, 1e-9, "peak CPU should be merged")
+	// OpenCost drops the peak from aggregated allocations, so the namespace's is its pods'.
+	assert.InDelta(t, 0.7, saved.Efficiency.CPUCoresUsedMax, 1e-9, "peak CPU should be the pods'")
+	assert.InDelta(t, float64(500*1024*1024), saved.Efficiency.RAMBytesUsedMax, 1e-9, "peak RAM should be the pods'")
 	// The summary has no idle cost; the namespace's is its pods' unused requests.
 	assert.InDelta(t, 135.0, saved.Efficiency.CPUIdleCost, 1e-9) // 6 * 0.75 * 30
 	assert.InDelta(t, 45.0, saved.Efficiency.RAMIdleCost, 1e-9)  // 3 * 0.5 * 30
@@ -413,6 +423,35 @@ func TestOnApplicationSync_Success_StoresCostAndEfficiency(t *testing.T) {
 	}
 	assert.InDelta(t, 450.0, totalPodCost, 1e-9) // (9+6) * 30
 	assert.Nil(t, saved.App, "without the application's resources only the namespace is measured")
+}
+
+func TestOnApplicationSync_PodsWithoutPeak_KeepNamespacePeak(t *testing.T) {
+	t.Parallel()
+
+	srv := newOpenCostTestServerWithPodPeaks(t, false)
+	defer srv.Close()
+
+	var saved *models.CostActual
+	store := &mockStorage{
+		saveActualFn: func(_ context.Context, actual *models.CostActual) error {
+			saved = actual
+			return nil
+		},
+	}
+
+	hook := newTestHook(t, srv, store)
+	require.NoError(t, hook.OnApplicationSync(context.Background(), &models.SyncNotification{
+		ApplicationName:      "my-app",
+		ApplicationNamespace: "argocd",
+		Namespace:            "test-ns",
+		SyncResult:           "Succeeded",
+		SyncTimestamp:        time.Now(),
+	}))
+	require.NotNil(t, saved)
+	require.NotNil(t, saved.Efficiency)
+
+	assert.InDelta(t, 0.8, saved.Efficiency.CPUCoresUsedMax, 1e-9)
+	assert.InDelta(t, float64(400*1024*1024), saved.Efficiency.RAMBytesUsedMax, 1e-9)
 }
 
 func TestOnApplicationSync_WithResources_MeasuresTheApplicationsOwnPods(t *testing.T) {

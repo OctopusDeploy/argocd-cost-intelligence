@@ -77,7 +77,7 @@ These are the invariants most likely to be broken by a well-meant change.
 
 **Daily history.** OpenCost keeps only the days its Prometheus retains, so `history.Recorder` stores each app's cost per UTC day in `cost_daily` (progress in `cost_daily_progress`). Days are stored with their scope and never served in another. `DAILY_HISTORY_DAYS` (default 400, `0` = off) bounds retention.
 
-**Rightsizing.** `/rightsizing` reads `VerticalPodAutoscaler`s in the app's namespace and matches them to the app's controllers. Only a VPA in `Off` mode is advice. Current requests and savings come from OpenCost's per-container allocations, not manifests. Requests only; limits are never suggested. Without the VPA API, permission or an in-cluster config the answer is `available: false`.
+**Rightsizing.** `/rightsizing` reads `VerticalPodAutoscaler`s in the app's namespace and matches them to the app's controllers. Only a VPA in `Off` mode is advice, and only once its recommendation has a day of history (`minHistory`; before that the workload is `learning`). Current requests and savings come from OpenCost's per-container allocations, not manifests. Requests only; limits are never suggested. Without the VPA API, permission or an in-cluster config the answer is `available: false`.
 
 **Prometheus metrics** ([docs/metrics.md](docs/metrics.md)). Each API replica serves its own health on `METRICS_PORT` (9102), never on the API port, which trusts proxy headers; the NetworkPolicy admits only `metrics.allowedFrom` there.
 - Application cost comes from one exporter Deployment (`MODE=exporter`, 1 replica, `Recreate`), never from API replicas, whose identical series would multiply sums.

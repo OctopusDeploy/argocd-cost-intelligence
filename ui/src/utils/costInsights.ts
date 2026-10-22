@@ -1,4 +1,5 @@
 import { CostData, EfficiencyMetrics, PodCost } from './api';
+import { isPartialMeasurement } from './format';
 import { ControllerGroup, groupPodsByController } from './podGroups';
 
 export interface CostChange {
@@ -197,6 +198,12 @@ export function efficiencyLevel(ratio: number): EfficiencyLevel {
   return 'over-provisioned';
 }
 
+// hasRequests reports whether the pods request any CPU or memory. Use measured against no request
+// is no efficiency at all, so it gets no level and no percentage.
+export function hasRequests(efficiency: EfficiencyMetrics): boolean {
+  return efficiency.cpuCoresRequested > 0 || efficiency.ramBytesRequested > 0;
+}
+
 export interface CostSlice {
   id: 'cpu' | 'memory' | 'storage' | 'network' | 'cloud' | 'loadBalancer' | 'gpu';
   label: string;
@@ -250,12 +257,15 @@ const MIN_MONTHLY_SAVINGS = 1;
 
 // recommendCpuRequest suggests a lower CPU request when pods use less than half of what they
 // request. The suggestion leaves 25% headroom above the higher of average and peak use, rounded
-// up to 50m, and the saving assumes the CPU cost scales with the requested cores.
+// up to 50m, and the saving assumes the CPU cost scales with the requested cores. It suggests
+// nothing from less than a day of data (measuredHours), which has not seen a day's load.
 export function recommendCpuRequest(
   efficiency: EfficiencyMetrics | undefined,
-  cpuCost: number
+  cpuCost: number,
+  measuredHours: number | undefined
 ): CpuRecommendation | null {
   if (!efficiency || efficiency.cpuCoresRequested <= 0 || cpuCost <= 0) return null;
+  if (isPartialMeasurement(measuredHours)) return null;
   if (efficiencyLevel(efficiency.cpuEfficiency) !== 'over-provisioned') return null;
 
   const requested = efficiency.cpuCoresRequested;

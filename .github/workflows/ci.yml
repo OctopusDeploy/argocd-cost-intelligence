@@ -1,13 +1,18 @@
 name: CI
 
+# Branches other than main are checked through their pull request, so a PR commit runs CI once.
 on:
   push:
-    branches: ['**']
-    tags-ignore: ['v*']
+    branches: [main]
   pull_request:
 
 permissions:
   contents: read
+
+# A newer commit on a PR cancels the run for the older one. Every commit on main runs to the end.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   go:
@@ -99,18 +104,25 @@ jobs:
         run: test -z "$(find src -name '*.d.ts')"
         working-directory: ui
 
+  # Nothing is pushed. This catches a broken Dockerfile before a release does.
   images:
-    name: Images — build
+    name: Images — ${{ matrix.image }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: backend
+            tag: argocd-cost-intelligence:ci
+            context: .
+          - image: UI
+            tag: argocd-cost-intelligence-ui:ci
+            context: ui
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
-      # Nothing is pushed. This catches a broken Dockerfile before a release does.
-      - name: Backend image
-        run: docker build -t argocd-cost-intelligence:ci .
-
-      - name: UI image
-        run: docker build -t argocd-cost-intelligence-ui:ci ui
+      - name: Build
+        run: docker build -t ${{ matrix.tag }} ${{ matrix.context }}
 
   helm:
     name: Helm — lint & template

@@ -26,6 +26,8 @@ The chart also runs a post-install/post-upgrade hook Job that changes Argo CD it
 | `argocd-notifications-secret` | The key `cost-intel-webhook-token`, the bearer token the webhook sends |
 | `argocd-server` Deployment | An init container, `cost-intel-extension`, and a volume that fetch the UI bundle from the UI Service |
 
+The hook finds the `argocd-server` and `argocd-notifications-controller` Deployments by their `app.kubernetes.io/name` label, which Argo CD's `install.yaml` and its Helm chart both set, so it works with either, whatever the Helm release is called. The chart names them after the release, `argo-cd-argocd-server` for a release called `argo-cd`.
+
 The hook only writes keys of its own, named after `cost-intel`. Your triggers, templates and `policy.csv` stay as they are. `subscriptions` is a single key shared by every subscription, so the hook adds its entry to the list and keeps the others. It changes that key only when its entry is missing or 0.1.0's entry is still there. The rewritten list keeps your entries and comments, but its formatting may change: indentation, quoting and blank lines between entries. If `argocd-notifications-cm` or `argocd-rbac-cm` doesn't exist, the hook skips it and says so in its log.
 
 The hook then restarts `argocd-notifications-controller`, the UI Deployment and `argocd-server`, so the Argo CD UI reloads during an install or upgrade. When the hook succeeds it deletes its own ServiceAccount, ClusterRole and Job.
@@ -192,8 +194,8 @@ kubectl get cm argocd-cm -n argocd -o jsonpath='{.data.extension\.config}'
 kubectl get cm argocd-cmd-params-cm -n argocd -o jsonpath='{.data.server\.enable\.proxy\.extension}'
 kubectl get cm argocd-notifications-cm -n argocd -o jsonpath='{.data.service\.webhook\.cost-intel}'
 kubectl get cm argocd-rbac-cm -n argocd -o jsonpath='{.data.policy\.cost-intel\.csv}'
-kubectl get deploy argocd-server -n argocd \
-  -o jsonpath='{.spec.template.spec.initContainers[*].name}'      # includes cost-intel-extension
+kubectl get deploy -n argocd -l app.kubernetes.io/name=argocd-server \
+  -o jsonpath='{.items[*].spec.template.spec.initContainers[*].name}'      # includes cost-intel-extension
 
 # Backend health
 kubectl port-forward svc/argocd-cost-intelligence 18080:8080 -n argocd-cost-intel &
@@ -328,11 +330,15 @@ kubectl patch cm argocd-rbac-cm -n argocd \
   --type json -p '[{"op":"remove","path":"/data/policy.cost-intel.csv"}]'
 
 # 5. The UI init container and volume on argocd-server
-#    (one patch: the volume mount must go together with the volume)
-kubectl patch deployment argocd-server -n argocd --type strategic \
-  -p '{"spec":{"template":{"spec":{"initContainers":[{"name":"cost-intel-extension","$patch":"delete"}],"containers":[{"name":"argocd-server","volumeMounts":[{"mountPath":"/tmp/extensions","$patch":"delete"}]}],"volumes":[{"name":"cost-intel-ext-js","$patch":"delete"}]}}}}'
+#    (one patch: the volume mount must go together with the volume).
+#    The server container is argocd-server with install.yaml and server with
+#    Argo CD's Helm chart; both list it first.
+SERVER=$(kubectl get deploy -n argocd -l app.kubernetes.io/name=argocd-server -o name)
+CONTAINER=$(kubectl get "$SERVER" -n argocd -o jsonpath='{.spec.template.spec.containers[0].name}')
+kubectl patch "$SERVER" -n argocd --type strategic \
+  -p '{"spec":{"template":{"spec":{"initContainers":[{"name":"cost-intel-extension","$patch":"delete"}],"containers":[{"name":"'"$CONTAINER"'","volumeMounts":[{"mountPath":"/tmp/extensions","$patch":"delete"}]}],"volumes":[{"name":"cost-intel-ext-js","$patch":"delete"}]}}}}'
 
 # 6. Restart so the changes apply
-kubectl rollout restart deployment/argocd-server -n argocd
-kubectl rollout restart deployment/argocd-notifications-controller -n argocd
+kubectl rollout restart deployment -n argocd -l app.kubernetes.io/name=argocd-server
+kubectl rollout restart deployment -n argocd -l app.kubernetes.io/name=argocd-notifications-controller
 ```

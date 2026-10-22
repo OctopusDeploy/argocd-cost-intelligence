@@ -4,6 +4,13 @@
   "service.webhook.cost-intel" (printf "url: %s/api/cost-analysis/on-sync\nheaders:\n- name: Content-Type\n  value: application/json\n- name: Authorization\n  value: Bearer $cost-intel-webhook-token\n" $backend)
   "trigger.cost-intel-on-sync-succeeded" (.Files.Get "files/argocd/trigger.cost-intel-on-sync-succeeded")
   "template.cost-intel-sync-succeeded" (.Files.Get "files/argocd/template.cost-intel-sync-succeeded") }}
+{{- $extensionURL := printf "http://%s-ui.%s.svc.cluster.local:%v/index.js" (include "argocd-cost-intelligence.fullname" .) .Values.namespace.name .Values.ui.port }}
+{{- $extensionInit := dict
+  "name" "cost-intel-extension"
+  "image" (.Values.postInstallHook.extensionInitImage | default "busybox:1.37.0")
+  "securityContext" (dict "runAsUser" 1000 "runAsNonRoot" true "allowPrivilegeEscalation" false "capabilities" (dict "drop" (list "ALL")))
+  "command" (list "sh" "-c" (printf "for i in 1 2 3 4 5; do wget -qO /ext/extension-cost-intel.js %s && echo OK && exit 0; sleep 10; done; echo Warning: extension download failed; exit 0" $extensionURL))
+  "volumeMounts" (list (dict "name" "cost-intel-ext-js" "mountPath" "/ext")) }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -44,6 +51,8 @@ spec:
           value: {{ .Files.Get "files/argocd/legacy/template.app-sync-succeeded" | toJson }}
         - name: RBAC_POLICY
           value: {{ .Files.Get "files/argocd/policy.cost-intel.csv" | toJson }}
+        - name: EXTENSION_INIT_CONTAINER
+          value: {{ $extensionInit | toJson | toJson }}
         command:
         - /bin/sh
         - -c
@@ -72,9 +81,19 @@ spec:
             fi
           }
 
+          # deployments NAME prints the Argo CD Deployments labelled app.kubernetes.io/name=NAME.
+          # Argo CD's install.yaml names them after the component, its Helm chart after the
+          # release (argo-cd-argocd-server), but both set this label. A failed lookup stops the
+          # hook, so the Job retries instead of reporting that nothing was found.
+          deployments() {
+            kubectl get deployments -n "$ARGOCD_NAMESPACE" -l "app.kubernetes.io/name=$1" -o name
+          }
+          NOTIFICATIONS_DEPLOYMENTS=$(deployments argocd-notifications-controller)
+
           echo "Waiting for Argo CD notifications controller..."
-          kubectl wait --for=condition=available --timeout=300s \
-            deployment/argocd-notifications-controller -n {{ .Values.argoCd.namespace }} || true
+          for d in $NOTIFICATIONS_DEPLOYMENTS; do
+            kubectl wait --for=condition=available --timeout=300s "$d" -n "$ARGOCD_NAMESPACE" || true
+          done
 
           echo "Configuring Argo CD extension proxy backend..."
           BACKEND_URL="http://{{ include "argocd-cost-intelligence.fullname" . }}.{{ .Values.namespace.name }}.svc.cluster.local:{{ .Values.costIntelligence.port }}"
@@ -94,11 +113,26 @@ spec:
           kubectl rollout status deployment/{{ include "argocd-cost-intelligence.fullname" . }}-ui -n {{ .Values.namespace.name }} --timeout=120s || true
 
           echo "Injecting Cost Intelligence UI extension into Argo CD server..."
-          kubectl patch deployment argocd-server -n {{ .Values.argoCd.namespace }} --type strategic -p '{"spec":{"template":{"spec":{"initContainers":[{"name":"cost-intel-extension","image":{{ .Values.postInstallHook.extensionInitImage | default "busybox:1.37.0" | toJson }},"securityContext":{"runAsUser":1000,"runAsNonRoot":true,"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}},"command":["sh","-c","for i in 1 2 3 4 5; do wget -qO /ext/extension-cost-intel.js http://{{ include "argocd-cost-intelligence.fullname" . }}-ui.{{ .Values.namespace.name }}.svc.cluster.local:{{ .Values.ui.port }}/index.js && echo OK && exit 0; sleep 10; done; echo Warning: extension download failed; exit 0"],"volumeMounts":[{"name":"cost-intel-ext-js","mountPath":"/ext"}]}],"containers":[{"name":"argocd-server","volumeMounts":[{"name":"cost-intel-ext-js","mountPath":"/tmp/extensions"}]}],"volumes":[{"name":"cost-intel-ext-js","emptyDir":{}}]}}}}' || true
+          SERVER_DEPLOYMENTS=$(deployments argocd-server)
+          if [ -z "$SERVER_DEPLOYMENTS" ]; then
+            echo "  no Deployment labelled app.kubernetes.io/name=argocd-server in $ARGOCD_NAMESPACE: the UI extension is not installed"
+          fi
+          for d in $SERVER_DEPLOYMENTS; do
+            # The volume is mounted into the server container, which install.yaml calls argocd-server
+            # and the Helm chart calls server; failing both, the first container.
+            CONTAINER=$(kubectl get "$d" -n "$ARGOCD_NAMESPACE" -o json | jq -r '.spec.template.spec.containers
+              | ((map(select(.name == "argocd-server" or .name == "server")) | first) // first) | .name') || continue
+            PATCH=$(jq -nc --argjson init "$EXTENSION_INIT_CONTAINER" --arg c "$CONTAINER" \
+              '{spec: {template: {spec: {
+                initContainers: [$init],
+                containers: [{name: $c, volumeMounts: [{name: "cost-intel-ext-js", mountPath: "/tmp/extensions"}]}],
+                volumes: [{name: "cost-intel-ext-js", emptyDir: {}}]}}}}') || continue
+            kubectl patch "$d" -n "$ARGOCD_NAMESPACE" --type strategic -p "$PATCH" && echo "  patched $d (container $CONTAINER)" || true
 
-          echo "Restarting Argo CD server to pick up new UI extension..."
-          kubectl rollout restart deployment/argocd-server -n {{ .Values.argoCd.namespace }} || true
-          kubectl rollout status deployment/argocd-server -n {{ .Values.argoCd.namespace }} --timeout=300s || true
+            echo "Restarting $d to pick up new UI extension..."
+            kubectl rollout restart "$d" -n "$ARGOCD_NAMESPACE" || true
+            kubectl rollout status "$d" -n "$ARGOCD_NAMESPACE" --timeout=300s || true
+          done
           {{- end }}
 
           # Every key below is this chart's own (named cost-intel), except `subscriptions`, a single
@@ -194,8 +228,13 @@ spec:
           {{- end }}
 
           echo "Restarting Argo CD notifications controller..."
-          kubectl rollout restart deployment/argocd-notifications-controller -n {{ .Values.argoCd.namespace }} || true
-          kubectl rollout status deployment/argocd-notifications-controller -n {{ .Values.argoCd.namespace }} --timeout=300s || true
+          if [ -z "$NOTIFICATIONS_DEPLOYMENTS" ]; then
+            echo "  no Deployment labelled app.kubernetes.io/name=argocd-notifications-controller in $ARGOCD_NAMESPACE: skipped"
+          fi
+          for d in $NOTIFICATIONS_DEPLOYMENTS; do
+            kubectl rollout restart "$d" -n "$ARGOCD_NAMESPACE" || true
+            kubectl rollout status "$d" -n "$ARGOCD_NAMESPACE" --timeout=300s || true
+          done
 
 
           {{- if include "argocd-cost-intelligence.accessApplication.enabled" . }}

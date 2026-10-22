@@ -1,7 +1,6 @@
 ArgoCD Cost Intelligence is installed in namespace {{ .Values.namespace.name }}.
 Open any application in Argo CD to find its Cost Intelligence tab.
-{{- /* An unquoted off is a YAML bool, which the Deployment skips like an empty value. */}}
-{{- $scope := .Values.costIntelligence.clusterScopeApp | default "" | toString }}
+{{- $scope := include "argocd-cost-intelligence.clusterScopeApp" . }}
 {{- $access := .Values.costIntelligence.accessApplication }}
 {{- if eq $scope "off" }}
 

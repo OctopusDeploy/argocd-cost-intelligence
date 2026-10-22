@@ -111,7 +111,7 @@ spec:
           value: {{ .Values.costIntelligence.pruneRemoteCost | quote }}
         - name: VPA_ENABLED
           value: {{ .Values.costIntelligence.vpa.enabled | quote }}
-        {{- with .Values.costIntelligence.clusterScopeApp }}
+        {{- with include "argocd-cost-intelligence.clusterScopeApp" . }}
         - name: CLUSTER_SCOPE_APP
           value: {{ . | quote }}
         {{- end }}

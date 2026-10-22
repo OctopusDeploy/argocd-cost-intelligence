@@ -48,6 +48,7 @@ All notable changes to this project are listed here. The format follows [Keep a 
 ### Security
 
 - `golang.org/x/net` is updated from 0.57.0 to 0.60.0 to fix GO-2026-6603, GO-2026-6610, GO-2026-6611, GO-2026-6612 and GO-2026-6617 in its HTTP/2 transport, which the Kubernetes client (rightsizing and the exporter) uses.
+- The docs said k3d doesn't enforce NetworkPolicy and told you to set `networkPolicy.enabled=false` there. k3s and k3d do enforce it, unless k3s was started with `--disable-network-policy`. If you turned the policies off on k3s or k3d because of that advice, set `networkPolicy.enabled=true` again: they are what stops anything in the cluster from forging the headers Argo CD's proxy sets.
 
 ## [0.1.0] - 2026-10-04
 

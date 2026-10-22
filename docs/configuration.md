@@ -24,7 +24,7 @@ Set values with `--set key=value` or with a values file (`-f`). If the file hold
 | `argoCd.namespace` | `argocd` | The namespace Argo CD runs in. The hook patches resources there. |
 | `namespace.name` | `argocd-cost-intel` | The namespace for every chart resource. `helm --namespace` must match it. |
 | `namespace.create` | `true` | Create that namespace. Set it to `false` when Helm (`--create-namespace`) or you create it first. With `true`, an existing namespace makes the install fail. |
-| `networkPolicy.enabled` | `true` | Deploy the NetworkPolicies. Set it to `false` on CNIs that don't enforce them (Flannel, k3d). |
+| `networkPolicy.enabled` | `true` | Deploy the NetworkPolicies. Set it to `false` on CNIs that don't enforce them, such as Flannel on its own. k3s and k3d do enforce them, unless k3s was started with `--disable-network-policy`. |
 
 ### Credentials
 

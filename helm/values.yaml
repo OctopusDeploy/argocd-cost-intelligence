@@ -299,7 +299,8 @@ webhook:
 
 # NetworkPolicy — restricts which pods may reach the backend.
 # Requires a CNI that enforces NetworkPolicy (Calico, Cilium, Weave, etc.).
-# k3d's default flannel CNI does NOT enforce policies; set enabled: false there.
+# Flannel on its own does NOT enforce policies; set enabled: false there. k3s and k3d do enforce
+# them, with the policy controller built into k3s.
 networkPolicy:
   enabled: true
   # Only argocd-server (extension proxy, UI bundle download) and

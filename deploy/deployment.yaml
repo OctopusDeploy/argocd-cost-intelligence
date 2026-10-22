@@ -91,8 +91,8 @@ spec:
         # Rightsizing from Vertical Pod Autoscaler recommendations; needs the VPA rule in rbac.yaml.
         - name: VPA_ENABLED
           value: "true"
-        # Argo CD Application whose viewers may see cluster-wide cost data (Namespaces and
-        # Chargeback pages). Unset uses the Application that installed this Deployment, read from
+        # Argo CD Application whose viewers may see cluster-wide cost data (Namespaces, Idle
+        # spend and Chargeback pages). Unset uses the Application that installed this Deployment, read from
         # its tracking annotation; "off" turns those pages off.
         # - name: CLUSTER_SCOPE_APP
         #   value: "argocd:<application-name>"

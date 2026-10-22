@@ -30,7 +30,7 @@ From a checkout, replace the OCI reference with `./helm`. Ready-made overlays: `
 |---|---|---|
 | `postgres.auth.password` | none | Database password; required on first install (or use `postgres.auth.existingSecret`) |
 | `openCost.baseURL` | `http://opencost.opencost:9003` | OpenCost API URL |
-| `costIntelligence.clusterScopeApp` | `""` | Argo CD Application (`<namespace>:<name>`) whose viewers see the cluster-wide Namespaces and Chargeback pages; empty turns them off |
+| `costIntelligence.clusterScopeApp` | `""` | Argo CD Application (`<namespace>:<name>`) whose viewers see the cluster-wide Namespaces, Idle spend and Chargeback pages; empty uses the Application that installed the chart, or else the access Application; `off` turns them off |
 | `argoCd.namespace` | `argocd` | Where Argo CD runs |
 | `webhook.existingSecret` | `""` | Set when Argo CD or `helm template` renders the chart, so the webhook token stays stable |
 | `networkPolicy.enabled` | `true` | Set `false` on CNIs that do not enforce NetworkPolicy (Flannel, k3d) |

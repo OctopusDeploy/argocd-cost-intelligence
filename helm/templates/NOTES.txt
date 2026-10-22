@@ -1,26 +1,48 @@
 ArgoCD Cost Intelligence is installed in namespace {{ .Values.namespace.name }}.
 Open any application in Argo CD to find its Cost Intelligence tab.
-{{- if .Values.costIntelligence.clusterScopeApp }}
+{{- /* An unquoted off is a YAML bool, which the Deployment skips like an empty value. */}}
+{{- $scope := .Values.costIntelligence.clusterScopeApp | default "" | toString }}
+{{- $access := .Values.costIntelligence.accessApplication }}
+{{- if eq $scope "off" }}
 
-Cluster-wide costs (the Namespaces and Chargeback pages) are shown to users
-Argo CD allows to get the application {{ .Values.costIntelligence.clusterScopeApp }}.
+Cluster-wide costs (the Namespaces, Idle spend and Chargeback pages) are OFF.
+To turn them on, set costIntelligence.clusterScopeApp to an application's
+<namespace>:<name>, or leave it empty to use the application that installed
+Cost Intelligence or the one the chart creates.
+{{- else if $scope }}
+
+Cluster-wide costs (the Namespaces, Idle spend and Chargeback pages) are shown
+to users Argo CD allows to get the application {{ $scope }}.
+{{- else if include "argocd-cost-intelligence.accessApplication.enabled" . }}
+
+Cluster-wide costs (the Namespaces, Idle spend and Chargeback pages) are shown
+to users Argo CD allows to get the application {{ .Values.argoCd.namespace }}:{{ $access.name }},
+which the chart created for this and which deploys nothing. role:admin can, and
+so can everyone if your policy.default is role:readonly. To let another role see
+them, add a line to argocd-rbac-cm:
+
+  p, role:platform, applications, get, {{ $access.project }}/{{ $access.name }}, allow
 {{- else }}
 
-Cluster-wide costs (the Namespaces and Chargeback pages) are OFF.
-They are shown only to users Argo CD allows to get one application you choose.
-Any existing application works. List the candidates:
-
-  kubectl get applications -A
-
-Then turn the pages on with that application's <namespace>:<name>:
+Cluster-wide costs (the Namespaces, Idle spend and Chargeback pages) are shown
+to users Argo CD allows to get the Argo CD application that installed Cost
+Intelligence. If Helm installed it, there is no such application and the chart
+created none, so the pages stay off until you choose one. Any existing
+application works:
 
   helm upgrade {{ .Release.Name }} <chart> -n {{ .Release.Namespace }} --reuse-values \
     --set costIntelligence.clusterScopeApp=<namespace>:<name>
-
-To see them, people also need `get` on that application, for example in argocd-rbac-cm:
-
-  p, role:platform, applications, get, <project>/<name>, allow
 {{- end }}
+{{- if and .Values.features.autoPatchArgoCd (dig "rbac" "grantAdmin" true .Values.argoCd) }}
+
+The install hook lets role:admin open the extension, with policy.cost-intel.csv
+in argocd-rbac-cm (if argocd-rbac-cm didn't exist yet, the hook skipped this and
+its log says so). Other roles need their own line in policy.csv, for example:
+
+  p, role:platform, extensions, invoke, cost-intel, allow
+
+Without it the tab shows "401: Unauthorized extension request".
+{{- else }}
 
 Argo CD denies the extension to everyone until argocd-rbac-cm allows it, the
 built-in admin included. Append this line to the policy.csv already there:
@@ -29,3 +51,4 @@ built-in admin included. Append this line to the policy.csv already there:
 
 Other roles need their own line. Without it the tab shows
 "401: Unauthorized extension request".
+{{- end }}

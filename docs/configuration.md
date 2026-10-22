@@ -18,7 +18,7 @@ Set values with `--set key=value` or with a values file (`-f`). If the file hold
 |---|---|---|
 | `postgres.auth.password` | `""` | Database password. Needed on first install unless `postgres.auth.existingSecret` is set. Later upgrades read it back from the Secret. |
 | `openCost.baseURL` | `http://opencost.opencost:9003` | OpenCost API URL. |
-| `costIntelligence.clusterScopeApp` | `""` | The Argo CD Application (`<namespace>:<name>`) whose viewers see the Namespaces and Chargeback pages and the control-plane fee. Empty uses the Application that installed the chart, or else the access Application below. `off` turns them off. See [installation.md](installation.md#choose-your-settings). |
+| `costIntelligence.clusterScopeApp` | `""` | The Argo CD Application (`<namespace>:<name>`) whose viewers see the Namespaces, Idle spend and Chargeback pages and the control-plane fee. Empty uses the Application that installed the chart, or else the access Application below. `off` turns them off. See [installation.md](installation.md#choose-your-settings). |
 | `costIntelligence.accessApplication.create` | `true` | When Helm itself installs the chart and `clusterScopeApp` is empty, create an Argo CD Application to gate cluster-wide costs, in an AppProject that permits no resources. It deploys nothing. It is not created when Argo CD renders the chart, since Argo CD's own Application is the gate then. |
 | `costIntelligence.accessApplication.name` / `.project` | `cost-intelligence-access` | Names of that Application and its AppProject, in `argoCd.namespace`. |
 | `argoCd.namespace` | `argocd` | The namespace Argo CD runs in. The hook patches resources there. |

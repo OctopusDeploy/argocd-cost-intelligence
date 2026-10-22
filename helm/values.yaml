@@ -21,7 +21,7 @@ costIntelligence:
   port: 8080
 
   # Argo CD Application ("<namespace>:<name>") that gates cluster-wide cost data: the
-  # Namespaces and Chargeback pages, and cluster control-plane cost. Only users Argo CD RBAC
+  # Namespaces, Idle spend and Chargeback pages, and cluster control-plane cost. Only users Argo CD RBAC
   # allows to get this Application can see them, for example with
   #   p, role:platform, applications, get, <project>/<name>, allow
   # Empty finds one: the Argo CD Application that installed this chart, or, when Helm installed

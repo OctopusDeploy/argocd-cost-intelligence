@@ -12,7 +12,7 @@ keywords:
   - cost-analysis
   - opencost
 
-home: https://github.com/OctopusDeploy/argocd-cost-intelligence
+home: https://argocd-cost-intelligence.readthedocs.io/
 sources:
   - https://github.com/OctopusDeploy/argocd-cost-intelligence
 
@@ -24,6 +24,9 @@ dependencies: []
 
 annotations:
   artifacthub.io/license: Apache-2.0
+  artifacthub.io/links: |
+    - name: Documentation
+      url: https://argocd-cost-intelligence.readthedocs.io/
   artifacthub.io/changes: |
     - kind: added
       description: Initial release

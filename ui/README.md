@@ -3,7 +3,7 @@
 The React / TypeScript plugin that shows cost data inside the Argo CD UI. It registers two extensions (`src/index.tsx`):
 
 - an **application tab**, "Cost Intelligence" (`CostPanel`: Actual costs / Resources / Trends)
-- a **system-level page** at `/cost-intelligence` (`NamespaceDashboard`: Namespaces / Chargeback)
+- a **system-level page** at `/cost-intelligence` (`NamespaceDashboard`: Namespaces / Idle spend / Chargeback)
 
 Installing it is part of the Helm chart; see [installation.md](../docs/installation.md). This file is for working on the plugin. The conventions (design tokens, layout, accessibility, testing rules) are in [CLAUDE.md](../CLAUDE.md#ui-plugin); read them before changing a component.
 

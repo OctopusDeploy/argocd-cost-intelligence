@@ -1,6 +1,7 @@
 # ArgoCD Cost Intelligence
 
 [![CI](https://github.com/OctopusDeploy/argocd-cost-intelligence/actions/workflows/ci.yml/badge.svg)](https://github.com/OctopusDeploy/argocd-cost-intelligence/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/readthedocs/argocd-cost-intelligence)](https://argocd-cost-intelligence.readthedocs.io/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/OctopusDeploy/argocd-cost-intelligence?include_prereleases)](https://github.com/OctopusDeploy/argocd-cost-intelligence/releases)
 
@@ -58,6 +59,8 @@ These come from a small test cluster in the Argo CD dark theme, so the amounts a
 </details>
 
 ## Documentation
+
+The guides are also published at [argocd-cost-intelligence.readthedocs.io](https://argocd-cost-intelligence.readthedocs.io/).
 
 | I want to... | Read |
 |---|---|

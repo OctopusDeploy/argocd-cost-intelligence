@@ -28,6 +28,8 @@ type mockStorage struct {
 	getLatestActualFn         func(ctx context.Context, app models.AppRef) (*models.CostActual, error)
 	getActualsInDateRangeFn   func(ctx context.Context, app models.AppRef, start, end time.Time) ([]models.CostActual, error)
 	getNamespaceCostSummaryFn func(ctx context.Context, namespace string, days int) (float64, error)
+	// superseded makes SaveActualUnlessSuperseded find a later sync's record.
+	superseded atomic.Bool
 }
 
 var _ storage.CostStorage = (*mockStorage)(nil)
@@ -40,6 +42,13 @@ func (m *mockStorage) SaveActual(ctx context.Context, actual *models.CostActual)
 		return m.saveActualFn(ctx, actual)
 	}
 	return nil
+}
+
+func (m *mockStorage) SaveActualUnlessSuperseded(ctx context.Context, actual *models.CostActual) (bool, error) {
+	if m.superseded.Load() {
+		return false, nil
+	}
+	return true, m.SaveActual(ctx, actual)
 }
 
 func (m *mockStorage) GetLatestActual(ctx context.Context, app models.AppRef) (*models.CostActual, error) {
@@ -682,11 +691,11 @@ func TestOnApplicationSync_EarlierSyncFinishingLaterLeavesNoRetry(t *testing.T) 
 	h, observed := newRetryingHook(context.Background(), t, newOpenCostWithDataAfter(t, 0), store, time.Hour)
 
 	// An earlier sync of the app starts, and finds no data only after a later sync has recorded.
-	earlier, _ := h.beginSync(myApp)
+	earlier := h.beginSync(myApp)
 	later := succeededSync()
 	later.SyncTimestamp = later.SyncTimestamp.Add(time.Minute)
 	require.NoError(t, h.OnApplicationSync(context.Background(), later))
-	h.scheduleRetry(myApp, *succeededSync(), earlier)
+	h.endSync(myApp, *succeededSync(), earlier, ErrNoData)
 
 	assert.Equal(t, 0, pendingRetries(h), "the later sync's record is newer than anything the earlier sync's retry would save")
 	assert.Len(t, saved, 1)
@@ -701,6 +710,69 @@ func TestOnApplicationSync_FailureWithoutPendingRetry_SchedulesNone(t *testing.T
 
 	require.Error(t, h.OnApplicationSync(context.Background(), succeededSync()))
 	assert.Equal(t, 0, pendingRetries(h), "only a sync without OpenCost data starts retrying")
+}
+
+func TestOnApplicationSync_OverlappingSyncsFailing_KeepTheRetryTheyReplaced(t *testing.T) {
+	t.Parallel()
+
+	failed := errors.New("OpenCost down")
+	for _, tc := range []struct {
+		name         string
+		newerSettles bool // the newer sync finishes first
+	}{
+		{"the earlier finishing first", false},
+		{"the newer finishing first", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			store, _ := savedRecords()
+			h, _ := newRetryingHook(context.Background(), t, newOpenCostWithDataAfter(t, 1), store, time.Hour)
+			require.ErrorIs(t, h.OnApplicationSync(context.Background(), succeededSync()), ErrNoData)
+			require.Equal(t, 1, pendingRetries(h))
+
+			// Two syncs start while the retry waits; the first replaces it, and both fail outright.
+			first := h.beginSync(myApp)
+			second := h.beginSync(myApp)
+			if tc.newerSettles {
+				h.endSync(myApp, *succeededSync(), second, failed)
+				h.endSync(myApp, *succeededSync(), first, failed)
+			} else {
+				h.endSync(myApp, *succeededSync(), first, failed)
+				h.endSync(myApp, *succeededSync(), second, failed)
+			}
+
+			assert.Equal(t, 1, pendingRetries(h), "the newest sync takes over the retry the first one replaced")
+		})
+	}
+}
+
+func TestOnApplicationSync_RecordedSync_OwesNoRetry(t *testing.T) {
+	t.Parallel()
+
+	store, _ := savedRecords()
+	h, _ := newRetryingHook(context.Background(), t, newOpenCostWithDataAfter(t, 1), store, time.Hour)
+	require.ErrorIs(t, h.OnApplicationSync(context.Background(), succeededSync()), ErrNoData)
+
+	require.NoError(t, h.OnApplicationSync(context.Background(), succeededSync()), "OpenCost has data now")
+	h.endSync(myApp, *succeededSync(), h.beginSync(myApp), errors.New("OpenCost down"))
+
+	assert.Equal(t, 0, pendingRetries(h), "the recorded sync settled the retry it replaced")
+}
+
+func TestRetry_LaterSyncRecordedElsewhere_StopsRetrying(t *testing.T) {
+	t.Parallel()
+
+	store, saved := savedRecords()
+	store.superseded.Store(true) // another replica has recorded a later sync of the app
+	h, observed := newRetryingHook(context.Background(), t, newOpenCostWithDataAfter(t, 1), store,
+		time.Millisecond, time.Millisecond, time.Millisecond)
+
+	require.ErrorIs(t, h.OnApplicationSync(context.Background(), succeededSync()), ErrNoData)
+
+	require.Eventually(t, func() bool { return pendingRetries(h) == 0 }, 5*time.Second, time.Millisecond)
+	assert.Empty(t, observed.get(), "a retry with nothing newer to store measured nothing of use")
+	assert.Empty(t, saved)
 }
 
 func TestRetry_PanicReleasesItsSlot(t *testing.T) {
@@ -721,11 +793,11 @@ func TestRetry_PanicReleasesItsSlot(t *testing.T) {
 	for i := range maxConcurrentRetries {
 		n := succeededSync()
 		n.ApplicationName = fmt.Sprintf("app-%d", i)
-		h.scheduleRetry(models.AppRef{Namespace: n.ApplicationNamespace, Name: n.ApplicationName}, *n, 0)
+		h.endSync(models.AppRef{Namespace: n.ApplicationNamespace, Name: n.ApplicationName}, *n, 0, ErrNoData)
 	}
 	require.Eventually(t, func() bool { return pendingRetries(h) == 0 }, 5*time.Second, time.Millisecond)
 	panicking.Store(false)
-	h.scheduleRetry(myApp, *succeededSync(), 0)
+	h.endSync(myApp, *succeededSync(), 0, ErrNoData)
 
 	select {
 	case <-saved:

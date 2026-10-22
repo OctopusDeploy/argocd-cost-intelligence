@@ -12,9 +12,11 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -22,6 +24,7 @@ import (
 	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
 	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/opencost"
 	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/storage"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/telemetry"
 )
 
 // mockStorage implements storage.CostStorage for testing.
@@ -44,6 +47,10 @@ var _ storage.CostStorage = (*mockStorage)(nil)
 func (m *mockStorage) InitializeSchema(_ context.Context) error                 { return nil }
 func (m *mockStorage) SaveActual(_ context.Context, _ *models.CostActual) error { return nil }
 func (m *mockStorage) SaveFirstActual(context.Context, *models.CostActual) (bool, error) {
+	return true, nil
+}
+
+func (m *mockStorage) SaveActualUnlessSuperseded(context.Context, *models.CostActual) (bool, error) {
 	return true, nil
 }
 func (m *mockStorage) Lock(context.Context, string) (func(), error) { return func() {}, nil }
@@ -294,6 +301,33 @@ func TestHandleOnSync_OtherCluster_Returns200(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 	assert.Contains(t, rr.Body.String(), "another cluster")
+}
+
+func TestHandleOnSync_OtherCluster_StopsTheRetryOfAnEarlierSync(t *testing.T) {
+	t.Parallel()
+
+	reg := prometheus.NewRegistry()
+	srv := newTestAPIServer(t, &mockStorage{}, WithMetrics(telemetry.NewMetrics(reg)))
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	var retried atomic.Int32
+	srv.syncHook.RetryWithoutData(ctx, []time.Duration{2 * time.Second}, func(string) { retried.Add(1) })
+
+	// The test OpenCost has no data for "ns", so the sync's measurement is retried.
+	local := models.SyncNotification{ApplicationName: "redis", ApplicationNamespace: "argocd", Namespace: "ns", SyncResult: "Succeeded"}
+	payload, _ := json.Marshal(local)
+	require.Equal(t, http.StatusAccepted, doRequest(t, srv, http.MethodPost, "/api/cost-analysis/on-sync", payload).Code)
+	require.Eventually(t, func() bool {
+		return counterValues(t, reg, "argocd_cost_intelligence_sync_measurements_total", "result")["no_data"] == 1
+	}, 5*time.Second, 10*time.Millisecond)
+
+	remote := local
+	remote.DestinationServer = "https://prod.example.com"
+	payload, _ = json.Marshal(remote)
+	require.Equal(t, http.StatusOK, doRequest(t, srv, http.MethodPost, "/api/cost-analysis/on-sync", payload).Code)
+
+	assert.Never(t, func() bool { return retried.Load() > 0 }, 3*time.Second, 10*time.Millisecond,
+		"ns here is no longer the application's namespace")
 }
 
 func TestHandleOnSync_AccessApplication_Returns200(t *testing.T) {

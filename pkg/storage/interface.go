@@ -28,6 +28,11 @@ type CostStorage interface {
 	// stored beside it, and the later measurement is then the latest.
 	SaveFirstActual(ctx context.Context, actual *models.CostActual) (bool, error)
 
+	// SaveActualUnlessSuperseded stores actual, a sync's record, only when no later sync of its
+	// application has a record, and reports whether it did. A record measured at install does not count.
+	// A later sync saved in the same instant may be stored beside it.
+	SaveActualUnlessSuperseded(ctx context.Context, actual *models.CostActual) (bool, error)
+
 	// Lock waits until this process holds the named lock, shared by every replica using the same
 	// database, and returns the function that releases it. The lock is released if the process dies.
 	Lock(ctx context.Context, name string) (unlock func(), err error)

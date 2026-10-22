@@ -38,7 +38,7 @@ The hook doesn't change Kubernetes RBAC for Argo CD. The webhook is sent only fo
 
 | You need | Notes |
 |---|---|
-| A Kubernetes cluster | Any cluster Argo CD supports. |
+| A Kubernetes cluster | Any cluster Argo CD supports. OpenCost measures only the cluster it runs in, so Cost Intelligence measures only the applications Argo CD deploys to this cluster. If Argo CD also manages other clusters, applications deployed there aren't measured, and their tab says so; see [Known limitations](architecture.md#known-limitations). |
 | Argo CD 3.4 or 3.5 | The plugin uses the proxy extension feature, which the hook turns on. `argocd-notifications-controller` must be running in `argoCd.namespace`. |
 | OpenCost 1.121.1 or later | The backend and exporter call it on port 9003. The default URL is `http://opencost.opencost:9003`. See [opencost.io/docs/install](https://www.opencost.io/docs/install). |
 | Helm 3.8 or later | The chart is published as an OCI artifact. |

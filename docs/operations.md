@@ -6,6 +6,8 @@ Running the service day to day: fixing problems, how the NetworkPolicies work, a
 
 ### The Cost Intelligence tab doesn't appear
 
+If you turned the hook off and configured Argo CD from Git, go through [If the tab doesn't appear](gitops-install.md#if-the-tab-doesnt-appear) in the GitOps guide instead.
+
 Run the checks in [Check that it works](installation.md#check-that-it-works). These are the usual causes:
 
 - The `cost-intel-extension` init container is missing from `argocd-server`. Either the hook failed, or something that manages the Deployment reverted it. A failed hook Job is kept, so you can read its log: `kubectl logs -n argocd-cost-intel job/argocd-cost-intelligence-post-install`.

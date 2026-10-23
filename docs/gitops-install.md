@@ -4,6 +4,8 @@ This guide is for you if Argo CD itself is installed and configured from Git, fo
 
 You need everything in [installation.md](installation.md#prerequisites) first: Argo CD 3.4 or 3.5 with Argo CD Notifications, and OpenCost.
 
+Steps 1 and 2 are the same for every setup. Step 3 has one section for [Argo CD's Helm chart](#argo-cds-helm-chart) and one for [plain manifests or Kustomize](#plain-manifests-or-kustomize); follow only yours.
+
 ## What you'll add
 
 These are all the changes the hook makes to Argo CD. You'll add each of them to your Argo CD configuration.

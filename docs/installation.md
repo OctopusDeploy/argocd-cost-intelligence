@@ -242,7 +242,7 @@ Add one step to your CI workflow after `terraform plan`:
 ```bash
 infracost breakdown --format json --path ./terraform > /tmp/infracost.json
 
-curl -s -X POST \
+curl -s --fail-with-body -X POST \
   "https://<argocd-host>/extensions/cost-intel/api/cost-analysis/<app-name>/cloud-estimate?source=infracost" \
   -H "Authorization: Bearer $ARGOCD_TOKEN" \
   -H "Argocd-Application-Name: <app-namespace>:<app-name>" \
@@ -252,6 +252,29 @@ curl -s -X POST \
 ```
 
 `ARGOCD_TOKEN` is an Argo CD token (for example a project role token) allowed to `get` the application and to `invoke` the `cost-intel` extension. `<app-namespace>` is the namespace of the Application resource, usually `argocd`.
+
+The service answers `200` with the estimate it stored. Each push replaces the application's previous estimate, and resources without a monthly cost are left out:
+
+```json
+{
+  "source": "infracost",
+  "totalMonthlyCost": 412.5,
+  "currency": "USD",
+  "resources": [
+    { "name": "aws_db_instance.payments", "resourceType": "aws_db_instance", "monthlyCost": 380.1 }
+  ],
+  "pushedAt": "2026-10-23T09:14:02.381552Z"
+}
+```
+
+`--fail-with-body` fails the CI step on any other answer and prints why:
+
+| Status | Cause |
+|---|---|
+| `400` | The body isn't Infracost JSON or is over 10 MB, or `source` isn't `infracost`. Argo CD also answers `400` when a header is missing |
+| `401` | Argo CD refused the call: the token may not `get` the Application or `invoke` `cost-intel`, or `Argocd-Project-Name` isn't the Application's project. The `argocd-server` log has the reason |
+| `403` | `Argocd-Application-Name` names a different application from the URL |
+| `500` | The estimate couldn't be saved. The service log has the reason |
 
 The **Actual costs** tab then shows a full-stack monthly cost card: Kubernetes compute, cloud services and the total. The card warns when the estimate is more than 7 days old, and it's hidden when nothing has been pushed.
 

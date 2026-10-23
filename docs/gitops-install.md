@@ -89,15 +89,6 @@ spec:
         postgres:
           auth:
             existingSecret: cost-intel-postgres
-        # openCost:
-        #   baseURL: http://opencost.opencost.svc.cluster.local:9003
-        # argoCd:
-        #   namespace: argocd
-        # metrics:
-        #   allowedFrom:
-        #     - namespaceSelector:
-        #         matchLabels:
-        #           kubernetes.io/metadata.name: prometheus-system
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd-cost-intel
@@ -111,13 +102,7 @@ The NetworkPolicy lets Prometheus reach the metrics port only from the namespace
 
 The chart creates a ClusterRole, so the project must allow cluster-scoped resources. The `default` project does.
 
-If you apply the Application with `kubectl`, Kubernetes may warn about its finalizer:
-
-```text
-Warning: metadata.finalizers: "resources-finalizer.argocd.argoproj.io": prefer a domain-qualified finalizer name including a path (/) to avoid accidental conflicts with other finalizer writers
-```
-
-You can ignore it. Kubernetes prints it for any finalizer name without a `/`; older versions leave out "including a path (/)". The Application is created, and Argo CD still uses the finalizer to delete what the Application installed.
+If you apply the Application with `kubectl`, Kubernetes may warn that its finalizer should be "a domain-qualified finalizer name". You can ignore it: the Application is created and the finalizer still works.
 
 Who sees the cluster-wide Namespaces, Idle spend and Chargeback pages is decided by this Application: anyone your Argo CD RBAC lets `get` it. See [Choose your settings](installation.md#choose-your-settings) to pick another Application or turn those pages off.
 
@@ -145,7 +130,6 @@ Add these values to the values file of your Argo CD release. Each block below is
 ```yaml
 configs:
   cm:
-    # Where Argo CD sends the plugin's API calls
     extension.config: |
       extensions:
       - name: cost-intel
@@ -154,16 +138,13 @@ configs:
           - url: http://argocd-cost-intelligence.argocd-cost-intel.svc.cluster.local:8080
 
   params:
-    # Proxy extensions are off unless this is set
     server.enable.proxy.extension: true
 
   rbac:
-    # Lets the built-in admin role open the plugin
     policy.cost-intel.csv: |
       p, role:admin, extensions, invoke, cost-intel, allow
 
 server:
-  # Downloads the plugin from the Cost Intelligence UI Service when argocd-server starts
   initContainers:
   - name: cost-intel-extension
     image: busybox:1.37.0
@@ -229,7 +210,6 @@ notifications:
               "syncResult": "Succeeded"
             }
 
-  # Sends the trigger above to the webhook above for every Application
   subscriptions:
     - recipients:
       - cost-intel
@@ -258,7 +238,7 @@ If Argo CD renders its own chart from Git, every values file is in Git, so set `
 
 You don't need to add the notifications ClusterRole. The chart already gives the notifications controller access to Applications in every namespace, unless you set `createClusterRoles: false`; then add Argo CD's, as for plain manifests below. It only watches the namespaces in `configs.params."application.namespaces"`, though, as the [apps in any namespace](https://argo-cd.readthedocs.io/en/stable/operator-manual/app-any-namespace/) guide describes.
 
-Sync your Argo CD release. Changing the init container restarts `argocd-server`. If the restart happens before Cost Intelligence's UI is running, the download fails, `argocd-server` starts without the plugin, and you restart it later with `kubectl rollout restart deployment -n argocd -l app.kubernetes.io/name=argocd-server`. The chart names the Deployment after your release, so this finds it by its label.
+Sync your Argo CD release. Changing the init container restarts `argocd-server`. If it restarts before Cost Intelligence's UI is running, it starts without the plugin; see [If the tab doesn't appear](#if-the-tab-doesnt-appear).
 
 ### Plain manifests or Kustomize
 
@@ -283,7 +263,7 @@ patches:
 - path: cost-intel-argocd-server.yaml
 ```
 
-`cost-intel-argocd-cm.yaml` tells Argo CD where to send the plugin's API calls. If `extension.config` is already set in your overlay, add the `cost-intel` entry to its list instead.
+`cost-intel-argocd-cm.yaml`. If `extension.config` is already set in your overlay, add the `cost-intel` entry to its list instead:
 
 ```yaml
 apiVersion: v1
@@ -299,7 +279,7 @@ data:
         - url: http://argocd-cost-intelligence.argocd-cost-intel.svc.cluster.local:8080
 ```
 
-`cost-intel-argocd-cmd-params-cm.yaml` turns on proxy extensions:
+`cost-intel-argocd-cmd-params-cm.yaml`:
 
 ```yaml
 apiVersion: v1
@@ -310,7 +290,7 @@ data:
   server.enable.proxy.extension: "true"
 ```
 
-`cost-intel-argocd-rbac-cm.yaml` lets the built-in admin role open the plugin. Add a line for each other role that should see it.
+`cost-intel-argocd-rbac-cm.yaml`. Add a line for each other role that should see the plugin:
 
 ```yaml
 apiVersion: v1
@@ -322,7 +302,7 @@ data:
     p, role:admin, extensions, invoke, cost-intel, allow
 ```
 
-`cost-intel-argocd-notifications-cm.yaml` calls Cost Intelligence after each successful sync. `subscriptions` is one list for all of Argo CD Notifications, so if your overlay already sets it, add the entry there instead.
+`cost-intel-argocd-notifications-cm.yaml`. `subscriptions` is one list for all of Argo CD Notifications, so if your overlay already sets it, add the entry there instead:
 
 ```yaml
 apiVersion: v1
@@ -366,7 +346,7 @@ data:
       - cost-intel-on-sync-succeeded
 ```
 
-`cost-intel-argocd-server.yaml` downloads the plugin from the Cost Intelligence UI Service when `argocd-server` starts, into a volume mounted where `argocd-server` loads extensions from. If the download fails, the init container still exits cleanly so `argocd-server` starts without the plugin.
+`cost-intel-argocd-server.yaml`. If the download fails, the init container still exits cleanly, so `argocd-server` starts without the plugin:
 
 ```yaml
 apiVersion: apps/v1
@@ -415,74 +395,18 @@ kubectl patch secret argocd-notifications-secret -n argocd --type merge \
   -p "{\"stringData\":{\"cost-intel-webhook-token\":\"$TOKEN\"}}"
 ```
 
-If your Applications live in other namespaces as well as `argocd` ([apps in any namespace](https://argo-cd.readthedocs.io/en/stable/operator-manual/app-any-namespace/)), the notifications controller needs to read them there. Argo CD's `install.yaml` only gives it a Role in `argocd`. Argo CD ships a ClusterRole and ClusterRoleBinding for this, `argocd-notifications-controller-cluster-apps`, in `examples/k8s-rbac/argocd-server-applications`. Besides Applications, it lets the controller read Secrets and ConfigMaps in every namespace.
+If your Applications live in other namespaces as well as `argocd` ([apps in any namespace](https://argo-cd.readthedocs.io/en/stable/operator-manual/app-any-namespace/)), uncomment the two lines in `resources` above and use the same Argo CD version as your install. `install.yaml` only lets the notifications controller read Applications in `argocd`. Those two lines add Argo CD's `argocd-notifications-controller-cluster-apps` ClusterRole, which lets it read Applications, Secrets and ConfigMaps in every namespace. The controller also has to watch those namespaces, which `application.namespaces` in `argocd-cmd-params-cm` sets.
 
-Uncomment the two lines in `resources` above and use the same Argo CD version as your install. The controller also has to watch those namespaces, which `application.namespaces` in `argocd-cmd-params-cm` sets, as that guide describes.
-
-Sync or apply your overlay. The `argocd-server` patch restarts it. If the restart happens before Cost Intelligence's UI is running, `argocd-server` starts without the plugin, and you restart it later with `kubectl rollout restart deployment/argocd-server -n argocd`.
+Sync or apply your overlay. The `argocd-server` patch restarts it. If it restarts before Cost Intelligence's UI is running, it starts without the plugin; see [If the tab doesn't appear](#if-the-tab-doesnt-appear).
 
 ### Use the Argo CD extension installer instead
 
-The [Argo CD extension installer](https://github.com/argoproj-labs/argocd-extension-installer) is an init container that downloads an extension archive and checks its checksum. The Argo CD chart runs it from `server.extensions`.
+The [Argo CD extension installer](https://github.com/argoproj-labs/argocd-extension-installer) can download the plugin in place of the init container above, and checks its checksum. It needs access to GitHub, or to wherever you host the files. With the Argo CD chart it runs from `server.extensions`; with plain manifests it replaces the init container in `cost-intel-argocd-server.yaml`, with `EXTENSIONS_DIR` set to `/tmp/extensions` (see its README) and Argo CD's `tmp` volume mounted at `/tmp`, where it downloads. Set `EXTENSION_URL` and `EXTENSION_CHECKSUM_URL` to the archive and the checksum file each release from 0.1.0 on attaches:
 
-Each Cost Intelligence release from 0.1.0 on attaches the archive, `extension.tar.gz`, and its checksum file, `extension_checksums.txt`. 0.1.0-rc.1 doesn't have them, so use the init container above with it. The URLs below need internet access to GitHub. In an air-gapped cluster, host the two files yourself and point the URLs at them.
+- `https://github.com/OctopusDeploy/argocd-cost-intelligence/releases/download/v<chart-version>/extension.tar.gz`
+- `https://github.com/OctopusDeploy/argocd-cost-intelligence/releases/download/v<chart-version>/extension_checksums.txt`
 
-If the hook has run on this Argo CD before, remove what it added to `argocd-server` before you sync the installer into it. Its init container has the same name as the installer's, so applying the installer on top of it would keep parts of the old one. The commands below work with the Argo CD chart and with `install.yaml`. Don't run them after that sync: they remove the `/tmp/extensions` mount, which by then is part of your Argo CD configuration:
-
-```bash
-SERVER=$(kubectl get deploy -n argocd -l app.kubernetes.io/name=argocd-server -o name)
-CONTAINER=$(kubectl get "$SERVER" -n argocd -o jsonpath='{.spec.template.spec.containers[0].name}')
-kubectl patch "$SERVER" -n argocd --type strategic \
-  -p '{"spec":{"template":{"spec":{"initContainers":[{"name":"cost-intel-extension","$patch":"delete"}],"containers":[{"name":"'"$CONTAINER"'","volumeMounts":[{"mountPath":"/tmp/extensions","$patch":"delete"}]}],"volumes":[{"name":"cost-intel-ext-js","$patch":"delete"}]}}}}'
-```
-
-With the Argo CD chart, use this instead of `server.initContainers`, `server.volumes` and `server.volumeMounts`:
-
-```yaml
-server:
-  extensions:
-    enabled: true
-    extensionList:
-    - name: cost-intel-extension
-      env:
-      - name: EXTENSION_URL
-        value: https://github.com/OctopusDeploy/argocd-cost-intelligence/releases/download/v<chart-version>/extension.tar.gz
-      - name: EXTENSION_CHECKSUM_URL
-        value: https://github.com/OctopusDeploy/argocd-cost-intelligence/releases/download/v<chart-version>/extension_checksums.txt
-      - name: IGNORE_FAILURE
-        value: "true"
-```
-
-With plain manifests, replace the init container in `cost-intel-argocd-server.yaml` with this one. It also mounts Argo CD's own `tmp` volume, because the installer downloads there and its root filesystem is read-only.
-
-```yaml
-      initContainers:
-      - name: cost-intel-extension
-        image: quay.io/argoprojlabs/argocd-extension-installer:v1.1.0
-        env:
-        - name: EXTENSION_URL
-          value: https://github.com/OctopusDeploy/argocd-cost-intelligence/releases/download/v<chart-version>/extension.tar.gz
-        - name: EXTENSION_CHECKSUM_URL
-          value: https://github.com/OctopusDeploy/argocd-cost-intelligence/releases/download/v<chart-version>/extension_checksums.txt
-        - name: EXTENSIONS_DIR
-          value: /tmp/extensions
-        - name: IGNORE_FAILURE
-          value: "true"
-        securityContext:
-          runAsUser: 1000
-          runAsNonRoot: true
-          allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: true
-          capabilities:
-            drop: [ALL]
-        volumeMounts:
-        - name: cost-intel-ext-js
-          mountPath: /tmp/extensions
-        - name: tmp
-          mountPath: /tmp
-```
-
-`IGNORE_FAILURE` lets `argocd-server` start without the plugin if the download fails. Without it, a failed download keeps `argocd-server`, and so the whole Argo CD UI, from starting.
+Set `IGNORE_FAILURE` to `"true"`. Without it, a failed download keeps `argocd-server`, and so the whole Argo CD UI, from starting. If the hook has run on this Argo CD before, its init container has the same name as the installer's, so remove what it added to `argocd-server` first. Run only step 5 of [Uninstall](installation.md#uninstall), and only before you sync the installer in: afterwards it would also remove the `/tmp/extensions` mount the installer needs.
 
 ## Check that it works
 
@@ -517,23 +441,15 @@ kubectl exec -n argocd "$POD" -c "$CONTAINER" -- ls /tmp/extensions
 
 The log says `OK`, or `UI extension installed successfully` with the installer, and the listing shows `extension-cost-intel.js`.
 
-Then open any Application in the Argo CD UI. It has a **Cost Intelligence** tab. Cost Intelligence measures each application when it starts, so most tabs show a cost within a few minutes, marked "Measured at install". Sync an application and its tab shows the new cost within about half a minute. A new application takes a few minutes longer, since OpenCost has no data yet for the namespace its first sync creates; Cost Intelligence measures it again until it does. If an application that already ran doesn't show its cost, check that the webhook was sent:
-
-```bash
-kubectl logs -n argocd -l app.kubernetes.io/name=argocd-notifications-controller --tail=-1 | grep cost-intel
-```
-
-With `-l`, `kubectl logs` shows only the last 10 lines of each pod unless you add `--tail=-1`.
+Then open any Application in the Argo CD UI. It has a **Cost Intelligence** tab. Cost Intelligence measures each application when it starts, so most tabs show a cost within a few minutes, marked "Measured at install". Sync an application and its tab shows the new cost within about half a minute. A new application takes a few minutes longer, since OpenCost has no data yet for the namespace its first sync creates; Cost Intelligence measures it again until it does. If an application that already ran doesn't show its cost, see [Costs show $0 or "no data"](operations.md#costs-show-0-or-no-data).
 
 ## If the tab doesn't appear
 
 [The Cost Intelligence tab doesn't appear](operations.md#the-cost-intelligence-tab-doesnt-appear) in the operations guide lists the usual causes; skip the ones about the hook. Also check what you added in step 3:
 
-- `argocd-server` hasn't restarted since you added the init container or changed `server.enable.proxy.extension`. The hook would restart it; here you do: `kubectl rollout restart deployment -n argocd -l app.kubernetes.io/name=argocd-server`.
+- `argocd-server` restarted before Cost Intelligence's UI was running, or hasn't restarted since you added the init container or changed `server.enable.proxy.extension`. The hook would restart it; here you do: `kubectl rollout restart deployment -n argocd -l app.kubernetes.io/name=argocd-server`. The Argo CD chart names the Deployment after your release, so this finds it by its label.
 - The init container's URL has the wrong Service name, namespace or port. Check them with `kubectl get svc -n argocd-cost-intel`, then restart `argocd-server`.
 - The file name doesn't start with `extension` and end in `.js`. Argo CD ignores other files in `/tmp/extensions`.
-- The tab shows "401: Unauthorized extension request". The RBAC rule doesn't name your role, or the extension name in `policy.cost-intel.csv` isn't `cost-intel`.
-- The tab never fills in after a sync. The webhook isn't reaching Cost Intelligence. Check the subscription and the token from above. If `kubectl logs -n argocd-cost-intel deploy/argocd-cost-intelligence | grep 'Refused POST /on-sync'` prints anything, the two tokens differ. If both look right, restart the notifications controller with `kubectl rollout restart deployment -n argocd -l app.kubernetes.io/name=argocd-notifications-controller`, as the hook does after it changes them.
 
 ## Upgrade and uninstall
 

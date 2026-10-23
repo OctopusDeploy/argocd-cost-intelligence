@@ -32,7 +32,6 @@ postgres:
   replicaCount: 1
 
   persistence:
-    enabled: true
     storageClassName: fast-ssd  # Change to your storage class
     size: 100Gi
 

@@ -1,0 +1,657 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "argocd-cost-intelligence values",
+  "description": "Checks the type of each value the chart reads. Keys it doesn't know are allowed.",
+  "type": "object",
+  "properties": {
+    "namespace": {
+      "type": "object",
+      "properties": {
+        "create": {
+          "type": "boolean",
+          "description": "Create the namespace."
+        },
+        "name": {
+          "type": "string",
+          "description": "Namespace for every resource of the chart."
+        }
+      }
+    },
+    "costIntelligence": {
+      "type": "object",
+      "properties": {
+        "image": {
+          "type": "object",
+          "properties": {
+            "repository": {
+              "type": "string"
+            },
+            "tag": {
+              "type": [
+                "string",
+                "number"
+              ],
+              "description": "Empty uses the chart's appVersion."
+            },
+            "pullPolicy": {
+              "type": "string",
+              "enum": [
+                "Always",
+                "IfNotPresent",
+                "Never"
+              ]
+            }
+          },
+          "description": "Backend image."
+        },
+        "replicaCount": {
+          "type": "integer",
+          "description": "Backend replicas when autoscaling is off.",
+          "minimum": 1
+        },
+        "port": {
+          "type": "integer",
+          "description": "Port the backend listens on (SERVER_PORT).",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "clusterScopeApp": {
+          "type": [
+            "string",
+            "boolean"
+          ],
+          "description": "Application (<namespace>:<name>) that gates cluster-wide cost data (CLUSTER_SCOPE_APP). Empty finds one; off, no or false turns it off."
+        },
+        "accessApplication": {
+          "type": "object",
+          "properties": {
+            "create": {
+              "type": "boolean",
+              "description": "Create the access Application when Helm installs the chart."
+            },
+            "name": {
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            }
+          },
+          "description": "The Application and AppProject that gate cluster-wide cost data when Helm installs the chart."
+        },
+        "dailyHistoryDays": {
+          "type": "integer",
+          "description": "Days of daily cost history to keep (DAILY_HISTORY_DAYS). 0 turns recording off.",
+          "minimum": 0
+        },
+        "backfillConcurrency": {
+          "type": "integer",
+          "description": "Applications measured at once at startup (BACKFILL_CONCURRENCY). 0 turns the backfill off.",
+          "minimum": 0
+        },
+        "pruneRemoteCost": {
+          "type": "boolean",
+          "description": "Delete cost stored for Applications on another cluster (PRUNE_REMOTE_COST). Can't be undone."
+        },
+        "database": {
+          "type": "object",
+          "properties": {
+            "maxOpenConns": {
+              "type": "integer",
+              "description": "DB_MAX_OPEN_CONNS",
+              "minimum": 1
+            },
+            "maxIdleConns": {
+              "type": "integer",
+              "description": "DB_MAX_IDLE_CONNS",
+              "minimum": 0
+            }
+          },
+          "description": "PostgreSQL connection pool per replica."
+        },
+        "server": {
+          "type": "object",
+          "properties": {
+            "readTimeout": {
+              "type": "string",
+              "description": "SERVER_READ_TIMEOUT. A Go duration such as 10s or 5m."
+            },
+            "writeTimeout": {
+              "type": "string",
+              "description": "SERVER_WRITE_TIMEOUT. A Go duration such as 10s or 5m."
+            },
+            "idleTimeout": {
+              "type": "string",
+              "description": "SERVER_IDLE_TIMEOUT. A Go duration such as 10s or 5m."
+            }
+          },
+          "description": "HTTP server timeouts."
+        },
+        "vpa": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Rightsizing advice from VerticalPodAutoscaler recommendations (VPA_ENABLED)."
+            }
+          }
+        },
+        "logLevel": {
+          "type": "string",
+          "pattern": "^\\s*([Ii][Nn][Ff][Oo]|[Dd][Ee][Bb][Uu][Gg])?\\s*$",
+          "description": "info or debug, in any case (LOG_LEVEL)."
+        },
+        "resources": {
+          "type": "object",
+          "description": "Container resource requests and limits."
+        },
+        "autoscaling": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "minReplicas": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "maxReplicas": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "targetCPUUtilizationPercentage": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1
+            },
+            "targetMemoryUtilizationPercentage": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1
+            }
+          },
+          "description": "HorizontalPodAutoscaler for the backend."
+        }
+      }
+    },
+    "postgres": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Deploy the bundled PostgreSQL. false uses an external one."
+        },
+        "replicaCount": {
+          "type": "integer",
+          "description": "Leave at 1: the bundled PostgreSQL is one instance on one volume.",
+          "minimum": 0
+        },
+        "image": {
+          "type": "object",
+          "properties": {
+            "repository": {
+              "type": "string"
+            },
+            "tag": {
+              "type": [
+                "string",
+                "number"
+              ],
+              "description": "Empty uses the chart's appVersion."
+            },
+            "pullPolicy": {
+              "type": "string",
+              "enum": [
+                "Always",
+                "IfNotPresent",
+                "Never"
+              ]
+            }
+          },
+          "description": "PostgreSQL image."
+        },
+        "sslMode": {
+          "type": "string",
+          "description": "sslmode of the database connection: disable, require or verify-full."
+        },
+        "auth": {
+          "type": "object",
+          "properties": {
+            "username": {
+              "type": [
+                "string",
+                "number"
+              ]
+            },
+            "password": {
+              "type": [
+                "string",
+                "number"
+              ],
+              "description": "Required on first install unless existingSecret is set."
+            },
+            "database": {
+              "type": [
+                "string",
+                "number"
+              ]
+            },
+            "existingSecret": {
+              "type": "string",
+              "description": "Secret with username and password keys. The chart then creates none."
+            }
+          }
+        },
+        "persistence": {
+          "type": "object",
+          "properties": {
+            "storageClassName": {
+              "type": "string",
+              "description": "Empty uses the default storage class."
+            },
+            "size": {
+              "type": "string"
+            }
+          }
+        },
+        "podSecurityContext": {
+          "type": "object"
+        },
+        "containerSecurityContext": {
+          "type": "object"
+        },
+        "resources": {
+          "type": "object",
+          "description": "Container resource requests and limits."
+        },
+        "service": {
+          "type": "object",
+          "properties": {
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            }
+          }
+        }
+      }
+    },
+    "openCost": {
+      "type": "object",
+      "properties": {
+        "baseURL": {
+          "type": "string",
+          "description": "OpenCost API URL (OPENCOST_BASE_URL)."
+        },
+        "timeout": {
+          "type": "string",
+          "description": "OpenCost request timeout. A Go duration such as 10s or 5m."
+        }
+      }
+    },
+    "argoCd": {
+      "type": "object",
+      "properties": {
+        "namespace": {
+          "type": "string",
+          "description": "Namespace Argo CD runs in."
+        },
+        "rbac": {
+          "type": "object",
+          "properties": {
+            "grantAdmin": {
+              "type": "boolean",
+              "description": "Let role:admin open the extension through policy.cost-intel.csv."
+            }
+          }
+        }
+      }
+    },
+    "security": {
+      "type": "object",
+      "properties": {
+        "podSecurityContext": {
+          "type": "object"
+        },
+        "containerSecurityContext": {
+          "type": "object"
+        }
+      },
+      "description": "Security contexts of the backend, exporter and UI pods."
+    },
+    "rbac": {
+      "type": "object",
+      "properties": {
+        "create": {
+          "type": "boolean",
+          "description": "Create the ClusterRole, ClusterRoleBinding and the Role that reads the service's own Deployment."
+        },
+        "roleName": {
+          "type": "string"
+        },
+        "roleBindingName": {
+          "type": "string"
+        }
+      }
+    },
+    "serviceAccount": {
+      "type": "object",
+      "properties": {
+        "create": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string",
+          "description": "Empty uses the release's full name, or default when create is false."
+        }
+      }
+    },
+    "healthChecks": {
+      "type": "object",
+      "properties": {
+        "startupProbe": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "periodSeconds": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "failureThreshold": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "description": "Startup probe of the backend and the exporter."
+        },
+        "livenessProbe": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "initialDelaySeconds": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "periodSeconds": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "timeoutSeconds": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "failureThreshold": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "readinessProbe": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "initialDelaySeconds": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "periodSeconds": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "timeoutSeconds": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "failureThreshold": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      }
+    },
+    "ingress": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Exposes the backend outside Argo CD's proxy. Leave it off."
+        },
+        "className": {
+          "type": "string"
+        },
+        "annotations": {
+          "type": "object"
+        },
+        "hosts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "host": {
+                "type": "string"
+              },
+              "paths": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string"
+                    },
+                    "pathType": {
+                      "type": "string",
+                      "enum": [
+                        "Exact",
+                        "Prefix",
+                        "ImplementationSpecific"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tls": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "nodeSelector": {
+      "type": "object"
+    },
+    "affinity": {
+      "type": "object"
+    },
+    "tolerations": {
+      "type": "array"
+    },
+    "commonLabels": {
+      "type": "object",
+      "description": "Labels on every resource."
+    },
+    "commonAnnotations": {
+      "type": "object",
+      "description": "Annotations on every resource."
+    },
+    "ui": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "image": {
+          "type": "object",
+          "properties": {
+            "repository": {
+              "type": "string"
+            },
+            "tag": {
+              "type": [
+                "string",
+                "number"
+              ],
+              "description": "Empty uses the chart's appVersion."
+            },
+            "pullPolicy": {
+              "type": "string",
+              "enum": [
+                "Always",
+                "IfNotPresent",
+                "Never"
+              ]
+            }
+          },
+          "description": "UI image."
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "replicas": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "resources": {
+          "type": "object",
+          "description": "Container resource requests and limits."
+        },
+        "autoRegister": {
+          "type": "boolean",
+          "description": "Have the hook add the init container that loads the bundle into argocd-server."
+        }
+      }
+    },
+    "webhook": {
+      "type": "object",
+      "properties": {
+        "existingSecret": {
+          "type": "string",
+          "description": "Secret holding the webhook token under the key token. Empty generates one."
+        }
+      }
+    },
+    "networkPolicy": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "probeCIDRs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Node ranges admitted for kubelet probes, when the CNI needs them."
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Serve /metrics and run the exporter."
+        },
+        "port": {
+          "type": "integer",
+          "description": "METRICS_PORT. Must differ from costIntelligence.port.",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "podAnnotations": {
+          "type": "boolean",
+          "description": "Add prometheus.io scrape annotations to the pods."
+        },
+        "allowedFrom": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "description": "NetworkPolicy from entries admitted to the metrics port."
+        },
+        "exporter": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "interval": {
+              "type": "string",
+              "description": "EXPORTER_INTERVAL, at least 1m. A Go duration such as 10s or 5m."
+            },
+            "resources": {
+              "type": "object",
+              "description": "Container resource requests and limits."
+            }
+          }
+        },
+        "serviceMonitor": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "interval": {
+              "type": "string"
+            },
+            "labels": {
+              "type": "object"
+            }
+          }
+        },
+        "prometheusRule": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "labels": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "postInstallHook": {
+      "type": "object",
+      "properties": {
+        "image": {
+          "type": "string",
+          "description": "Hook image. Needs kubectl, jq and yq v4."
+        },
+        "extensionInitImage": {
+          "type": "string",
+          "description": "argocd-server init container image. Needs sh and wget."
+        }
+      }
+    },
+    "features": {
+      "type": "object",
+      "properties": {
+        "autoPatchArgoCd": {
+          "type": "boolean",
+          "description": "Run the post-install/post-upgrade hook that registers the extension, the webhook and the token with Argo CD."
+        },
+        "deployUI": {
+          "type": "boolean",
+          "description": "Deploy the UI plugin. ui.enabled must be true too."
+        }
+      }
+    }
+  }
+}

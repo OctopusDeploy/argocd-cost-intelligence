@@ -10,7 +10,7 @@ helm show values oci://ghcr.io/octopusdeploy/charts/argocd-cost-intelligence --v
 
 ## Helm values
 
-Set values with `--set key=value` or with a values file (`-f`). If the file holds a password, keep it out of version control.
+Set values with `--set key=value` or with a values file (`-f`). If the file holds a password, keep it out of version control. The chart checks the type of each value: a value of the wrong type, such as a word for a port, stops `helm install` and `helm template` (which Argo CD runs) with an error naming the key. Keys it doesn't know are ignored.
 
 ### Common settings
 
@@ -40,12 +40,14 @@ Set values with `--set key=value` or with a values file (`-f`). If the file hold
 | Key | Default | Description |
 |---|---|---|
 | `postgres.enabled` | `true` | Deploy the bundled StatefulSet. For `false`, see [External PostgreSQL](#external-postgresql). |
-| `postgres.image.repository` / `.tag` | `postgres` / `15-alpine` | |
+| `postgres.image.repository` / `.tag` / `.pullPolicy` | `postgres` / `15-alpine` / `IfNotPresent` | |
+| `postgres.replicaCount` | `1` | Leave it at 1: the bundled PostgreSQL is one instance on one volume. |
 | `postgres.sslMode` | `disable` | Connection mode (`DB_SSL_MODE`): `disable`, `require` or `verify-full`. Plaintext is fine only for the bundled database inside the cluster. |
 | `postgres.service.port` | `5432` | |
 | `postgres.persistence.size` | `20Gi` | Size of the PVC `postgres-pvc`. A PVC can only grow, and only if its StorageClass allows expansion. A smaller value makes the upgrade fail. |
 | `postgres.persistence.storageClassName` | `""` | Empty means the cluster default. |
 | `postgres.resources` | 100m / 256Mi requested, 500m / 1Gi limit | |
+| `postgres.podSecurityContext` / `.containerSecurityContext` | `fsGroup` 999, no privilege escalation | PostgreSQL starts as root and switches to uid 999, and writes to its root filesystem, so it can't use the backend's contexts. |
 
 The chart can't keep the PVC on uninstall, and it has no switch to run without one.
 
@@ -63,7 +65,7 @@ The chart can't keep the PVC on uninstall, and it has no switch to run without o
 | `costIntelligence.logLevel` | `info` | `debug` also logs each OpenCost request URL and response body, in the API and the exporter (`LOG_LEVEL`). These name every namespace and its cost; turn it on only while troubleshooting. |
 | `costIntelligence.database.maxOpenConns` / `maxIdleConns` | `25` / `5` | Connection pool size per replica. Keep replicas times `maxOpenConns` below PostgreSQL's `max_connections`. |
 | `costIntelligence.server.readTimeout` / `writeTimeout` / `idleTimeout` | `10s` / `10s` / `120s` | HTTP server timeouts. Raise `writeTimeout` if large Trends queries get cut off. |
-| `costIntelligence.image.tag` | chart `appVersion` | Pin a release. |
+| `costIntelligence.image.repository` / `.tag` / `.pullPolicy` | `ghcr.io/octopusdeploy/argocd-cost-intelligence` / chart `appVersion` / `IfNotPresent` | The backend image, which the exporter runs too. Set `tag` to pin a release. |
 | `costIntelligence.resources` | 100m / 128Mi requested, 500m / 512Mi limit | |
 | `openCost.timeout` | `10s` | How long to wait for OpenCost. |
 
@@ -75,7 +77,8 @@ The chart can't keep the PVC on uninstall, and it has no switch to run without o
 | `ui.enabled` and `features.deployUI` | `true` | Deploy the UI plugin. Both must be true. |
 | `ui.autoRegister` | `true` | Have the hook add the init container that loads the bundle into `argocd-server`. Needs `features.autoPatchArgoCd`. |
 | `ui.port` / `ui.replicas` | `3000` / `1` | |
-| `ui.image.tag` | chart `appVersion` | |
+| `ui.image.repository` / `.tag` / `.pullPolicy` | `ghcr.io/octopusdeploy/argocd-cost-intelligence-ui` / chart `appVersion` / `IfNotPresent` | |
+| `ui.resources` | 50m / 64Mi requested, 200m / 256Mi limit | |
 | `postInstallHook.image` | `alpine/k8s:1.32.3` | An image with `kubectl`, `jq` and `yq` (mikefarah/yq v4), for the hook Job. Pick a tag close to your cluster's Kubernetes minor version. |
 | `postInstallHook.extensionInitImage` | `busybox:1.37.0` | The image of the `argocd-server` init container that downloads the UI bundle. It needs `sh` and `wget`. |
 | `argoCd.rbac.grantAdmin` | `true` | Have the hook write `policy.cost-intel.csv` in `argocd-rbac-cm`, so `role:admin` can open the extension. With `false` the hook removes that key, unless you changed it. It never touches `policy.csv`. |
@@ -102,11 +105,14 @@ The metrics themselves, with queries and alerts, are in [metrics.md](metrics.md)
 |---|---|---|
 | `networkPolicy.probeCIDRs` | `[]` | Node address ranges to admit, for CNIs that block kubelet probes. See [NetworkPolicy](operations.md#networkpolicy). |
 | `ingress.enabled` | `false` | Create an Ingress for the backend. This bypasses Argo CD's authorization and the NetworkPolicy blocks it, so leave it off. |
+| `ingress.className` / `.annotations` / `.hosts` / `.tls` | none, one example host | The Ingress class, its annotations, the hosts with their paths and path types, and TLS entries with `hosts` and `secretName`. |
 | `nodeSelector`, `affinity`, `tolerations` | empty | Applied to the backend, exporter and PostgreSQL pods. |
 | `security.podSecurityContext` / `security.containerSecurityContext` | non-root uid 1000, read-only root filesystem, all capabilities dropped | For the backend, exporter and UI pods. PostgreSQL has its own under `postgres.`. |
+| `healthChecks.startupProbe` | enabled, 5s period, 30 failures | For the backend and the exporter. The liveness probe waits for it, so a database that is slow to come up doesn't restart the pod. |
 | `healthChecks.livenessProbe` / `.readinessProbe` | enabled, 10s / 5s period | For the backend and PostgreSQL probes. |
 | `commonLabels`, `commonAnnotations` | a `part-of` label, no annotations | Added to every resource (the annotations go on the pods). |
-| `rbac.*`, `serviceAccount.*` | created, named `argocd-cost-intelligence` | |
+| `rbac.create` / `.roleName` / `.roleBindingName` | `true` / `argocd-cost-intelligence` | Create the ClusterRole and ClusterRoleBinding with these names, and a Role to read the service's own Deployment. |
+| `serviceAccount.create` / `.name` | `true` / `argocd-cost-intelligence` | The backend's and the exporter's ServiceAccount. With `create: false`, the chart uses the named account, or `default` when the name is empty. |
 
 ## Secrets
 

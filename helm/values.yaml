@@ -139,7 +139,6 @@ postgres:
 
   # Storage
   persistence:
-    enabled: true
     storageClassName: ""  # Use default storage class
     size: 20Gi
 
@@ -163,7 +162,6 @@ postgres:
 
   # Service
   service:
-    type: ClusterIP
     port: 5432
 
 # OpenCost Configuration
@@ -210,7 +208,6 @@ rbac:
   # Role names
   roleName: argocd-cost-intelligence
   roleBindingName: argocd-cost-intelligence
-  serviceAccountName: argocd-cost-intelligence
 
 # Service Account
 serviceAccount:

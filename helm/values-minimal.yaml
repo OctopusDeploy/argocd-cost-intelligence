@@ -29,7 +29,6 @@ postgres:
   replicaCount: 1
 
   persistence:
-    enabled: true
     storageClassName: ""  # Use default
     size: 10Gi
 

@@ -1,6 +1,6 @@
 # Configuration
 
-This page lists the Helm values, how to manage the secrets, the ready-made profiles, and the environment variables for running without Helm. To install, see [installation.md](installation.md).
+This page lists the Helm values, how to manage the secrets, the ready-made profiles, and the environment variables for running without Helm. To install, see [Installation](installation.md).
 
 The defaults are in [`helm/values.yaml`](../helm/values.yaml). To print them for a released version, with `<chart-version>` taken from the [Releases page](https://github.com/OctopusDeploy/argocd-cost-intelligence/releases):
 
@@ -18,7 +18,7 @@ Set values with `--set key=value` or with a values file (`-f`). If the file hold
 |---|---|---|
 | `postgres.auth.password` | `""` | Database password. Needed on first install unless `postgres.auth.existingSecret` is set. Later upgrades read it back from the Secret. |
 | `openCost.baseURL` | `http://opencost.opencost:9003` | OpenCost API URL. |
-| `costIntelligence.clusterScopeApp` | `""` | The Argo CD Application (`<namespace>:<name>`) whose viewers see the Namespaces, Idle spend and Chargeback pages and the control-plane fee. Empty uses the Application that installed the chart, or else the access Application below. `off` turns them off. See [installation.md](installation.md#choose-your-settings). |
+| `costIntelligence.clusterScopeApp` | `""` | The Argo CD Application (`<namespace>:<name>`) whose viewers see the Namespaces, Idle spend and Chargeback pages and the control-plane fee. Empty uses the Application that installed the chart, or else the access Application below. `off` turns them off. See [Choose your settings](installation.md#choose-your-settings). |
 | `costIntelligence.accessApplication.create` | `true` | When Helm itself installs the chart and `clusterScopeApp` is empty, create an Argo CD Application to gate cluster-wide costs, in an AppProject that permits no resources. It deploys nothing. It is not created when Argo CD renders the chart, since Argo CD's own Application is the gate then. |
 | `costIntelligence.accessApplication.name` / `.project` | `cost-intelligence-access` | Names of that Application and its AppProject, in `argoCd.namespace`. |
 | `argoCd.namespace` | `argocd` | The namespace Argo CD runs in. The hook patches resources there. |
@@ -61,7 +61,7 @@ The chart can't keep the PVC on uninstall, and it has no switch to run without o
 | `costIntelligence.dailyHistoryDays` | `400` | How many days of each application's daily cost to keep in PostgreSQL (`DAILY_HISTORY_DAYS`), about one row per application per day. OpenCost only answers for the days its Prometheus keeps, often 15, so this history is what lets the Trends tab show months. `0` turns recording off. |
 | `costIntelligence.backfillConcurrency` | `4` | How many namespaces to measure at once when the service starts and finds Applications without a cost record (`BACKFILL_CONCURRENCY`). Replicas take turns, so OpenCost never sees more than this many queries from the backfill. `0` turns it off, and applications then show costs only after their next sync. |
 | `costIntelligence.pruneRemoteCost` | `false` | Delete the cost records and daily history stored for Applications that deploy to another cluster (`PRUNE_REMOTE_COST`). It can't be undone, and an Application that targets this cluster by its API server URL counts as remote; see [Limits and requirements](limits-and-requirements.md#only-this-cluster-is-measured). |
-| `costIntelligence.vpa.enabled` | `true` | Read VPA recommendations for rightsizing (`VPA_ENABLED`) and give the ClusterRole read access to `verticalpodautoscalers`. See [installation.md](installation.md#optional-rightsizing). |
+| `costIntelligence.vpa.enabled` | `true` | Read VPA recommendations for rightsizing (`VPA_ENABLED`) and give the ClusterRole read access to `verticalpodautoscalers`. See [Optional: rightsizing](installation.md#optional-rightsizing). |
 | `costIntelligence.logLevel` | `info` | `debug` also logs each OpenCost request URL and response body, in the API and the exporter (`LOG_LEVEL`). These name every namespace and its cost; turn it on only while troubleshooting. |
 | `costIntelligence.database.maxOpenConns` / `maxIdleConns` | `25` / `5` | Connection pool size per replica. Keep replicas times `maxOpenConns` below PostgreSQL's `max_connections`. |
 | `costIntelligence.server.readTimeout` / `writeTimeout` / `idleTimeout` | `10s` / `10s` / `120s` | HTTP server timeouts. Raise `writeTimeout` if large Trends queries get cut off. |
@@ -97,7 +97,7 @@ The chart can't keep the PVC on uninstall, and it has no switch to run without o
 | `metrics.serviceMonitor.enabled` / `.interval` / `.labels` | `false` / `1m` / `{}` | ServiceMonitors for the Prometheus Operator, one for the API and one for the exporter. `labels` are the labels your Prometheus selects by, such as `release: kube-prometheus-stack`. |
 | `metrics.prometheusRule.enabled` / `.labels` | `false` / `{}` | A PrometheusRule built from `helm/files/prometheus-rules.yaml`. |
 
-The metrics themselves, with queries and alerts, are in [metrics.md](metrics.md).
+The metrics themselves, with queries and alerts, are in [Prometheus metrics](metrics.md).
 
 ### Networking and scheduling
 
@@ -142,7 +142,7 @@ The bundled PostgreSQL only applies the password when it first initialises its v
 
 ### Webhook token
 
-Argo CD Notifications has to send a bearer token to `POST /api/cost-analysis/on-sync`, or the backend answers 401. The chart generates the token and keeps it in the Secret `argocd-cost-intelligence-webhook` (key `token`). The hook copies it into `argocd-notifications-secret` as `cost-intel-webhook-token`. The backend reads it only at startup. If Argo CD or `helm template` renders the chart, use `webhook.existingSecret`; see [installation.md](installation.md#install-with-argo-cd-or-helm-template), which also covers rotating the token.
+Argo CD Notifications has to send a bearer token to `POST /api/cost-analysis/on-sync`, or the backend answers 401. The chart generates the token and keeps it in the Secret `argocd-cost-intelligence-webhook` (key `token`). The hook copies it into `argocd-notifications-secret` as `cost-intel-webhook-token`. The backend reads it only at startup. If Argo CD or `helm template` renders the chart, use `webhook.existingSecret`; see [Install with Argo CD or helm template](installation.md#install-with-argo-cd-or-helm-template), which also covers rotating the token.
 
 ## Profiles
 
@@ -173,7 +173,7 @@ The chart sets these variables from its values, so you only need them when you r
 
 | Variable | Default | Description |
 |---|---|---|
-| `MODE` | `api` | `api` serves the REST API. `exporter` exports every Argo CD Application's cost to Prometheus (see [metrics.md](metrics.md)). |
+| `MODE` | `api` | `api` serves the REST API. `exporter` exports every Argo CD Application's cost to Prometheus (see [Prometheus metrics](metrics.md)). |
 | `METRICS_PORT` | `9102` | The port that serves Prometheus `/metrics`, apart from the API port. `0` turns metrics off (API mode only). |
 | `DB_HOST` | `localhost` | PostgreSQL host. The chart has no value for it. |
 | `DB_PASSWORD` | required | Database password. |

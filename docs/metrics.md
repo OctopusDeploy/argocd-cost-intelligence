@@ -222,6 +222,6 @@ The exporter lists Argo CD Applications with the chart's ServiceAccount, which a
 
 ## Configuration
 
-The `metrics.*` Helm values (port, pod annotations, `allowedFrom`, exporter interval and resources, ServiceMonitor, PrometheusRule) are listed in [configuration.md](configuration.md#metrics). The environment variables, if you run it without the chart, are `METRICS_PORT` (default `9102`; `0` turns `/metrics` off), `MODE=exporter` and `EXPORTER_INTERVAL` (default `5m`, at least `1m`).
+The `metrics.*` Helm values (port, pod annotations, `allowedFrom`, exporter interval and resources, ServiceMonitor, PrometheusRule) are listed in [Configuration](configuration.md#metrics). The environment variables, if you run it without the chart, are `METRICS_PORT` (default `9102`; `0` turns `/metrics` off), `MODE=exporter` and `EXPORTER_INTERVAL` (default `5m`, at least `1m`).
 
 `MODE=exporter` lists Applications through the in-cluster configuration, so it cannot run outside Kubernetes. In exporter mode `/health` and `/ready` are served on the metrics port; `/ready` answers once the first refresh has finished.

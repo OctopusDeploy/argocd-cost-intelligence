@@ -2,7 +2,7 @@
 
 This guide is for you if Argo CD itself is installed and configured from Git, for example with Argo CD managing its own Helm release or a Kustomize overlay. In that case the chart's install hook is the wrong tool. It changes Argo CD's ConfigMaps and the `argocd-server` Deployment with `kubectl patch`, and those changes live only in the cluster. They are lost when your Git sets the same key, and they don't come back when you rebuild Argo CD from Git. So you turn the hook off and put the same settings in your own Argo CD configuration.
 
-You need everything in [installation.md](installation.md#prerequisites) first: Argo CD 3.4 or 3.5 with Argo CD Notifications, and OpenCost.
+You need the [prerequisites in Installation](installation.md#prerequisites) first: Argo CD 3.4 or 3.5 with Argo CD Notifications, and OpenCost.
 
 Steps 1 and 2 are the same for every setup. Step 3 has one section for [Argo CD's Helm chart](#argo-cds-helm-chart) and one for [plain manifests or Kustomize](#plain-manifests-or-kustomize); follow only yours.
 
@@ -105,7 +105,9 @@ spec:
     automated: {}
 ```
 
-Set `openCost.baseURL` if OpenCost isn't at `http://opencost.opencost:9003`, and `argoCd.namespace` if Argo CD isn't in `argocd`. The chart's NetworkPolicy uses that namespace to let `argocd-server` and the notifications controller in. It lets Prometheus reach the metrics port only from the namespaces in `metrics.allowedFrom`, by default `monitoring`. If your Prometheus runs in another namespace, set `metrics.allowedFrom` to it, or its scrapes time out and every Cost Intelligence target shows as down. Setting it replaces `monitoring`; see [metrics.md](metrics.md#security). Other settings are in [configuration.md](configuration.md).
+Set `openCost.baseURL` if OpenCost isn't at `http://opencost.opencost:9003`, and `argoCd.namespace` if Argo CD isn't in `argocd`. The chart's NetworkPolicy uses that namespace to let `argocd-server` and the notifications controller in.
+
+The NetworkPolicy lets Prometheus reach the metrics port only from the namespaces in `metrics.allowedFrom`, by default `monitoring`. If your Prometheus runs in another namespace, set `metrics.allowedFrom` to it, or its scrapes time out and every Cost Intelligence target shows as down. Setting it replaces `monitoring`; see [Prometheus metrics](metrics.md#security). Other settings are in [Configuration](configuration.md).
 
 The chart creates a ClusterRole, so the project must allow cluster-scoped resources. The `default` project does.
 
@@ -413,7 +415,9 @@ kubectl patch secret argocd-notifications-secret -n argocd --type merge \
   -p "{\"stringData\":{\"cost-intel-webhook-token\":\"$TOKEN\"}}"
 ```
 
-If your Applications live in other namespaces as well as `argocd` ([apps in any namespace](https://argo-cd.readthedocs.io/en/stable/operator-manual/app-any-namespace/)), the notifications controller needs to read them there. Argo CD's `install.yaml` only gives it a Role in `argocd`. Argo CD ships a ClusterRole and ClusterRoleBinding for this, `argocd-notifications-controller-cluster-apps`, in `examples/k8s-rbac/argocd-server-applications`. Besides Applications, it lets the controller read Secrets and ConfigMaps in every namespace. Uncomment the two lines in `resources` above and use the same Argo CD version as your install. The controller also has to watch those namespaces, which `application.namespaces` in `argocd-cmd-params-cm` sets, as that guide describes.
+If your Applications live in other namespaces as well as `argocd` ([apps in any namespace](https://argo-cd.readthedocs.io/en/stable/operator-manual/app-any-namespace/)), the notifications controller needs to read them there. Argo CD's `install.yaml` only gives it a Role in `argocd`. Argo CD ships a ClusterRole and ClusterRoleBinding for this, `argocd-notifications-controller-cluster-apps`, in `examples/k8s-rbac/argocd-server-applications`. Besides Applications, it lets the controller read Secrets and ConfigMaps in every namespace.
+
+Uncomment the two lines in `resources` above and use the same Argo CD version as your install. The controller also has to watch those namespaces, which `application.namespaces` in `argocd-cmd-params-cm` sets, as that guide describes.
 
 Sync or apply your overlay. The `argocd-server` patch restarts it. If the restart happens before Cost Intelligence's UI is running, `argocd-server` starts without the plugin, and you restart it later with `kubectl rollout restart deployment/argocd-server -n argocd`.
 
@@ -533,7 +537,7 @@ Go through these in order. Each one is a common reason.
 - The tab is there but shows an error instead of costs. Check that `server.enable.proxy.extension` is `"true"` and that `argocd-server` restarted after it changed, because it reads that setting only when it starts. Then check that the URL in `extension.config` points at the backend Service on port 8080, not the UI Service.
 - The tab never fills in after a sync. The webhook isn't reaching Cost Intelligence. Check the subscription and the token from above. If `kubectl logs -n argocd-cost-intel deploy/argocd-cost-intelligence | grep 'Refused POST /on-sync'` prints anything, the two tokens differ. If both look right, restart the notifications controller with `kubectl rollout restart deployment -n argocd -l app.kubernetes.io/name=argocd-notifications-controller`, as the hook does after it changes them.
 
-[operations.md](operations.md) covers more problems once the tab is there.
+[Operations](operations.md) covers more problems once the tab is there.
 
 ## Upgrade and uninstall
 

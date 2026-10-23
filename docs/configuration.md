@@ -179,7 +179,7 @@ The chart sets these variables from its values, so you only need them when you r
 | `CLUSTER_ACCESS_APP` | empty | The fallback Application (`<namespace>:<name>`) when none installed the service; see [Authorization](architecture.md#authorization). |
 | `POD_NAMESPACE` / `DEPLOYMENT_NAME` | empty | The service's own Deployment, whose tracking annotation names the Application that installed it. |
 | `ARGOCD_NAMESPACE` | `argocd` | Where Argo CD runs. A tracking annotation that names an Application without a namespace means one here. |
-| `BACKFILL_CONCURRENCY` | `4` | How many namespaces to measure at once when the service starts; `0` turns it off. See [Measuring at install](architecture.md#measuring-at-install-pkgbackfill). |
+| `BACKFILL_CONCURRENCY` | `4` | How many namespaces to measure at once when the service starts; `0` turns it off. See [Measuring at install](architecture.md#when-the-service-starts). |
 | `PRUNE_REMOTE_COST` | `false` | Delete stored cost for Applications that deploy to another cluster, which can't be undone; see [Limits and requirements](limits-and-requirements.md#only-this-cluster-is-measured). |
 | `VPA_ENABLED` | `true` | Read Vertical Pod Autoscaler recommendations for rightsizing; see [Optional: rightsizing](installation.md#optional-rightsizing). |
 | `LOG_LEVEL` | `info` | `info` or `debug`, in any case. `debug` also logs each OpenCost request URL and response body, which name every namespace and its cost. |

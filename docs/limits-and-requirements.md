@@ -1,6 +1,6 @@
 # Limits and requirements
 
-What ArgoCD Cost Intelligence runs on and what it doesn't do, to check before you install it. To install it, see [Installation](installation.md); for how it works inside, see [Architecture](architecture.md#known-limitations).
+What ArgoCD Cost Intelligence runs on and what it doesn't do, to check before you install it. To install it, see [Installation](installation.md); for how it works inside, see [Architecture](architecture.md).
 
 ## Compatibility
 

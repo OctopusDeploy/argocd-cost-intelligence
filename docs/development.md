@@ -1,6 +1,6 @@
 # Development
 
-How to build the project, run the tests and try a change locally. For the contribution process (branches, sign-off, pull requests), see [CONTRIBUTING.md](../CONTRIBUTING.md). For how the code is organised, see [architecture.md](architecture.md).
+How to build the project, run the tests and try a change locally. For the contribution process (branches, sign-off, pull requests), see [CONTRIBUTING.md](../CONTRIBUTING.md). For how the service works inside, see [Architecture](architecture.md).
 
 You need the Go version in `go.mod`, Node.js 22, and Docker with Compose. `make lint-go` installs golangci-lint if it's missing; the other linters run in containers.
 

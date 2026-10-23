@@ -12,7 +12,7 @@ By participating you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md). 
 
 ## Development setup
 
-[docs/development.md](docs/development.md) covers the tools you need, running the project locally, the checks a change must pass and trying it in a real Argo CD. [docs/architecture.md](docs/architecture.md) describes the design. [CLAUDE.md](CLAUDE.md) lists the rules that are easiest to break (cost scoping, authorization, UI constraints). It's written for AI assistants, but it's worth a read even if you don't use one.
+[docs/development.md](docs/development.md) covers the tools you need, running the project locally, the checks a change must pass and trying it in a real Argo CD. [docs/architecture.md](docs/architecture.md) describes the design; its [design decisions](docs/architecture.md#design-decisions) and [authorization](docs/architecture.md#authorization) sections hold the rules that are easiest to break. The Go conventions are in [docs/development.md](docs/development.md#go-conventions), and the UI plugin's in [ui/README.md](ui/README.md#conventions).
 
 ## Making a change
 

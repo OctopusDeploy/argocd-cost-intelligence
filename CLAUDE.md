@@ -104,56 +104,14 @@ Required: `DB_PASSWORD`, `OPENCOST_BASE_URL`, `WEBHOOK_SECRET` (16+ characters).
 
 ## Go conventions
 
-Linting is golangci-lint v2 (`.golangci.yaml`) with `gofumpt` and `goimports`.
+The Go conventions are in the development guide, with the commands and local setup. It is imported here:
 
-- Use `github.com/golang-jwt/jwt/v5`, `dario.cat/mergo` and stdlib `errors`.
-- Kubernetes import aliases are enforced: `appsv1`, `corev1`, `rbacv1`, `apierrors`, `metav1`, `stderrors`.
-- `unparam` is disabled in `_test.go` files.
+@docs/development.md
 
 ## UI plugin
 
-`ui/src/index.tsx` registers an application tab (`CostPanel`: Actual costs / Resources / Trends) and a system page at `/cost-intelligence` (`NamespaceDashboard`: Namespaces / Idle spend / Chargeback).
+The plugin's commands, how Argo CD loads it and its conventions (design system, Argo CD's CSS, layout, accessibility, interaction) are in the plugin's README. It is imported here:
 
-**React is not bundled.** Webpack maps it to the `window.React` that Argo CD sets: React 16.14 on Argo CD 3.4, React 19 on 3.5. Use only APIs React 16.14 has (no `useSyncExternalStore`, `useId`, `useTransition`, `react-dom/client`); ESLint rejects them. Keep `"jsx": "react"` in tsconfig.
-
-**Definition of done:** lint, typecheck, test and build all pass, and `find src -name '*.d.ts'` is empty.
-
-### Design system
-
-- **Octopus Deploy look.** The plugin is a branded panel inside Argo CD's page ("Cost Intelligence by Octopus Deploy"), in Octopus's palette and its Inter font, with bordered cards, an icon tile above each card title, sentence-case labels and outlined buttons. Argo CD's own page around it is unchanged. Inter is bundled (`src/theme/font.ts`, inlined by webpack) because Argo CD serves the extension as one JS file and air-gapped clusters can't reach a font host.
-- **Colours** come from `src/theme/tokens.ts` (`useTokens()`) only; never hardcode one. `cardStyle(t)` is the standard container, `series` the chart palette.
-- **Reuse shared components** before building: `PluginFrame` (root and branded header), `CardHeader` / `IconTile`, `TabBar`, `StatStrip`, `Notice` / `ErrorNotice`, `ReloadButton`, `MeasuredLabel`, `Share`, `AdviceCard`, `Chip`, `levelIcon` / `LEVEL_LABELS`, `icons.tsx`. `BrandMark` is the octoicon from Octopus's official logo pack (octopus.com/company/brand); keep its path as it is.
-- **Formatting** goes through `src/utils/format.ts` (`formatMoney`, `formatPercent`, ...). Never `toFixed` a currency by hand.
-- The same concept uses the same words and icon on every page, and columns beside a total add up to it.
-
-### Argo CD's CSS
-
-Argo CD ships `outline: none !important` on buttons, links, spans and inputs, so inline focus styles do nothing. `src/theme/globalStyles.ts` injects one stylesheet instead (focus rings, button hover tints). Every root view renders inside `PluginFrame`, which sets `className={PLUGIN_CLASS}`, spreads `pluginRootStyle(t)` and calls `useGlobalStyles()`. Never set `outline: 'none'`. Scope every rule to `.cost-intel` (a test enforces this).
-
-### Layout
-
-The plugin fills the width Argo CD gives it and adapts to **its own width, not the window's** (`useContainerWidth`, thresholds in `src/utils/layout.ts`). Tables scroll inside their own wrapper below their `minWidth`; nothing may overflow the page horizontally. Choose fallbacks so unmeasured views (and jsdom) get the ordinary layout.
-
-### Accessibility
-
-- Clickable things are `<button>` or `<a>`, never `<span onClick>`. Toggles use `aria-pressed`; disclosures use `aria-expanded` + `aria-controls`.
-- Tables are CSS grids with `role="table"` / `row` / `columnheader` / `cell` in an `overflowX: 'auto'` wrapper.
-- Inputs have a `<label htmlFor>`. Result changes are announced through a visually hidden `role="status"` region.
-- Charts are keyboard-readable, start the y-axis at zero, resize with their container and offer a table view.
-
-### Interaction
-
-- No submit buttons for filters: text queries after a 400ms debounce (Enter queries at once); chips, selects and tabs apply immediately.
-- View state lives in the URL via `src/hooks/useUrlState.ts` (`costTab`, `costNs`, `costLabel`, `costScope`, `costRange`, `costFrom`, `costTo`). `push` for navigation, `replace` for refinements. Idle spend and Chargeback share `costScope`. Never touch Argo CD's own parameters.
-- Pages refresh every 30s in the background without a spinner and keep the last good data if a refresh fails.
-- The theme is read from Argo CD's `view_preferences` localStorage key by one shared poller (`src/hooks/useTheme.ts`). Do not add per-component timers.
-
-### Testing
+@ui/README.md
 
 Read [Writing tests](CONTRIBUTING.md#writing-tests) in CONTRIBUTING before writing a Go or UI test (jsdom limits, fake timers, stubbing widths).
-
-### Trying a build in a running Argo CD
-
-`argocd-server` re-reads `/tmp/extensions` on every request, so a bundle can be swapped in without a restart (lost when the pod restarts). The commands are in [ui/README.md](ui/README.md#try-a-build-in-a-running-argo-cd).
-
-System-level extension registration is deferred with `setTimeout(0)` in `index.tsx` on purpose; read the comment there before changing it.

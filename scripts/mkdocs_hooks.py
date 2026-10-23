@@ -3,11 +3,11 @@
 The Markdown under docs/ is written to be read on GitHub as well, so it links to the README and to
 files outside docs/ (the chart, CONTRIBUTING.md, ...). These hooks keep it that way:
 
-- the README becomes the site's home page and SECURITY.md its Security page, so neither is kept
-  twice;
-- a link to either goes to its page, and a link to any other file outside docs/ goes to that file
-  on GitHub, at the commit being built when Read the Docs builds it. A link to a file
-  that doesn't exist is a warning, so a strict build fails on it.
+- the README becomes the site's home page, and ROADMAP.md and SECURITY.md its Roadmap and Security
+  pages, so none of them is kept twice;
+- a link to one of them goes to its page, and a link to any other file outside docs/ goes to that
+  file on GitHub, at the commit being built when Read the Docs builds it. A link to a file that
+  doesn't exist is a warning, so a strict build fails on it.
 """
 
 import logging
@@ -31,7 +31,7 @@ def _repo_root(config):
 
 
 # Files outside docs/ that the site serves as pages: repository file -> page.
-PAGES = {"README.md": "index.md", "SECURITY.md": "security.md"}
+PAGES = {"README.md": "index.md", "ROADMAP.md": "roadmap.md", "SECURITY.md": "security.md"}
 
 
 def on_files(files, config):

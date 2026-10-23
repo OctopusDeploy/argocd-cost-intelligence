@@ -96,7 +96,7 @@ Follow the backend log while you reproduce the problem: `docker compose logs -f 
 
 ## Documentation site
 
-The pages under `docs/`, the README and `SECURITY.md` are published on Read the Docs with MkDocs. Write ordinary relative links that work on GitHub: links to files outside `docs/` are rewritten to GitHub at build time. A new page needs an entry in the `nav` of `mkdocs.yml`.
+The pages under `docs/`, the README, `ROADMAP.md` and `SECURITY.md` are published on Read the Docs with MkDocs. Write ordinary relative links that work on GitHub: links to files outside `docs/` are rewritten to GitHub at build time. A new page needs an entry in the `nav` of `mkdocs.yml`.
 
 `make docs` builds the site and fails on a broken link or anchor, as CI does. `make docs-serve` serves it with live reload.
 

@@ -7,7 +7,7 @@ By participating you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md). 
 ## Before you start
 
 - **Bugs and small fixes:** open a pull request directly.
-- **Features and larger changes:** open an issue first so we can agree on the approach before you invest time.
+- **Features and larger changes:** open an issue first so we can agree on the approach before you invest time. The [roadmap](ROADMAP.md) lists what we already plan to build.
 - **Questions:** use GitHub Discussions rather than issues.
 
 ## Development setup

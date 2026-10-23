@@ -5,8 +5,8 @@ repo_url: https://github.com/OctopusDeploy/argocd-cost-intelligence
 edit_uri: edit/main/docs/
 copyright: Maintained by <a href="https://octopus.com">Octopus Deploy</a> · Licensed under <a href="https://github.com/OctopusDeploy/argocd-cost-intelligence/blob/main/LICENSE">Apache-2.0</a>
 
-# The home page is the README, the Security page is SECURITY.md, and links to other files
-# outside docs/ point at GitHub; see scripts/mkdocs_hooks.py.
+# The home page is the README, the Roadmap and Security pages are ROADMAP.md and SECURITY.md,
+# and links to other files outside docs/ point at GitHub; see scripts/mkdocs_hooks.py.
 hooks:
 - scripts/mkdocs_hooks.py
 
@@ -16,6 +16,7 @@ exclude_docs: requirements.txt
 # The generated pages and the hook live outside docs/; rebuild on their changes too.
 watch:
 - README.md
+- ROADMAP.md
 - SECURITY.md
 - scripts
 validation:
@@ -50,6 +51,7 @@ nav:
 - Contributing:
   - Architecture: architecture.md
   - Development: development.md
+  - Roadmap: roadmap.md
   - Security: security.md
 
 theme:

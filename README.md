@@ -76,6 +76,7 @@ The guides are also published at [argocd-cost-intelligence.readthedocs.io](https
 | Understand how it works inside | [Architecture](docs/architecture.md) |
 | Build it, run the tests, try it locally | [Development](docs/development.md) |
 | Work on the Argo CD UI plugin | [ui/README.md](ui/README.md) |
+| See what is planned next | [Roadmap](ROADMAP.md) |
 
 ## Contributing
 

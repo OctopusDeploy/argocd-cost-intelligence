@@ -21,7 +21,7 @@ A measurement stored by an earlier version, or sent by a notifications template 
 
 ## Actual costs
 
-![Actual costs: monthly cost, cost breakdown, resource efficiency and what changed since the last sync](images/actual-costs.webp)
+![Actual costs: monthly cost, change since the last sync, rightsizing advice, cost breakdown and resource efficiency](images/actual-costs.webp)
 
 | Figure | Meaning |
 |---|---|
@@ -52,7 +52,7 @@ The monthly cost per workload, with its CPU, memory, total and share of the tota
 
 ## Trends
 
-![Trends: daily cost for the last 30 days with a month-end forecast](images/trends.webp)
+![Trends: daily cost for this month with a month-end forecast](images/trends.webp)
 
 Daily cost, queried from OpenCost for each day whether or not the application synced. The service stores each finished day, so the history outlives OpenCost's own retention, for 400 days by default ([`costIntelligence.dailyHistoryDays`](configuration.md#backend); `0` turns recording off). Today is still being measured, so it is left out of the averages and the trend.
 

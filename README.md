@@ -7,7 +7,7 @@
 
 ArgoCD Cost Intelligence shows what each Argo CD application actually costs, in a **Cost Intelligence** tab inside the Argo CD UI. After every successful sync it asks [OpenCost](https://www.opencost.io) what the application's pods cost and keeps the result, so application owners see their cost where they already work. You need Argo CD and OpenCost running in the same cluster, and only the applications Argo CD deploys to that cluster are measured. If Argo CD also manages other clusters, the tab of an application deployed there says it isn't measured ([Known limitations](docs/architecture.md#known-limitations)).
 
-![Actual costs: monthly cost, cost breakdown, resource efficiency and what changed since the last sync](docs/images/actual-costs.webp)
+![Actual costs: monthly cost, change since the last sync, rightsizing advice, cost breakdown and resource efficiency](docs/images/actual-costs.webp)
 
 ## Quick start
 
@@ -46,15 +46,17 @@ Next: the [installation guide](docs/installation.md) for the OpenCost URL, clust
 
 ![Resources: cost per controller and Vertical Pod Autoscaler rightsizing suggestions](docs/images/resources.webp)
 
-![Trends: daily cost for the last 30 days with a month-end forecast](docs/images/trends.webp)
+![Trends: daily cost for this month with a month-end forecast](docs/images/trends.webp)
 
 The system page, for people who can see cluster-wide costs:
 
 ![Namespaces: cost, idle spend and efficiency per namespace](docs/images/namespaces.webp)
 
+![Idle spend: applications ranked by the requested CPU and memory their pods didn't use](docs/images/idle-spend.webp)
+
 ![Chargeback: cost grouped by a Kubernetes label](docs/images/chargeback.webp)
 
-These come from a small test cluster in the Argo CD dark theme, so the amounts are small.
+These come from a test cluster with sample OpenCost data, in the Argo CD dark theme.
 
 </details>
 

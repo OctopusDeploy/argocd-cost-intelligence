@@ -1,6 +1,6 @@
 # Development
 
-How to run the project locally, check a change and try it in a real Argo CD. For the contribution process and the test conventions, see [CONTRIBUTING.md](../CONTRIBUTING.md). For how the service works inside, see [Architecture](architecture.md).
+How to run the project locally, check a change and try it in a real Argo CD. For the contribution process and the test conventions, see [CONTRIBUTING.md](../CONTRIBUTING.md); for the plugin's own conventions, see [ui/README.md](../ui/README.md#conventions). For how the service works inside, see [Architecture](architecture.md).
 
 ## Prerequisites
 
@@ -48,9 +48,15 @@ To run one Go test, use `go test -run TestName ./pkg/server/...`.
 
 The integration tests need a running Docker daemon. The OpenCost client tests skip unless something answers on port 9003, so start the mock first (`docker compose up -d mock-opencost`) if you changed the client.
 
-`golangci-lint fmt` formats Go code the way the linter checks it.
-
 CI runs all of these on every pull request, and also builds the images and scans for vulnerabilities and leaked secrets.
+
+## Go conventions
+
+The linter is golangci-lint v2, configured in `.golangci.yaml`. It formats with `gofumpt` and `goimports`; `golangci-lint fmt` formats your code the way it checks it.
+
+- Use `github.com/golang-jwt/jwt/v5`, `dario.cat/mergo` and the standard library's `errors`. The linter rejects jwt v4, `github.com/imdario/mergo` and `github.com/pkg/errors`.
+- When you alias an import, use the alias the linter expects: `appsv1`, `corev1`, `rbacv1`, `apierrors` and `metav1` for the Kubernetes packages, `stderrors` for the standard library's `errors`. The full list is under `importas` in `.golangci.yaml`.
+- `unparam` doesn't run on `_test.go` files.
 
 ## Running it in Argo CD
 

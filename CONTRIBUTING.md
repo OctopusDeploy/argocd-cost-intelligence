@@ -12,30 +12,13 @@ By participating you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md). 
 
 ## Development setup
 
-You need Go (the version in `go.mod`), Node.js 22, and Docker.
-
-```bash
-git clone https://github.com/OctopusDeploy/argocd-cost-intelligence.git
-cd argocd-cost-intelligence
-
-docker-compose up -d    # service on :8080, PostgreSQL, and a mock OpenCost on :9003
-make build              # backend binary in bin/
-make test               # Go unit tests (make test-integration needs Docker; see docs/development.md)
-make lint               # every linter: Go, UI, Helm, Prometheus rules, workflows, manifests, Dockerfiles, scripts
-make lint-go            # one of them; `make help` lists the rest
-
-cd ui
-npm ci
-npm run lint && npm run typecheck && npm test && npm run build
-```
-
-[docs/development.md](docs/development.md) explains each test level (unit, integration, Docker Compose, local Kubernetes) and how to run it, and [docs/architecture.md](docs/architecture.md) describes the design. [CLAUDE.md](CLAUDE.md) lists the rules that are easiest to break (cost scoping, authorization, UI constraints). It's written for AI assistants, but it's worth a read even if you don't use one.
+[docs/development.md](docs/development.md) covers the tools you need, running the project locally, the checks a change must pass and trying it in a real Argo CD. [docs/architecture.md](docs/architecture.md) describes the design. [CLAUDE.md](CLAUDE.md) lists the rules that are easiest to break (cost scoping, authorization, UI constraints). It's written for AI assistants, but it's worth a read even if you don't use one.
 
 ## Making a change
 
 1. Fork the repository and create a branch from `main`.
-2. Make your change, with tests. A bug fix should include a test that fails without the fix.
-3. Run the checks above. A change is ready when `make test`, `make lint` and the four `npm` commands pass.
+2. Make your change, with tests (see [Writing tests](#writing-tests)). A bug fix should include a test that fails without the fix.
+3. Run the checks in [Checking a change](docs/development.md#checking-a-change). A change is ready when `make test`, `make lint` and the four `npm` commands pass.
 4. Update documentation and `CHANGELOG.md` (under `[Unreleased]`) for anything a user would notice. Flag breaking changes under **Breaking**.
 5. Open a pull request that explains what changed and why, and links the issue it addresses.
 
@@ -44,6 +27,25 @@ npm run lint && npm run typecheck && npm test && npm run build
 - **Costs.** Never multiply an OpenCost cost by a fixed 30, and never mix namespace-scoped and application-scoped figures in one comparison.
 - **Authorization.** App routes look data up by the `AppRef` from the request context, not by the URL. New routes must go in the group matching their scope.
 - **UI.** The plugin runs on the React that Argo CD provides (16.14 on Argo CD 3.4), so use only APIs React 16.14 has. Take colours from the theme tokens, never hardcode them.
+
+### Writing tests
+
+Check that a new test can fail: break the behaviour, watch the test fail, then restore it.
+
+**Go**
+
+- Use table-driven tests, and `t.Parallel()` when the cases share no state.
+- Put the test in the same package as the code.
+- Unit tests use no network and no database. Fake OpenCost with `httptest` and storage with an in-memory fake (see `pkg/history/fakes_test.go`). The storage and OpenCost client code has integration tests for the real thing.
+- Authorization changes are tested in `pkg/server/auth_test.go` and `app_scope_test.go`. For a new app route, test that a header naming another application is refused.
+
+**UI**
+
+- Test behaviour and logic. Test styling only where it guards accessibility.
+- jest-dom is not installed: assert with `getAttribute` and `textContent`.
+- jsdom has no `localStorage`: stub it (see `useTheme.test.tsx`).
+- Call `vi.useFakeTimers()` before rendering anything that schedules a timer, and advance with `advanceTimersByTimeAsync`; `waitFor` hangs under fake timers.
+- Test a layout that depends on width by stubbing `HTMLElement.prototype.getBoundingClientRect` (see `StatStrip.test.tsx`), and restore the mocks in `afterEach`.
 
 ### Commit messages
 

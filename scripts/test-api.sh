@@ -1,10 +1,13 @@
 #!/bin/bash
 
 BASE_URL=${BASE_URL:-http://localhost:8080}
-# The token /on-sync requires; docker-compose and `make run` use this one.
+# The token /on-sync requires; Docker Compose and `make run` use this one.
 WEBHOOK_SECRET=${WEBHOOK_SECRET:-local-dev-webhook-secret}
+# nginx is one of the deployments the mock OpenCost reports in "default" outside a cluster, so the
+# application's own share has a cost.
+APP=nginx
 # Argo CD's proxy sets this header; the API refuses application routes without it.
-APP_HEADER="Argocd-Application-Name: default:test-app"
+APP_HEADER="Argocd-Application-Name: argocd:$APP"
 TIMESTAMP=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
 
 echo "=== Testing ArgoCD Cost Intelligence API ==="
@@ -23,34 +26,46 @@ echo ""
 
 # Test 3: Send sync notification
 echo "3. Sending sync notification (on-sync webhook)..."
-curl -s -X POST "$BASE_URL/api/cost-analysis/on-sync" \
+curl -s -o /dev/null -w "HTTP %{http_code}\n" -X POST "$BASE_URL/api/cost-analysis/on-sync" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $WEBHOOK_SECRET" \
   -d "{
-    \"applicationName\": \"test-app\",
-    \"applicationNamespace\": \"default\",
+    \"applicationName\": \"$APP\",
+    \"applicationNamespace\": \"argocd\",
     \"namespace\": \"default\",
+    \"resources\": [{\"kind\": \"Deployment\", \"name\": \"$APP\", \"namespace\": \"default\"}],
     \"syncTimestamp\": \"$TIMESTAMP\",
     \"syncResult\": \"Succeeded\"
-  }" | jq '.'
+  }"
 echo ""
 
-# Wait a moment for processing
-echo "Waiting 2 seconds for webhook processing..."
-sleep 2
+# The service waits 5 seconds before it measures, then writes the record. Wait for the one of this
+# sync, not one an earlier run left in the database.
+echo "Waiting for the cost record..."
+recorded=false
+for _ in $(seq 1 20); do
+  if curl -sf -H "$APP_HEADER" "$BASE_URL/api/cost-analysis/$APP/actual" |
+    jq -e --arg ts "$TIMESTAMP" '.syncTimestamp == $ts' >/dev/null 2>&1; then
+    recorded=true
+    break
+  fi
+  sleep 1
+done
+[ "$recorded" = true ] || echo "No record for this sync after 20 seconds; check the service log."
+echo ""
 
 # Test 4: Get actual cost
-echo "4. Getting actual cost for test-app..."
-curl -s -H "$APP_HEADER" "$BASE_URL/api/cost-analysis/test-app/actual" | jq '.' || echo "No cost data yet"
+echo "4. Getting actual cost for $APP..."
+curl -s -H "$APP_HEADER" "$BASE_URL/api/cost-analysis/$APP/actual" | jq '.' || echo "No cost data yet"
 echo ""
 
 # Test 5: Get cost trend
-echo "5. Getting 7-day cost trend for test-app..."
-curl -s -H "$APP_HEADER" "$BASE_URL/api/cost-analysis/test-app/trend?days=7" | jq '.' || echo "No trend data yet"
+echo "5. Getting 7-day cost trend for $APP..."
+curl -s -H "$APP_HEADER" "$BASE_URL/api/cost-analysis/$APP/trend?days=7" | jq '.' || echo "No trend data yet"
 echo ""
 
 # Test 6: Get namespace summary
-echo "6. Getting namespace cost summary for 'default' (needs CLUSTER_SCOPE_APP=default:test-app on the server)..."
+echo "6. Getting namespace cost summary for 'default' (needs CLUSTER_SCOPE_APP=argocd:$APP on the server)..."
 curl -s -H "$APP_HEADER" "$BASE_URL/api/cost-analysis/namespace/default/summary?days=30" | jq '.' || echo "No summary data yet"
 echo ""
 

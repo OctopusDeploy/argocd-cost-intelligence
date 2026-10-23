@@ -169,7 +169,7 @@ The chart has no value for the database host. The backend and exporter always co
 
 ## Running without Helm
 
-The chart sets these variables from its values, so you only need them when you run the image without the chart. [`.env.example`](../.env.example) is a template with all of them.
+The chart sets these variables from its values, so you only need them when you run the image without the chart. [`.env.example`](../.env.example) is a template to start from, with the ones you are most likely to set.
 
 | Variable | Default | Description |
 |---|---|---|

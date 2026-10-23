@@ -44,7 +44,9 @@ describe('ArgoCDCostIntelligenceTab', () => {
     render(<ArgoCDCostIntelligenceTab application={application({ name: 'prod-eu' })} />);
 
     const link = screen.getByRole('link', { name: 'Single-cluster limit (opens in a new tab)' });
-    expect(link.getAttribute('href')).toContain('docs/architecture.md#known-limitations');
+    expect(link.getAttribute('href')).toBe(
+      'https://argocd-cost-intelligence.readthedocs.io/en/stable/how-costs-are-measured/#applications-on-another-cluster',
+    );
     expect(link.getAttribute('rel')).toBe('noopener noreferrer');
   });
 });

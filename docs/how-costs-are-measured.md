@@ -62,6 +62,9 @@ Ranges run from 30 days to a year, this month or last month, or a custom range o
 
 A day with no cost means OpenCost reported nothing for it: the application's pods weren't running, or OpenCost no longer had that day when it was first recorded.
 
+<!-- The plugin links to this heading. Don't rename or move it without a redirect. -->
 ## Applications on another cluster
 
-OpenCost measures only the cluster it runs in, so an application that Argo CD deploys to another cluster has no costs. Its tab says "Deploys to another cluster" instead. See [Known limitations](architecture.md#known-limitations).
+OpenCost measures only the cluster it runs in, so an application that Argo CD deploys to another cluster has no costs. Its tab says "Deploys to another cluster" instead. Measuring it needs OpenCost and Cost Intelligence in that cluster.
+
+The cluster is matched by name: an application is on this cluster only when its destination server is `https://kubernetes.default.svc` or empty and its destination name is `in-cluster` or empty. One that targets this cluster by its API server URL, or by a renamed in-cluster entry, is treated as being on another cluster. See [Known limitations](architecture.md#known-limitations).

@@ -154,7 +154,7 @@ Then assign the roles to your groups as you normally do.
 
 If Git also manages Argo CD itself, follow [Install when Git manages Argo CD](gitops-install.md) instead. It covers this section too.
 
-For an example Application, see [Step 2 of that guide](gitops-install.md#step-2-add-the-cost-intelligence-application). It sets `features.autoPatchArgoCd: false`, because in that guide Git holds Argo CD's settings and Step 3 changes them there. If you apply it with `kubectl`, Kubernetes may print a warning that `resources-finalizer.argocd.argoproj.io` should be "a domain-qualified finalizer name". It is harmless: the Application is created and the finalizer still works. That guide shows the full warning.
+For an example Application, see [Step 2 of that guide](gitops-install.md#step-2-add-the-cost-intelligence-application). It sets `features.autoPatchArgoCd: false`, because in that guide Git holds Argo CD's settings and Step 3 changes them there. If you apply it with `kubectl`, Kubernetes may print a warning that `resources-finalizer.argocd.argoproj.io` should be "a domain-qualified finalizer name". It is harmless: the Application is created and the finalizer still works.
 
 The chart generates the sync webhook's token and reads it back on `helm upgrade`, so it stays the same. Argo CD and `helm template` render without cluster access, so they'd generate a new token on every render. That restarts the backend each time and leaves the Application permanently out of sync. Create the Secret yourself instead:
 

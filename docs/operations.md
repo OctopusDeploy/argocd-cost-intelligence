@@ -65,16 +65,12 @@ Check these in order:
 
 ### Pods don't start or stay unready
 
-```bash
-kubectl describe pod <pod> -n argocd-cost-intel
-kubectl get events -n argocd-cost-intel --sort-by=.lastTimestamp
-```
-
-- `ImagePullBackOff`: the image tag doesn't exist, or the registry can't be reached.
 - The backend restarts at first start: PostgreSQL wasn't ready yet. It recovers by itself.
 - Pods only become unready after the NetworkPolicy is applied: your CNI blocks kubelet probes. See [NetworkPolicy](#networkpolicy).
 
 ### Database connection errors
+
+The backend image has no `psql`, so its log is where connection errors show:
 
 ```bash
 kubectl logs -n argocd-cost-intel deploy/argocd-cost-intelligence
@@ -119,21 +115,11 @@ kubectl run np-check --rm -it --restart=Never --image=busybox -n default -- \
 
 ## Database
 
-These commands use the bundled PostgreSQL (pod `postgres-0`) with the default user and database. Adjust them if you changed `postgres.auth.*`.
+The bundled PostgreSQL runs as pod `postgres-0`, with the user `cost_user` and the database `cost_intelligence`, unless you changed `postgres.auth.*`.
 
 ### Backup, restore and pruning
 
-```bash
-# Backup
-kubectl exec postgres-0 -n argocd-cost-intel -- \
-  pg_dump -U cost_user cost_intelligence > backup.sql
-
-# Restore (into an empty database, with the backend scaled down)
-kubectl exec -i postgres-0 -n argocd-cost-intel -- \
-  psql -U cost_user cost_intelligence < backup.sql
-```
-
-Nothing in the chart backs up PostgreSQL, so set up your own schedule.
+Nothing in the chart backs up PostgreSQL, and `helm uninstall` deletes its PVC, so back it up with your platform's tooling or `pg_dump`. Restore into an empty database, with the backend scaled down, because it creates the schema when it starts.
 
 `cost_actuals` gets a row per sync and is never pruned automatically. To keep, say, the last 90 days:
 
@@ -144,12 +130,3 @@ kubectl exec postgres-0 -n argocd-cost-intel -- \
 ```
 
 The service prunes `cost_daily` itself, down to `costIntelligence.dailyHistoryDays`. Pruning `cost_actuals` also drops the latest record of any application that hasn't synced in that period.
-
-### Connectivity
-
-```bash
-kubectl exec postgres-0 -n argocd-cost-intel -- \
-  psql -U cost_user -d cost_intelligence -c "SELECT 1;"
-```
-
-The backend image has no `psql`. To see connection errors, read its log (`kubectl logs deploy/argocd-cost-intelligence -n argocd-cost-intel`).

@@ -51,4 +51,4 @@ OpenCost can't see cloud services such as RDS or S3. Their cost appears only whe
 
 ### Nothing backs up the database
 
-The chart doesn't back up PostgreSQL. Use your platform's backup tooling, or the commands in [Backup, restore and pruning](operations.md#backup-restore-and-pruning).
+The chart doesn't back up PostgreSQL. Use your platform's backup tooling or `pg_dump`, with the names in [Database](operations.md#database).

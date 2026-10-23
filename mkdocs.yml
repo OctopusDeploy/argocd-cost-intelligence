@@ -3,18 +3,20 @@ site_description: The actual cost of each Argo CD application, measured with Ope
 site_url: !ENV [READTHEDOCS_CANONICAL_URL, https://argocd-cost-intelligence.readthedocs.io/en/latest/]
 repo_url: https://github.com/OctopusDeploy/argocd-cost-intelligence
 edit_uri: edit/main/docs/
+copyright: Maintained by <a href="https://octopus.com">Octopus Deploy</a>
 
-# The home page is the README and links to files outside docs/ point at GitHub;
-# see scripts/mkdocs_hooks.py.
+# The home page is the README, the Security page is SECURITY.md, and links to other files
+# outside docs/ point at GitHub; see scripts/mkdocs_hooks.py.
 hooks:
 - scripts/mkdocs_hooks.py
 
 strict: true
 # Pinned for the build, not a page of the site.
 exclude_docs: requirements.txt
-# The home page and the hook live outside docs/; rebuild on their changes too.
+# The generated pages and the hook live outside docs/; rebuild on their changes too.
 watch:
 - README.md
+- SECURITY.md
 - scripts
 validation:
   links:
@@ -48,6 +50,7 @@ nav:
 - Contributing:
   - Architecture: architecture.md
   - Development: development.md
+  - Security: security.md
 
 theme:
   name: material

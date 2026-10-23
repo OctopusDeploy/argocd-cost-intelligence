@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Guidance for AI coding assistants (and a quick reference for humans) working in this repository. For setup see [docs/installation.md](docs/installation.md); for internals (components, routes, schema, reasons) see [docs/architecture.md](docs/architecture.md); for running tests and a local cluster see [docs/development.md](docs/development.md); for the contribution process see [CONTRIBUTING.md](CONTRIBUTING.md).
+Guidance for AI coding assistants (and a quick reference for humans) working in this repository. For setup see [docs/installation.md](docs/installation.md); for internals (components, data flows, design decisions) see [docs/architecture.md](docs/architecture.md); for running tests and a local cluster see [docs/development.md](docs/development.md); for the contribution process see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Overview
 

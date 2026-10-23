@@ -6,13 +6,15 @@ Running the service day to day: fixing problems, how the NetworkPolicies work, a
 
 ### The Cost Intelligence tab doesn't appear
 
-If you turned the hook off and configured Argo CD from Git, go through [If the tab doesn't appear](gitops-install.md#if-the-tab-doesnt-appear) in the GitOps guide instead.
-
 Run the checks in [Check that it works](installation.md#check-that-it-works). These are the usual causes:
 
 - The `cost-intel-extension` init container is missing from `argocd-server`. Either the hook failed, or something that manages the Deployment reverted it. A failed hook Job is kept, so you can read its log: `kubectl logs -n argocd-cost-intel job/argocd-cost-intelligence-post-install`.
-- The viewer lacks `extensions, invoke, cost-intel` (see [Grant access in Argo CD](installation.md#grant-access-in-argo-cd)).
-- The init container couldn't download the bundle. It retries 5 times and then gives up quietly. Check `kubectl logs -n argocd <argocd-server-pod> -c cost-intel-extension`, the UI pod, and any NetworkPolicy or egress rules between the two namespaces.
+- The init container couldn't download the bundle, so `/tmp/extensions` is empty. It retries 5 times and then gives up quietly. Its log has the reason: `kubectl logs -n argocd <argocd-server-pod> -c cost-intel-extension`. Usually the UI pod wasn't running yet, or the chart's NetworkPolicy blocks the download because `argoCd.namespace` doesn't match the namespace Argo CD runs in. Check egress rules between the two namespaces too. Restart `argocd-server` once it's fixed.
+- The tab shows "401: Unauthorized extension request". Argo CD refused the call before it reached the backend. The `argocd-server` log has `permission denied: extensions, invoke, cost-intel`. The hook allows `role:admin` through `policy.cost-intel.csv` in `argocd-rbac-cm`, unless `argoCd.rbac.grantAdmin` is off. Every other role needs the rule from [Grant access in Argo CD](installation.md#grant-access-in-argo-cd).
+- The tab shows an error instead of costs. Check that `server.enable.proxy.extension` is `"true"` in `argocd-cmd-params-cm` and that `argocd-server` restarted after it changed, because it reads that setting only when it starts. Then check that `extension.config` in `argocd-cm` points at the backend Service on port 8080, not the UI Service.
+- The tab never fills in. See [Costs show $0 or "no data"](#costs-show-0-or-no-data).
+
+If you turned the hook off and configured Argo CD from Git, also go through [If the tab doesn't appear](gitops-install.md#if-the-tab-doesnt-appear) in the GitOps guide, which covers the changes you made by hand.
 
 ### The post-install hook fails
 
@@ -40,14 +42,13 @@ Set the gate yourself in any of these cases: see [Choose your settings](installa
 
 ### Costs show $0 or "no data"
 
-- **No sync yet.** Costs are captured when an application syncs successfully, so sync one.
+- **Not measured yet.** When the service starts, it measures every application that has no cost, and tries again for about 15 minutes while OpenCost has no data for it or doesn't answer. After that, an application is measured at its next successful sync, so sync it. With `costIntelligence.backfillConcurrency` at `0`, only syncs measure.
 - **OpenCost.** Try it from the backend pod:
   ```bash
   kubectl exec -n argocd-cost-intel deploy/argocd-cost-intelligence -- \
     curl -s 'http://opencost.opencost:9003/allocation?window=24h' | head -c 200
   ```
   Use your `openCost.baseURL` if it differs. A new OpenCost needs time to collect metrics and reports $0 until it has a full window.
-- **The tab shows "401: Unauthorized extension request".** Argo CD refused the call before it reached the backend. The `argocd-server` log says `permission denied: extensions, invoke, cost-intel`. The hook allows `role:admin` through `policy.cost-intel.csv` in `argocd-rbac-cm`, unless `argoCd.rbac.grantAdmin` is off. Every other role needs the rule from [Grant access in Argo CD](installation.md#grant-access-in-argo-cd).
 - **The webhook is refused.** The backend logs `Refused POST /on-sync` and answers 401. Argo CD Notifications sent no token or the wrong one. It sends the `cost-intel-webhook-token` key of `argocd-notifications-secret`, which has to equal the backend's token. `helm upgrade` copies it again. If something else manages that Secret (Argo CD's own Helm chart, say) and replaces it, add the key there.
 - **The webhook is accepted but nothing is stored.** `/on-sync` answers 202 as soon as it queues the work, and the OpenCost query and database write happen afterwards. Follow the backend log while you sync: `kubectl logs -f -n argocd-cost-intel deploy/argocd-cost-intelligence`.
 - **The webhook never arrives.** Run `kubectl logs -n argocd -l app.kubernetes.io/name=argocd-notifications-controller --tail=-1 | grep cost-intel`, and check that `subscriptions` in the notifications ConfigMap still has the entry that sends `cost-intel-on-sync-succeeded` to `cost-intel`. Restart the controller after you change the ConfigMap.
@@ -79,7 +80,7 @@ kubectl get events -n argocd-cost-intel --sort-by=.lastTimestamp
 kubectl logs -n argocd-cost-intel deploy/argocd-cost-intelligence
 ```
 
-- **`password authentication failed`**: PostgreSQL sets its user's password only when it first initialises its volume, so changing the Secret afterwards doesn't change the database. Either set the Secret back to the original value, or run `ALTER USER` inside `postgres-0` to match it. Starting over with an empty database means uninstalling, which deletes the PVC (see [Uninstall](installation.md#uninstall)).
+- **`password authentication failed`**: the Secret no longer matches the database user's password, usually because the Secret was changed after the first install. See [PostgreSQL credentials](configuration.md#postgresql-credentials).
 - **`SSL is not enabled on the server`**: set `postgres.sslMode=disable` for the bundled database, or the mode your external database needs.
 
 ## NetworkPolicy

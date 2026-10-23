@@ -138,7 +138,7 @@ helm install argocd-cost-intelligence \
   --wait --timeout 10m
 ```
 
-The bundled PostgreSQL only applies the password when it first initialises its volume. If you rotate the Secret later, the database user's password doesn't change. Change both (`ALTER USER` inside `postgres-0`).
+The bundled PostgreSQL only applies the password when it first initialises its volume. If you rotate the Secret later, the database user's password doesn't change, and the backend logs `password authentication failed`. Change both (`ALTER USER` inside `postgres-0`), or set the Secret back to the original value. Starting over with an empty database means uninstalling, which deletes the PVC (see [Uninstall](installation.md#uninstall)).
 
 ### Webhook token
 
@@ -169,23 +169,33 @@ The chart has no value for the database host. The backend and exporter always co
 
 ## Running without Helm
 
-The chart sets these variables from its values, so you only need them when you run the image without the chart. [`.env.example`](../.env.example) is a template with the rest, such as the database connection, and their defaults.
+The chart sets these variables from its values, so you only need them when you run the image without the chart. [`.env.example`](../.env.example) is a template with all of them.
 
 | Variable | Default | Description |
 |---|---|---|
 | `MODE` | `api` | `api` serves the REST API. `exporter` exports every Argo CD Application's cost to Prometheus (see [Prometheus metrics](metrics.md)). |
-| `METRICS_PORT` | `9102` | The port that serves Prometheus `/metrics`, apart from the API port. `0` turns metrics off (API mode only). |
-| `DB_HOST` | `localhost` | PostgreSQL host. The chart has no value for it. |
-| `DB_PASSWORD` | required | Database password. |
-| `DB_SSL_MODE` | `disable` | PostgreSQL SSL mode: `disable`, `require` or `verify-full`. |
-| `OPENCOST_BASE_URL` | `http://opencost:9003` | OpenCost API endpoint. |
+| `SERVER_PORT` | `8080` | The API port. |
 | `SERVER_READ_TIMEOUT` / `SERVER_WRITE_TIMEOUT` / `SERVER_IDLE_TIMEOUT` | `10s` / `10s` / `120s` | HTTP server timeouts. |
-| `WEBHOOK_SECRET` | required | The bearer token Argo CD Notifications sends to `/on-sync`, at least 16 characters. |
+| `METRICS_PORT` | `9102` | The port that serves Prometheus `/metrics`, apart from the API port, so in API mode it must differ from `SERVER_PORT` and `0` turns metrics off. The exporter needs it. |
+| `EXPORTER_INTERVAL` | `5m` | How often the exporter measures every Application, at least `1m`. Exporter mode only. |
+| `WEBHOOK_SECRET` | required | The bearer token Argo CD Notifications sends to `/on-sync`, at least 16 characters. Not needed in exporter mode. |
+| `DB_HOST` | `localhost` | PostgreSQL host. The chart has no value for it. |
+| `DB_PORT` | `5432` | PostgreSQL port. |
+| `DB_USER` | `cost_user` | Database user. |
+| `DB_PASSWORD` | required | Database password. |
+| `DB_NAME` | `cost_intelligence` | Database name. |
+| `DB_SSL_MODE` | `disable` | PostgreSQL SSL mode: `disable`, `require` or `verify-full`. |
+| `DB_MAX_OPEN_CONNS` / `DB_MAX_IDLE_CONNS` | `25` / `5` | Connection pool size of each process. |
+| `OPENCOST_BASE_URL` | `http://opencost:9003` | OpenCost API endpoint, `http` or `https`. The chart's default is `http://opencost.opencost:9003`. |
+| `OPENCOST_TIMEOUT` | `10s` | How long to wait for each OpenCost request. |
 | `CLUSTER_SCOPE_APP` | empty | The Argo CD Application (`<namespace>:<name>`) whose viewers may see cluster-wide cost data. Empty finds one and `off` turns it off; see [Choose your settings](installation.md#choose-your-settings). |
 | `CLUSTER_ACCESS_APP` | empty | The fallback Application (`<namespace>:<name>`) when none installed the service; see [Authorization](architecture.md#authorization). |
 | `POD_NAMESPACE` / `DEPLOYMENT_NAME` | empty | The service's own Deployment, whose tracking annotation names the Application that installed it. |
 | `ARGOCD_NAMESPACE` | `argocd` | Where Argo CD runs. A tracking annotation that names an Application without a namespace means one here. |
+| `DAILY_HISTORY_DAYS` | `400` | How many days of each application's daily cost to keep; `0` turns recording off. |
 | `BACKFILL_CONCURRENCY` | `4` | How many namespaces to measure at once when the service starts; `0` turns it off. See [Measuring at install](architecture.md#when-the-service-starts). |
 | `PRUNE_REMOTE_COST` | `false` | Delete stored cost for Applications that deploy to another cluster, which can't be undone; see [Limits and requirements](limits-and-requirements.md#only-this-cluster-is-measured). |
 | `VPA_ENABLED` | `true` | Read Vertical Pod Autoscaler recommendations for rightsizing; see [Optional: rightsizing](installation.md#optional-rightsizing). |
 | `LOG_LEVEL` | `info` | `info` or `debug`, in any case. `debug` also logs each OpenCost request URL and response body, which name every namespace and its cost. |
+
+When a `SERVER_`, `DB_` or `OPENCOST_` variable isn't set, the service reads the same name without the prefix, so a `USER` or `HOST` already in the environment takes the place of `DB_USER` or `DB_HOST`, and a `PORT` takes the place of both `SERVER_PORT` and `DB_PORT`. Set the ones you rely on.

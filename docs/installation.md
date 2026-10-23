@@ -26,11 +26,7 @@ The chart also runs a post-install/post-upgrade hook Job that changes Argo CD it
 | `argocd-notifications-secret` | The key `cost-intel-webhook-token`, the bearer token the webhook sends |
 | `argocd-server` Deployment | An init container, `cost-intel-extension`, and a volume that fetch the UI bundle from the UI Service |
 
-The hook finds the `argocd-server` and `argocd-notifications-controller` Deployments by their `app.kubernetes.io/name` label, which Argo CD's `install.yaml` and its Helm chart both set, so it works with either, whatever the Helm release is called. The chart names them after the release, `argo-cd-argocd-server` for a release called `argo-cd`.
-
-The hook only writes keys of its own, named after `cost-intel`. Your triggers, templates and `policy.csv` stay as they are. If `argocd-notifications-cm` or `argocd-rbac-cm` doesn't exist, the hook skips it and says so in its log.
-
-`subscriptions` is a single key shared by every subscription, so the hook adds its entry to the list and keeps the others. It changes that key only when its entry is missing or 0.1.0's entry is still there. The rewritten list keeps your entries and comments, but its formatting may change: indentation, quoting and blank lines between entries.
+The hook works with Argo CD's `install.yaml` and with its Helm chart, whatever the release is called. It only writes keys of its own, named after `cost-intel`, and removes the trigger and template 0.1.0 wrote if you haven't changed them, so your triggers, templates and `policy.csv` stay as they are. `subscriptions` is one key shared by every subscription: the hook changes it only when its entry is missing or 0.1.0's is still there, and keeps your entries and comments, but the list's formatting may change. If `argocd-notifications-cm` or `argocd-rbac-cm` doesn't exist, the hook skips it and logs that.
 
 The hook then restarts `argocd-notifications-controller`, the UI Deployment and `argocd-server`, so the Argo CD UI reloads during an install or upgrade. When the hook succeeds it deletes its own ServiceAccount, ClusterRole and Job.
 
@@ -71,13 +67,13 @@ The images are public on GHCR, so you don't need a pull secret: `ghcr.io/octopus
 
 ### Try it without OpenCost
 
-To look at the plugin before you have an OpenCost, the repository has a mock that answers with fixed data. Use it to try things out; the amounts mean nothing.
+To look at the plugin before you have an OpenCost, the repository has a mock. It prices the pods that run in each namespace with made-up but stable prices, scaled up so small pods show larger amounts. Use it to try things out; the amounts mean nothing.
 
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/OctopusDeploy/argocd-cost-intelligence/main/deploy/mock-opencost.yaml
 ```
 
-It runs as `opencost` in the `opencost` namespace, so the default OpenCost URL works. The mock knows a few workloads: `nginx`, `redis-master`, `redis-replica`, `data-migration-job` and `frontend`. An application's own cost is the cost of the workloads it deploys, so an application with other names shows $0 (its namespace still shows the mock's amounts). To see numbers, deploy an application with a Deployment called `nginx`, in a namespace other than `production`. Remove the mock with `kubectl delete -f` on the same file, and install a real OpenCost before you rely on the numbers.
+It runs as `opencost` in the `opencost` namespace, so the default OpenCost URL works. Remove it with `kubectl delete -f` on the same file, and install a real OpenCost before you rely on the numbers.
 
 ### Choose your settings
 
@@ -288,11 +284,7 @@ The **Actual costs** tab then shows a full-stack monthly cost card: Kubernetes c
 
 By default the chart serves metrics on port 9102: each Application's cost per hour (from the exporter) and the health of each API replica. If your Prometheus scrapes by `prometheus.io/*` pod annotations (the `prometheus-community/prometheus` chart does), you don't need to do anything else, as long as it scrapes with `honor_labels: true`. Two settings are worth checking:
 
-- **Who may scrape.** The NetworkPolicy admits only the namespaces in `metrics.allowedFrom`, which defaults to `monitoring`. If your Prometheus runs somewhere else, set it to that namespace. Otherwise its scrapes time out and all the Cost Intelligence targets show as down. For a Prometheus in `prometheus-system`:
-  ```bash
-  --set 'metrics.allowedFrom[0].namespaceSelector.matchLabels.kubernetes\.io/metadata\.name=prometheus-system'
-  ```
-  This replaces the default, so `monitoring` is no longer admitted. To keep it as well, add it as `metrics.allowedFrom[1]`. [Prometheus metrics](metrics.md#security) shows how to admit only the Prometheus pods.
+- **Who may scrape.** The NetworkPolicy admits only `metrics.allowedFrom`, by default the `monitoring` namespace. If your Prometheus runs somewhere else, its scrapes time out until you set it; see [Prometheus metrics](metrics.md#security).
 - **The Prometheus Operator.** Use `metrics.serviceMonitor.enabled`, `metrics.prometheusRule.enabled`, their `labels`, and `metrics.podAnnotations=false`. See [Prometheus metrics](metrics.md#prometheus-operator).
 
 Anyone who can query that Prometheus sees every Application's cost, whatever Argo CD's RBAC says. To export only the service's own health, set `metrics.exporter.enabled=false`. To export nothing, set `metrics.enabled=false`. [Prometheus metrics](metrics.md) lists the metrics, how to join them with `argocd_app_info`, and example queries and alerts.

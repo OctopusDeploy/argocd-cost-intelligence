@@ -427,7 +427,7 @@ The [Argo CD extension installer](https://github.com/argoproj-labs/argocd-extens
 
 Each Cost Intelligence release from 0.1.0 on attaches the archive, `extension.tar.gz`, and its checksum file, `extension_checksums.txt`. 0.1.0-rc.1 doesn't have them, so use the init container above with it. The URLs below need internet access to GitHub. In an air-gapped cluster, host the two files yourself and point the URLs at them.
 
-If the hook has run on this Argo CD before, remove what it added to `argocd-server` before you sync the installer into it. Its init container has the same name as the installer's, so applying the installer on top of it would keep parts of the old one. This applies with the Argo CD chart as well as with `install.yaml`: the hook finds the Deployment by its label, whatever your release calls it, and the server container by its name, `argocd-server` or `server`, or else takes the first container. The commands below find the Deployment the same way and take its first container, which is the server container in both. Don't run them after that sync: they remove the `/tmp/extensions` mount, which by then is part of your Argo CD configuration:
+If the hook has run on this Argo CD before, remove what it added to `argocd-server` before you sync the installer into it. Its init container has the same name as the installer's, so applying the installer on top of it would keep parts of the old one. The commands below work with the Argo CD chart and with `install.yaml`. Don't run them after that sync: they remove the `/tmp/extensions` mount, which by then is part of your Argo CD configuration:
 
 ```bash
 SERVER=$(kubectl get deploy -n argocd -l app.kubernetes.io/name=argocd-server -o name)
@@ -527,17 +527,13 @@ With `-l`, `kubectl logs` shows only the last 10 lines of each pod unless you ad
 
 ## If the tab doesn't appear
 
-Go through these in order. Each one is a common reason.
+[The Cost Intelligence tab doesn't appear](operations.md#the-cost-intelligence-tab-doesnt-appear) in the operations guide lists the usual causes; skip the ones about the hook. Also check what you added in step 3:
 
-- `argocd-server` hasn't restarted since you added the init container. Restart it with `kubectl rollout restart deployment -n argocd -l app.kubernetes.io/name=argocd-server`.
-- The download failed, so `/tmp/extensions` is empty. The `cost-intel-extension` log says why. Usually the UI wasn't running yet, or the URL has the wrong Service name, namespace or port. Check them with `kubectl get svc -n argocd-cost-intel`, then restart `argocd-server`.
-- The chart's NetworkPolicy blocks the download because `argoCd.namespace` in the Cost Intelligence values doesn't match the namespace Argo CD runs in.
+- `argocd-server` hasn't restarted since you added the init container or changed `server.enable.proxy.extension`. The hook would restart it; here you do: `kubectl rollout restart deployment -n argocd -l app.kubernetes.io/name=argocd-server`.
+- The init container's URL has the wrong Service name, namespace or port. Check them with `kubectl get svc -n argocd-cost-intel`, then restart `argocd-server`.
 - The file name doesn't start with `extension` and end in `.js`. Argo CD ignores other files in `/tmp/extensions`.
-- The tab is there but shows "401: Unauthorized extension request". The RBAC rule is missing or doesn't name your role. Check `policy.cost-intel.csv`, and that the extension name in it is `cost-intel`.
-- The tab is there but shows an error instead of costs. Check that `server.enable.proxy.extension` is `"true"` and that `argocd-server` restarted after it changed, because it reads that setting only when it starts. Then check that the URL in `extension.config` points at the backend Service on port 8080, not the UI Service.
+- The tab shows "401: Unauthorized extension request". The RBAC rule doesn't name your role, or the extension name in `policy.cost-intel.csv` isn't `cost-intel`.
 - The tab never fills in after a sync. The webhook isn't reaching Cost Intelligence. Check the subscription and the token from above. If `kubectl logs -n argocd-cost-intel deploy/argocd-cost-intelligence | grep 'Refused POST /on-sync'` prints anything, the two tokens differ. If both look right, restart the notifications controller with `kubectl rollout restart deployment -n argocd -l app.kubernetes.io/name=argocd-notifications-controller`, as the hook does after it changes them.
-
-[Operations](operations.md) covers more problems once the tab is there.
 
 ## Upgrade and uninstall
 

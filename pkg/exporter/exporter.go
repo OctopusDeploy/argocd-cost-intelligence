@@ -16,6 +16,7 @@ package exporter
 
 import (
 	"context"
+	"errors"
 	"log"
 	"sort"
 	"sync/atomic"
@@ -25,6 +26,7 @@ import (
 
 	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
 	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/opencost"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/storage"
 	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/telemetry"
 )
 
@@ -282,6 +284,11 @@ func (e *Exporter) costSamples(ctx context.Context, apps []Application) []sample
 // estimateSamples converts the cloud estimates of Applications that still exist to cost per hour.
 func (e *Exporter) estimateSamples(ctx context.Context, apps []Application) []sample {
 	estimates, err := e.estimates.ListCloudEstimates(ctx)
+	if errors.Is(err, storage.ErrNoSchema) {
+		// The API creates the tables, so on a fresh install the exporter can start first.
+		e.logger.Printf("Exporter: no cloud estimates until the API has created its tables: %v", err)
+		return nil
+	}
 	if err != nil {
 		e.fail(StageEstimates, err)
 		return nil

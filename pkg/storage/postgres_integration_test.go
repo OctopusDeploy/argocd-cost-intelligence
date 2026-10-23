@@ -676,10 +676,18 @@ func TestListCloudEstimates_EveryApplicationAndSource(t *testing.T) {
 	assert.Equal(t, teamBWeb, got[2].App)
 }
 
+func TestListCloudEstimates_BeforeTheMigrations(t *testing.T) {
+	db, _ := newDatabaseAt(t, 0)
+
+	_, err := (&PostgresCostStorage{db: db}).ListCloudEstimates(context.Background())
+
+	require.ErrorIs(t, err, ErrNoSchema)
+}
+
 // ---- Migration 005: keying by Application namespace ----
 
-// newDatabaseAt creates an empty database, migrates it to version and returns a connection to it.
-// It lets a test write rows the way an older release did before migrating them.
+// newDatabaseAt creates an empty database, migrates it to version (0 leaves it empty) and returns a
+// connection to it. It lets a test write rows the way an older release did before migrating them.
 func newDatabaseAt(t *testing.T, version uint) (*sql.DB, *migrate.Migrate) {
 	t.Helper()
 	ctx := context.Background()
@@ -700,7 +708,9 @@ func newDatabaseAt(t *testing.T, version uint) (*sql.DB, *migrate.Migrate) {
 
 	m, err := newMigrator(db)
 	require.NoError(t, err)
-	require.NoError(t, m.Migrate(version))
+	if version > 0 {
+		require.NoError(t, m.Migrate(version))
+	}
 	return db, m
 }
 

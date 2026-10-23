@@ -31,7 +31,7 @@ All notable changes to this project are listed here. The format follows [Keep a 
 
 ### Changed
 
-- The UI plugin has a new look. Both the application tab and the Namespaces / Chargeback page sit in a panel headed "Cost Intelligence", with "by Octopus Deploy" under it linking to the Octopus Deploy website. They use Octopus Deploy's colours and the Inter font, which is bundled into the plugin so it works without internet access. Labels are in sentence case and the Reload button is labelled.
+- The UI plugin has a new look. Both the application tab and the Namespaces / Chargeback page sit in a panel headed by the Octopus Deploy logo and "Cost Intelligence", with "by Octopus Deploy" under it linking to the Octopus Deploy website. They use Octopus Deploy's colours and the Inter font, which is bundled into the plugin so it works without internet access. Labels are in sentence case and the Reload button is labelled.
 - The `argocd-server` init container uses `busybox:1.37.0` instead of `busybox:latest`.
 - The service no longer logs every OpenCost request URL and response body, which named each namespace and its cost, unless `LOG_LEVEL` is `debug`.
 - The UI Service no longer lists the files it serves or sends CORS headers. `argocd-server` fetches the plugin by its path from inside the cluster, which is unchanged.

@@ -1,13 +1,24 @@
 import React from 'react';
+import { useTokens } from '../theme/tokens';
 
-// BrandMark is the Octopus Deploy mark in the plugin's header. This is a stand-in drawing: replace
-// the SVG below with the official asset, keeping the size prop, and nothing else needs to change.
-export const BrandMark: React.FC<{ size?: number }> = ({ size = 36 }) => (
-  <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true" focusable="false" style={{ flexShrink: 0 }}>
-    <rect width="64" height="64" rx="14" fill="#2f93e0" />
-    <path
-      d="M32 11c-9.4 0-16 7-16 16.3 0 4.7 1.7 8.3 4 11-1.6 3.2-4.3 5.6-8 6.6 3.6 1.6 7.7.6 10.7-2-.6 3.6-2.3 6.7-5.2 9 4.3.2 8-2.4 9.8-6.3.7 3.6 2.6 6.4 4.7 8.1 2.1-1.7 4-4.5 4.7-8.1 1.8 3.9 5.5 6.5 9.8 6.3-2.9-2.3-4.6-5.4-5.2-9 3 2.6 7.1 3.6 10.7 2-3.7-1-6.4-3.4-8-6.6 2.3-2.7 4-6.3 4-11C48 18 41.4 11 32 11z"
-      fill="#ffffff"
-    />
-  </svg>
-);
+// BrandMark is the Octopus Deploy octoicon in the plugin's header, the path from Octopus's official
+// logo pack (octopus.com/company/brand), in the same blue on both themes as in that pack. The viewBox
+// is the icon's bounding box widened to a square, so it sits centred in a size x size box.
+export const BrandMark: React.FC<{ size?: number }> = ({ size = 36 }) => {
+  const t = useTokens();
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="63.38 77 140.44 140.44"
+      aria-hidden="true"
+      focusable="false"
+      style={{ flexShrink: 0 }}
+    >
+      <path
+        d="M76.6351 183.449C87.0978 176.544 99.2687 164.892 94.7847 151.297C92.2224 143.745 88.806 137.487 88.1654 129.287C87.7383 122.382 88.806 115.477 91.1547 109.219C100.55 83.7567 128.522 71.6728 153.717 79.2253C176.992 86.3461 193.006 113.751 183.397 137.487C177.846 151.297 175.283 162.086 187.668 172.66C191.084 175.465 199.198 179.996 199.198 185.175C199.198 191.865 185.96 183.665 184.679 182.586C186.387 185.607 202.828 202.87 192.365 204.164C182.757 205.243 174.216 191.649 168.451 185.823C158.629 175.897 160.337 197.691 160.337 202.222C160.337 209.343 155.212 223.801 146.458 214.306C139.198 206.538 141.974 194.238 136.849 185.607C131.297 176.112 121.902 195.101 119.554 198.554C116.991 202.438 103.966 220.995 98.8416 211.069C94.5711 203.085 101.404 190.354 104.607 183.017C103.326 185.607 94.7847 189.491 92.4359 190.786C87.0978 193.807 80.9055 195.317 74.7133 194.886C61.2613 194.022 71.2969 186.902 76.6351 183.449Z"
+        fill={t.brand}
+      />
+    </svg>
+  );
+};

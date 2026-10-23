@@ -18,7 +18,7 @@ make test             # go test -v ./...
 make test-integration # + -tags=integration: storage (testcontainers, needs Docker) and OpenCost client (skipped unless an OpenCost or the mock is on :9003)
 make lint             # golangci-lint run ./...
 make fmt              # go fmt ./...
-docker-compose up -d  # service :8080 + PostgreSQL + mock OpenCost :9003
+docker compose up -d  # service :8080 + PostgreSQL + mock OpenCost :9003
 
 go test -v -run TestName ./pkg/server/...   # a single test
 ```
@@ -150,23 +150,10 @@ The plugin fills the width Argo CD gives it and adapts to **its own width, not t
 
 ### Testing
 
-- Test behaviour and logic; test styling only where it guards accessibility.
-- jest-dom is not installed: assert with `getAttribute` / `textContent`.
-- jsdom has no `localStorage`: stub it (see `useTheme.test.tsx`).
-- Call `vi.useFakeTimers()` before rendering anything that schedules a timer, and advance with `advanceTimersByTimeAsync`; `waitFor` hangs under fake timers.
-- Width-dependent layouts are tested by stubbing `HTMLElement.prototype.getBoundingClientRect` (see `StatStrip.test.tsx`). Restore mocks in `afterEach`.
-- Check a new test can fail: break the behaviour, watch it fail, restore.
+Read [Writing tests](CONTRIBUTING.md#writing-tests) in CONTRIBUTING before writing a Go or UI test (jsdom limits, fake timers, stubbing widths).
 
 ### Trying a build in a running Argo CD
 
-`argocd-server` re-reads `/tmp/extensions` on every request, so a bundle can be swapped in without a restart (lost when the pod restarts):
-
-```bash
-cd ui && npm run build && cd ..
-POD=$(kubectl get pods -n argocd -l app.kubernetes.io/name=argocd-server -o name | head -1)
-CONTAINER=$(kubectl get -n argocd "$POD" -o jsonpath='{.spec.containers[0].name}')
-kubectl exec -i -n argocd "$POD" -c "$CONTAINER" -- sh -c \
-  'cat > /tmp/extensions/.new.js && mv -f /tmp/extensions/.new.js /tmp/extensions/extension-cost-intel.js' < ui/dist/index.js
-```
+`argocd-server` re-reads `/tmp/extensions` on every request, so a bundle can be swapped in without a restart (lost when the pod restarts). The commands are in [ui/README.md](ui/README.md#try-a-build-in-a-running-argo-cd).
 
 System-level extension registration is deferred with `setTimeout(0)` in `index.tsx` on purpose; read the comment there before changing it.

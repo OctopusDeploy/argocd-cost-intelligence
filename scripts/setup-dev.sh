@@ -10,7 +10,7 @@ if ! command -v docker &> /dev/null; then
 fi
 
 # Check if Docker Compose is installed
-if ! command -v docker-compose &> /dev/null; then
+if ! docker compose version &> /dev/null; then
     echo "❌ Docker Compose is not installed. Please install Docker Compose first."
     exit 1
 fi
@@ -49,7 +49,7 @@ echo ""
 echo "=== Setup Complete! ==="
 echo ""
 echo "Next steps:"
-echo "1. Start services with: docker-compose up -d"
+echo "1. Start services with: docker compose up -d"
 echo "2. Check service health: curl http://localhost:8080/health"
 echo "3. Test the API with sample sync notification:"
 echo ""

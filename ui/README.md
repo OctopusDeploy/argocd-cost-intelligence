@@ -5,7 +5,7 @@ The React / TypeScript plugin that shows cost data inside the Argo CD UI. It reg
 - an **application tab**, "Cost Intelligence" (`CostPanel`: Actual costs / Resources / Trends)
 - a **system-level page** at `/cost-intelligence` (`NamespaceDashboard`: Namespaces / Idle spend / Chargeback)
 
-Installing it is part of the Helm chart; see [installation.md](../docs/installation.md). This file is for working on the plugin. The conventions (design tokens, layout, accessibility, testing rules) are in [CLAUDE.md](../CLAUDE.md#ui-plugin); read them before changing a component.
+Installing it is part of the Helm chart; see [installation.md](../docs/installation.md). This file is for working on the plugin. The conventions (design tokens, layout, accessibility) are in [CLAUDE.md](../CLAUDE.md#ui-plugin), and the testing rules in [CONTRIBUTING.md](../CONTRIBUTING.md#writing-tests); read them before changing a component.
 
 ## Commands
 
@@ -34,7 +34,17 @@ A change is done when lint, typecheck, test and build all pass and `find src -na
 
 ## Try a build in a running Argo CD
 
-`argocd-server` re-reads `/tmp/extensions` on every request, so a new bundle can replace the old one without a restart (lost when the pod restarts). The commands are in [CLAUDE.md](../CLAUDE.md#trying-a-build-in-a-running-argo-cd). `make helm-deploy` builds the images and deploys the whole chart to a local k3d cluster; see [development.md](../docs/development.md).
+`argocd-server` re-reads `/tmp/extensions` on every request, so a new bundle can replace the old one without a restart (lost when the pod restarts). From the repository root:
+
+```bash
+cd ui && npm run build && cd ..
+POD=$(kubectl get pods -n argocd -l app.kubernetes.io/name=argocd-server -o name | head -1)
+CONTAINER=$(kubectl get -n argocd "$POD" -o jsonpath='{.spec.containers[0].name}')
+kubectl exec -i -n argocd "$POD" -c "$CONTAINER" -- sh -c \
+  'cat > /tmp/extensions/.new.js && mv -f /tmp/extensions/.new.js /tmp/extensions/extension-cost-intel.js' < ui/dist/index.js
+```
+
+`make helm-deploy` builds the images and deploys the whole chart to a local k3d cluster; see [development.md](../docs/development.md#running-it-in-argo-cd).
 
 ## Source layout
 

@@ -32,7 +32,7 @@ HELM_TEMPLATE = helm template argocd-cost-intelligence ./helm --set postgres.aut
 help:
 	@echo "Available targets:"
 	@echo "  make build           - Build the binary"
-	@echo "  make run             - Run the service locally"
+	@echo "  make run             - Run the service against Docker Compose's PostgreSQL and mock OpenCost"
 	@echo "  make test            - Run unit tests"
 	@echo "  make test-integration - Run integration tests (storage needs Docker)"
 	@echo "  make test-opencost   - Run OpenCost client tests against a live or mock OpenCost"
@@ -42,7 +42,7 @@ help:
 	@echo "  make ui-extension    - Build the UI plugin archive and checksum for the extension installer (dist/)"
 	@echo "  make docker-push     - Push Docker image to registry"
 	@echo "  make docker-run      - Run Docker container locally"
-	@echo "  make deploy-local    - Deploy with docker-compose"
+	@echo "  make deploy-local    - Deploy with Docker Compose"
 	@echo "  make deploy-k8s      - Deploy to Kubernetes (raw manifests)"
 	@echo "  make helm-deploy      - Build images, import into k3d, deploy with mock OpenCost"
 	@echo "  make helm-deploy-real - Build images, import into k3d, deploy with real OpenCost + Prometheus"
@@ -68,14 +68,22 @@ help:
 	@echo "  K3D_CLUSTER=$(K3D_CLUSTER)  HELM_RELEASE=$(HELM_RELEASE)"
 	@echo "  HELM_VALUES=$(HELM_VALUES)"
 	@echo "  ARGOCD_NS=$(ARGOCD_NS)      APP_NS=$(APP_NS)"
+	@echo "  OPENCOST_NS=$(OPENCOST_NS)"
 
 build:
 	@echo "Building $(BINARY_NAME)..."
 	CGO_ENABLED=0 go build -o bin/$(BINARY_NAME) ./cmd
 
+# Against the PostgreSQL and mock OpenCost of Docker Compose (docker compose up -d postgres mock-opencost).
+# The DB_ and SERVER_ settings are set because envconfig falls back to the unprefixed variable
+# ($USER, $PORT, $NAME) when they aren't, and $USER is always the login name.
 run: build
 	@echo "Running $(BINARY_NAME)..."
-	DB_PASSWORD=test-password WEBHOOK_SECRET=local-dev-webhook-secret ./bin/$(BINARY_NAME)
+	DB_HOST=$${DB_HOST:-localhost} DB_PORT=$${DB_PORT:-5432} DB_NAME=$${DB_NAME:-cost_intelligence} \
+	DB_USER=$${DB_USER:-cost_user} DB_PASSWORD=$${DB_PASSWORD:-cost_password} SERVER_PORT=$${SERVER_PORT:-8080} \
+	OPENCOST_BASE_URL=$${OPENCOST_BASE_URL:-http://localhost:9003} \
+	WEBHOOK_SECRET=$${WEBHOOK_SECRET:-local-dev-webhook-secret} \
+	./bin/$(BINARY_NAME)
 
 test:
 	@echo "Running tests..."
@@ -128,14 +136,14 @@ docker-run: docker-build
 		$(IMAGE_NAME):$(IMAGE_TAG)
 
 deploy-local:
-	@echo "Deploying with docker-compose..."
-	docker-compose up -d
+	@echo "Deploying with Docker Compose..."
+	docker compose up -d
 	@echo "Services started. Access at http://localhost:8080"
-	@docker-compose ps
+	@docker compose ps
 
 deploy-local-down:
-	@echo "Stopping docker-compose services..."
-	docker-compose down
+	@echo "Stopping Docker Compose services..."
+	docker compose down
 
 deploy-k8s:
 	@echo "Deploying to Kubernetes..."

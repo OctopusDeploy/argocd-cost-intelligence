@@ -138,7 +138,7 @@ helm install argocd-cost-intelligence \
   --wait --timeout 10m
 ```
 
-The bundled PostgreSQL only applies the password when it first initialises its volume. If you rotate the Secret later, the database user's password doesn't change. Change both (`ALTER USER` inside `postgres-0`).
+The bundled PostgreSQL only applies the password when it first initialises its volume. If you rotate the Secret later, the database user's password doesn't change, and the backend logs `password authentication failed`. Change both (`ALTER USER` inside `postgres-0`), or set the Secret back to the original value. Starting over with an empty database means uninstalling, which deletes the PVC (see [Uninstall](installation.md#uninstall)).
 
 ### Webhook token
 

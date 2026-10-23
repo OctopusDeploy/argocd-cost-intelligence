@@ -26,13 +26,13 @@ Scrapes are served from the last refresh, so scraping is cheap and puts no load 
 
 The `namespace` and `name` labels identify the Application exactly as Argo CD's `argocd_app_info` does: `namespace` is where the Application resource lives (usually `argocd`), not where it deploys. Join on both: with apps-in-any-namespace, `team-a/web` and `team-b/web` are different Applications. Where an Application deploys is in `argocd_app_info`'s `dest_namespace`, or in `workload_namespace`.
 
-Costs are in OpenCost's currency, usually USD. Multiply by 730 for a month (the month Infracost and the cloud providers use), by 24 for a day. The UI projects its monthly figure onto a 30-day month (720 hours), so the two differ slightly.
+Costs are in OpenCost's currency, usually USD. Multiply by 730 for a month (the month Infracost and the cloud providers use), by 24 for a day.
 
 Each refresh replaces the series. An Application that has no workloads (only ConfigMaps, say) has no series. An Application that could not be measured, because OpenCost failed for one of its namespaces, has no cost series until it can be, rather than an old value; its `workload_info` stays. `exporter_refresh_errors_total` counts the failures. A deleted Application's series disappear at the next refresh.
 
 An Application that deploys to another cluster has no cost or `workload_info` series, because OpenCost measures only the cluster it runs in ([why](limits-and-requirements.md#only-this-cluster-is-measured)). Its cloud estimates come from CI, not OpenCost, so `application_estimated_hourly_cost` still has them. `exporter_remote_applications` counts these Applications.
 
-These metrics won't match the Cost Intelligence tab. The tab projects a month from the last 24 hours at each sync, while these are always the last hour, so they follow scaling, restarts and spot price changes as they happen.
+These metrics won't match the Cost Intelligence tab. The tab projects a 30-day month (720 hours) from the last 24 hours at each sync, while these are always the last hour, so they follow scaling, restarts and spot price changes as they happen.
 
 The metrics only cover the Application's own pods. Namespace and cluster totals, including pods no Application manages, idle node capacity and shared costs, are for OpenCost to report. Adding the metrics up gives the cost Argo CD Applications are responsible for, not your bill.
 
@@ -71,13 +71,7 @@ Every `result` starts at zero, so rates and alerts work before the first event.
 
 ## Example queries
 
-Each Application's monthly cost:
-
-```promql
-namespace_name:argocd_cost_intelligence_application_hourly_cost:sum * 730
-```
-
-`namespace_name:argocd_cost_intelligence_application_hourly_cost:sum` is the [recording rule](#recording-rules-and-alerts); without it, use `sum by (namespace, name) (argocd_cost_intelligence_application_hourly_cost)`.
+`namespace_name:argocd_cost_intelligence_application_hourly_cost:sum`, each Application's cost per hour, is the [recording rule](#recording-rules-and-alerts); without it, use `sum by (namespace, name) (argocd_cost_intelligence_application_hourly_cost)`.
 
 Monthly cost by Argo CD project (or `dest_namespace`, `dest_server`, ...):
 
@@ -90,30 +84,11 @@ sum by (project) (
 
 This needs `argocd_app_info` scraped with its own `namespace` label. If yours shows `exported_namespace` instead, scrape Argo CD's metrics with `honorLabels: true` (in the `argo/argo-cd` chart, `controller.metrics.serviceMonitor.honorLabels`), or rename it with `label_replace`.
 
-The ten most expensive Applications:
-
-```promql
-topk(10, namespace_name:argocd_cost_intelligence_application_hourly_cost:sum)
-```
-
 What share of each Application's cost pays for requests it does not use:
 
 ```promql
 sum by (namespace, name) (argocd_cost_intelligence_application_idle_hourly_cost)
   / namespace_name:argocd_cost_intelligence_application_hourly_cost:sum
-```
-
-Cost by resource across all Applications:
-
-```promql
-sum by (resource) (argocd_cost_intelligence_application_hourly_cost) * 730
-```
-
-Each Application's cost a week ago, and the change since:
-
-```promql
-namespace_name:argocd_cost_intelligence_application_hourly_cost:sum
-  - namespace_name:argocd_cost_intelligence_application_hourly_cost:sum offset 1w
 ```
 
 Full-stack cost per hour, Kubernetes plus cloud services:
@@ -162,7 +137,7 @@ sum by (app_namespace, app_name) (
 
 The thresholds are starting points. The cost alert compares with the recording rule's own history, so it needs the rule to have run for a week before it is reliable. To tune them, copy the file and set `metrics.prometheusRule.enabled=false`.
 
-There's no metric for "cost change since the last sync" or "anomaly". Those are queries over the cost series, like the ones above, so Prometheus works them out from data it already has.
+There's no metric for "cost change since the last sync" or "anomaly". Prometheus works them out from the cost series it already has, as `ArgoCDApplicationCostIncrease` does.
 
 ## Scraping
 
@@ -216,6 +191,6 @@ The exporter lists Argo CD Applications with the chart's ServiceAccount, which a
 
 ## Configuration
 
-The `metrics.*` Helm values (port, pod annotations, `allowedFrom`, exporter interval and resources, ServiceMonitor, PrometheusRule) are listed in [Configuration](configuration.md#metrics). The environment variables, if you run it without the chart, are `METRICS_PORT` (default `9102`; `0` turns `/metrics` off), `MODE=exporter` and `EXPORTER_INTERVAL` (default `5m`, at least `1m`).
+The `metrics.*` Helm values (port, pod annotations, `allowedFrom`, exporter interval and resources, ServiceMonitor, PrometheusRule) are listed in [Configuration](configuration.md#metrics), and the environment variables in [Running without Helm](configuration.md#running-without-helm).
 
 `MODE=exporter` lists Applications through the in-cluster configuration, so it cannot run outside Kubernetes. In exporter mode `/health` and `/ready` are served on the metrics port; `/ready` answers once the first refresh has finished.

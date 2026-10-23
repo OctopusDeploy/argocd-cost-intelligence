@@ -2,7 +2,7 @@
 
 Thanks for your interest in ArgoCD Cost Intelligence. Bug reports, fixes, docs and features are all welcome.
 
-By participating you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md). To report a security problem, see [SECURITY.md](SECURITY.md) instead of opening an issue.
+By participating you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md). To report a security problem, see [SECURITY.md](SECURITY.md) instead of opening an issue. [GOVERNANCE.md](GOVERNANCE.md) describes how decisions are made and how to become a maintainer.
 
 ## Before you start
 

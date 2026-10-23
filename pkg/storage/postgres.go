@@ -10,7 +10,8 @@ import (
 	"log"
 	"time"
 
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
+	"github.com/lib/pq/pqerror"
 
 	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
 )
@@ -683,6 +684,14 @@ func (p *PostgresCostStorage) GetCloudEstimate(ctx context.Context, app models.A
 	return &est, nil
 }
 
+// noSchema wraps ErrNoSchema around a query's error when the table it reads does not exist yet.
+func noSchema(err error) error {
+	if pq.As(err, pqerror.UndefinedTable) != nil {
+		return fmt.Errorf("%w: %w", ErrNoSchema, err)
+	}
+	return err
+}
+
 func (p *PostgresCostStorage) ListCloudEstimates(ctx context.Context) ([]models.AppCloudEstimate, error) {
 	// A row without an application namespace cannot be reached by any request (see migration 005).
 	query := `
@@ -693,7 +702,7 @@ func (p *PostgresCostStorage) ListCloudEstimates(ctx context.Context) ([]models.
 	`
 	rows, err := p.db.QueryContext(ctx, query)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list cloud estimates: %w", err)
+		return nil, fmt.Errorf("failed to list cloud estimates: %w", noSchema(err))
 	}
 	defer rows.Close()
 

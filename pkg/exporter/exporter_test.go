@@ -3,6 +3,7 @@ package exporter
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"strconv"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
 	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/opencost"
+	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/storage"
 )
 
 var refreshedAt = time.Date(2026, 10, 4, 7, 0, 0, 0, time.UTC)
@@ -232,6 +234,22 @@ argocd_cost_intelligence_application_estimated_hourly_cost{name="shop",namespace
 	assert.NotContains(t, got, "estimated_hourly_cost")
 	assert.Contains(t, got, `argocd_cost_intelligence_application_hourly_cost{name="shop"`, "costs do not depend on estimates")
 	assert.InDelta(t, 1, testutil.ToFloat64(e.errors.WithLabelValues(StageEstimates)), 0)
+}
+
+func TestRefresh_NoEstimatesBeforeTheAPICreatesItsTables(t *testing.T) {
+	t.Parallel()
+
+	estimates := &fakeEstimates{err: fmt.Errorf("failed to list cloud estimates: %w: %w",
+		storage.ErrNoSchema, errors.New(`pq: relation "cloud_estimates" does not exist (42P01)`))}
+	e, _ := newExporter(&fakeApps{apps: []Application{shop}}, cluster(), estimates)
+
+	e.Refresh(context.Background())
+
+	got := gatherText(t, e)
+	assert.NotContains(t, got, "estimated_hourly_cost")
+	assert.Contains(t, got, `argocd_cost_intelligence_application_hourly_cost{name="shop"`, "costs do not depend on estimates")
+	assert.Zero(t, testutil.ToFloat64(e.errors.WithLabelValues(StageEstimates)), "a fresh install is not a failure")
+	assert.True(t, e.Ready())
 }
 
 func TestRefresh_SkipsApplicationsOnOtherClusters(t *testing.T) {

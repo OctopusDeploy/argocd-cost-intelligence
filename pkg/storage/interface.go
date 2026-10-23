@@ -12,6 +12,10 @@ import (
 // failure.
 var ErrNotFound = errors.New("not found")
 
+// ErrNoSchema is wrapped by the errors of reads from a table the API's migrations have not created yet,
+// as when the exporter starts on a fresh install before the API has run them.
+var ErrNoSchema = errors.New("schema not created yet")
+
 // CostStorage defines the interface for storing and retrieving cost data.
 //
 // Per-application data is keyed by models.AppRef, the Application's namespace and name: with
@@ -71,7 +75,8 @@ type CostStorage interface {
 	GetCloudEstimate(ctx context.Context, app models.AppRef) (*models.CloudServiceEstimate, error)
 
 	// ListCloudEstimates returns every application's estimate from each source, without the
-	// per-resource breakdown, ordered by application and source.
+	// per-resource breakdown, ordered by application and source. The error wraps ErrNoSchema
+	// while the table does not exist yet.
 	ListCloudEstimates(ctx context.Context) ([]models.AppCloudEstimate, error)
 
 	// ListLatestActuals returns each application's most recent cost record. Only ApplicationNamespace,

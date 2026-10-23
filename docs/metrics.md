@@ -43,7 +43,7 @@ The metrics only cover the Application's own pods. Namespace and cluster totals,
 | `argocd_cost_intelligence_exporter_last_refresh_timestamp_seconds` | gauge | | When the exporter last refreshed with the current list of Applications. Not updated when listing Applications fails. |
 | `argocd_cost_intelligence_exporter_last_refresh_duration_seconds` | gauge | | How long the last refresh took. |
 | `argocd_cost_intelligence_exporter_remote_applications` | gauge | | Applications in the last refresh that deploy to another cluster, which OpenCost here does not measure. They are expected, not errors. |
-| `argocd_cost_intelligence_exporter_refresh_errors_total` | counter | `stage` | Failed refresh steps: `applications` (listing Applications; every cost series is dropped), `opencost` (one per namespace that failed), `estimates` (reading cloud estimates from PostgreSQL). |
+| `argocd_cost_intelligence_exporter_refresh_errors_total` | counter | `stage` | Failed refresh steps: `applications` (listing Applications; every cost series is dropped), `opencost` (one per namespace that failed), `estimates` (reading cloud estimates from PostgreSQL; on a fresh install, before the API has created its tables, there are no estimates and no error). |
 
 The exporter also reports `opencost_request_duration_seconds`, `database_operation_duration_seconds`, and Go and process metrics, as below.
 
@@ -218,7 +218,7 @@ The list replaces the default, so it must name every Prometheus that scrapes the
 
 With an empty list, nothing may reach the metrics port. `/metrics` holds no secrets and needs no authentication; it carries no pod names, labels or annotations.
 
-The exporter lists Argo CD Applications with the chart's ServiceAccount, which already may (`argoproj.io` `applications`, `get`/`list`), and reads cloud estimates from PostgreSQL. It runs no migrations and serves no API.
+The exporter lists Argo CD Applications with the chart's ServiceAccount, which already may (`argoproj.io` `applications`, `get`/`list`), and reads cloud estimates from PostgreSQL. It runs no migrations and serves no API, so until the API has created its tables it exports no cloud estimates and logs that it is waiting for them.
 
 ## Configuration
 

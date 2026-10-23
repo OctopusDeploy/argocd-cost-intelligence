@@ -3,7 +3,7 @@ site_description: The actual cost of each Argo CD application, measured with Ope
 site_url: !ENV [READTHEDOCS_CANONICAL_URL, https://argocd-cost-intelligence.readthedocs.io/en/latest/]
 repo_url: https://github.com/OctopusDeploy/argocd-cost-intelligence
 edit_uri: edit/main/docs/
-copyright: Maintained by <a href="https://octopus.com">Octopus Deploy</a>
+copyright: Maintained by <a href="https://octopus.com">Octopus Deploy</a> · Licensed under <a href="https://github.com/OctopusDeploy/argocd-cost-intelligence/blob/main/LICENSE">Apache-2.0</a>
 
 # The home page is the README, the Security page is SECURITY.md, and links to other files
 # outside docs/ point at GitHub; see scripts/mkdocs_hooks.py.
@@ -54,6 +54,10 @@ nav:
 
 theme:
   name: material
+  # The octoicon is the path from Octopus's official logo pack, the same as the plugin's BrandMark:
+  # white on the blue header, in the pack's blue as the favicon.
+  logo: assets/octoicon-white.svg
+  favicon: assets/octoicon.svg
   font:
     text: Inter
   features:
@@ -78,6 +82,12 @@ theme:
     toggle:
       icon: material/toggle-switch
       name: Switch to light mode
+
+extra:
+  social:
+  - icon: fontawesome/brands/github
+    link: https://github.com/OctopusDeploy/argocd-cost-intelligence
+    name: argocd-cost-intelligence on GitHub
 
 extra_css:
 - stylesheets/extra.css

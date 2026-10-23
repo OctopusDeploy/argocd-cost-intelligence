@@ -395,18 +395,18 @@ kubectl patch secret argocd-notifications-secret -n argocd --type merge \
   -p "{\"stringData\":{\"cost-intel-webhook-token\":\"$TOKEN\"}}"
 ```
 
-If your Applications live in other namespaces as well as `argocd` ([apps in any namespace](https://argo-cd.readthedocs.io/en/stable/operator-manual/app-any-namespace/)), uncomment the two lines in `resources` above, with the same Argo CD version as your install. `install.yaml` only lets the notifications controller read Applications in `argocd`; that ClusterRole lets it read Applications, Secrets and ConfigMaps in every namespace. The controller also has to watch those namespaces, which `application.namespaces` in `argocd-cmd-params-cm` sets.
+If your Applications live in other namespaces as well as `argocd` ([apps in any namespace](https://argo-cd.readthedocs.io/en/stable/operator-manual/app-any-namespace/)), uncomment the two lines in `resources` above and use the same Argo CD version as your install. `install.yaml` only lets the notifications controller read Applications in `argocd`. Those two lines add Argo CD's `argocd-notifications-controller-cluster-apps` ClusterRole, which lets it read Applications, Secrets and ConfigMaps in every namespace. The controller also has to watch those namespaces, which `application.namespaces` in `argocd-cmd-params-cm` sets.
 
 Sync or apply your overlay. The `argocd-server` patch restarts it. If it restarts before Cost Intelligence's UI is running, it starts without the plugin; see [If the tab doesn't appear](#if-the-tab-doesnt-appear).
 
 ### Use the Argo CD extension installer instead
 
-The [Argo CD extension installer](https://github.com/argoproj-labs/argocd-extension-installer) can download the plugin in place of the init container above, and checks its checksum. It needs access to GitHub, or to wherever you host the files. With the Argo CD chart it runs from `server.extensions`. Each release from 0.1.0 on attaches the archive and its checksum file:
+The [Argo CD extension installer](https://github.com/argoproj-labs/argocd-extension-installer) can download the plugin in place of the init container above, and checks its checksum. It needs access to GitHub, or to wherever you host the files. With the Argo CD chart it runs from `server.extensions`; with plain manifests it replaces the init container in `cost-intel-argocd-server.yaml`, with `EXTENSIONS_DIR` set to `/tmp/extensions` (see its README) and Argo CD's `tmp` volume mounted at `/tmp`, where it downloads. Set `EXTENSION_URL` and `EXTENSION_CHECKSUM_URL` to the archive and the checksum file each release from 0.1.0 on attaches:
 
 - `https://github.com/OctopusDeploy/argocd-cost-intelligence/releases/download/v<chart-version>/extension.tar.gz`
 - `https://github.com/OctopusDeploy/argocd-cost-intelligence/releases/download/v<chart-version>/extension_checksums.txt`
 
-Set `IGNORE_FAILURE` to `"true"`. Without it, a failed download keeps `argocd-server`, and so the whole Argo CD UI, from starting. If the hook has run on this Argo CD before, remove what it added to `argocd-server` first, with step 5 of [Uninstall](installation.md#uninstall), and only before you sync the installer in: afterwards it would also remove the `/tmp/extensions` mount the installer needs.
+Set `IGNORE_FAILURE` to `"true"`. Without it, a failed download keeps `argocd-server`, and so the whole Argo CD UI, from starting. If the hook has run on this Argo CD before, its init container has the same name as the installer's, so remove what it added to `argocd-server` first. Run only step 5 of [Uninstall](installation.md#uninstall), and only before you sync the installer in: afterwards it would also remove the `/tmp/extensions` mount the installer needs.
 
 ## Check that it works
 
@@ -439,7 +439,7 @@ kubectl logs -n argocd "$POD" -c cost-intel-extension
 kubectl exec -n argocd "$POD" -c "$CONTAINER" -- ls /tmp/extensions
 ```
 
-The log says `OK` and the listing shows `extension-cost-intel.js`.
+The log says `OK`, or `UI extension installed successfully` with the installer, and the listing shows `extension-cost-intel.js`.
 
 Then open any Application in the Argo CD UI. It has a **Cost Intelligence** tab. Cost Intelligence measures each application when it starts, so most tabs show a cost within a few minutes, marked "Measured at install". Sync an application and its tab shows the new cost within about half a minute. A new application takes a few minutes longer, since OpenCost has no data yet for the namespace its first sync creates; Cost Intelligence measures it again until it does. If an application that already ran doesn't show its cost, see [Costs show $0 or "no data"](operations.md#costs-show-0-or-no-data).
 

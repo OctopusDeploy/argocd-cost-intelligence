@@ -3,9 +3,10 @@
 The Markdown under docs/ is written to be read on GitHub as well, so it links to the README and to
 files outside docs/ (the chart, CONTRIBUTING.md, ...). These hooks keep it that way:
 
-- the README becomes the site's home page, so it isn't kept twice;
-- a link to the README goes to the home page, and a link to any other file outside docs/ goes to
-  that file on GitHub, at the commit being built when Read the Docs builds it. A link to a file
+- the README becomes the site's home page and SECURITY.md its Security page, so neither is kept
+  twice;
+- a link to either goes to its page, and a link to any other file outside docs/ goes to that file
+  on GitHub, at the commit being built when Read the Docs builds it. A link to a file
   that doesn't exist is a warning, so a strict build fails on it.
 """
 
@@ -29,24 +30,28 @@ def _repo_root(config):
     return os.path.dirname(os.path.abspath(config.config_file_path))
 
 
+# Files outside docs/ that the site serves as pages: repository file -> page.
+PAGES = {"README.md": "index.md", "SECURITY.md": "security.md"}
+
+
 def on_files(files, config):
-    readme = os.path.join(_repo_root(config), "README.md")
-    with open(readme, encoding="utf-8") as f:
-        index = File.generated(config, "index.md", content=f.read())
-    # Relative to edit_uri (edit/main/docs/), so the edit button opens the README.
-    index.edit_uri = "../README.md"
-    files.append(index)
+    for source, page in PAGES.items():
+        with open(os.path.join(_repo_root(config), source), encoding="utf-8") as f:
+            generated = File.generated(config, page, content=f.read())
+        # Relative to edit_uri (edit/main/docs/), so the edit button opens the repository file.
+        generated.edit_uri = "../" + source
+        files.append(generated)
     return files
 
 
 def on_page_markdown(markdown, page, config, files):
     root = _repo_root(config)
     docs = os.path.abspath(config.docs_dir)
-    readme = os.path.join(root, "README.md")
+    pages = {os.path.join(root, source): os.path.join(docs, page) for source, page in PAGES.items()}
     ref = os.environ.get("READTHEDOCS_GIT_COMMIT_HASH", "main")
 
     # Where the Markdown lives in the repository, which its links are relative to, and where the
-    # page lives in the site. They differ only for the home page.
+    # page lives in the site. They differ only for the pages generated from PAGES.
     page_dir = os.path.dirname(os.path.join(docs, page.file.src_uri))
     source_dir = root if page.file.abs_src_path is None else page_dir
 
@@ -57,8 +62,7 @@ def on_page_markdown(markdown, page, config, files):
         path, sep, anchor = target.partition("#")
         path, qsep, query = path.partition("?")
         resolved = os.path.normpath(os.path.join(source_dir, path))
-        if resolved == readme:
-            resolved = os.path.join(docs, "index.md")
+        resolved = pages.get(resolved, resolved)
         if resolved.startswith(docs + os.sep):
             new = os.path.relpath(resolved, page_dir).replace(os.sep, "/")
         else:

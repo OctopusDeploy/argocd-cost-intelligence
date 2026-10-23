@@ -30,7 +30,7 @@ Sync an application, wait a few seconds, and open its **Cost Intelligence** tab.
 
 Next: the [installation guide](docs/installation.md) for the OpenCost URL, cluster-wide costs and upgrades, and [configuration](docs/configuration.md) for every setting.
 
-> **Early release (v0.x).** Helm values and the database schema may still change between minor versions; breaking changes are listed in the [CHANGELOG](CHANGELOG.md). This is an independent community project, not affiliated with or endorsed by the Argo project, the CNCF or OpenCost.
+> **Early release (v0.x).** Helm values and the database schema may still change between minor versions; breaking changes are listed in the [CHANGELOG](CHANGELOG.md). This is an independent community project maintained by Octopus Deploy, not affiliated with or endorsed by the Argo project, the CNCF or OpenCost.
 
 ## What you get
 

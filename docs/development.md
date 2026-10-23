@@ -181,7 +181,7 @@ To look at OpenCost itself, `kubectl port-forward svc/opencost 9090:9090 -n open
 
 ## Documentation
 
-The pages under `docs/` and the README are also published on Read the Docs, built with MkDocs from `mkdocs.yml`. The README is the home page. Links to files outside `docs/` are rewritten at build time to point at GitHub, so keep writing ordinary relative links that work on GitHub. A new page also needs an entry in the `nav` of `mkdocs.yml`.
+The pages under `docs/`, the README and `SECURITY.md` are also published on Read the Docs, built with MkDocs from `mkdocs.yml`. The README is the home page and `SECURITY.md` the Security page. Links to other files outside `docs/` are rewritten at build time to point at GitHub, so keep writing ordinary relative links that work on GitHub. A new page also needs an entry in the `nav` of `mkdocs.yml`.
 
 `make docs` builds the site into `site/` and fails on a broken link or anchor, as it does in CI; `make docs-serve` serves it with live reload. Both need Python 3.
 

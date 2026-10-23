@@ -421,10 +421,13 @@ The [Argo CD extension installer](https://github.com/argoproj-labs/argocd-extens
 
 Each Cost Intelligence release from 0.1.0 on attaches the archive, `extension.tar.gz`, and its checksum file, `extension_checksums.txt`. 0.1.0-rc.1 doesn't have them, so use the init container above with it. The URLs below need internet access to GitHub. In an air-gapped cluster, host the two files yourself and point the URLs at them.
 
-If the hook has run on this Argo CD before, remove what it added to `argocd-server` before you sync the installer into it. Its init container has the same name as the installer's, so applying the installer on top of it would keep parts of the old one. The hook can only change `argocd-server` when its Deployment and container both have that name, as in Argo CD's `install.yaml`. The Argo CD chart calls the container `server`, so there the hook added nothing to `argocd-server` and you skip this. Don't run this after that sync: it removes the `/tmp/extensions` mount, which by then is part of your Argo CD configuration:
+If the hook has run on this Argo CD before, remove what it added to `argocd-server` before you sync the installer into it. Its init container has the same name as the installer's, so applying the installer on top of it would keep parts of the old one. This applies with the Argo CD chart as well as with `install.yaml`: the hook finds the Deployment by its label, whatever your release calls it, and the server container by its name, `argocd-server` or `server`, or else takes the first container. The commands below find the Deployment the same way and take its first container, which is the server container in both. Don't run them after that sync: they remove the `/tmp/extensions` mount, which by then is part of your Argo CD configuration:
 
 ```bash
-kubectl patch deployment argocd-server -n argocd --type strategic -p '{"spec":{"template":{"spec":{"initContainers":[{"name":"cost-intel-extension","$patch":"delete"}],"containers":[{"name":"argocd-server","volumeMounts":[{"mountPath":"/tmp/extensions","$patch":"delete"}]}],"volumes":[{"name":"cost-intel-ext-js","$patch":"delete"}]}}}}'
+SERVER=$(kubectl get deploy -n argocd -l app.kubernetes.io/name=argocd-server -o name)
+CONTAINER=$(kubectl get "$SERVER" -n argocd -o jsonpath='{.spec.template.spec.containers[0].name}')
+kubectl patch "$SERVER" -n argocd --type strategic \
+  -p '{"spec":{"template":{"spec":{"initContainers":[{"name":"cost-intel-extension","$patch":"delete"}],"containers":[{"name":"'"$CONTAINER"'","volumeMounts":[{"mountPath":"/tmp/extensions","$patch":"delete"}]}],"volumes":[{"name":"cost-intel-ext-js","$patch":"delete"}]}}}}'
 ```
 
 With the Argo CD chart, use this instead of `server.initContainers`, `server.volumes` and `server.volumeMounts`:

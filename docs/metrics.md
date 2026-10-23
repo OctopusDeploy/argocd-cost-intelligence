@@ -2,7 +2,7 @@
 
 ArgoCD Cost Intelligence exports two kinds of metrics:
 
-- What each Argo CD Application costs, per hour. A single exporter process serves these. Use them for Grafana dashboards, chargeback queries and cost alerts, next to Argo CD's own `argocd_app_info`.
+- What each Argo CD Application costs, per hour. A single exporter process serves these ([why](architecture.md#the-exporter-runs-as-a-single-replica)). Use them for Grafana dashboards, chargeback queries and cost alerts, next to Argo CD's own `argocd_app_info`.
 - How the service itself is doing. Each API replica serves its own: requests, sync webhooks and measurements, calls to OpenCost and PostgreSQL, and the daily history recorder. Use them to tell whether costs are being measured at all.
 
 Both are served on a port of their own (`9102` by default), never on the API port. The [Helm chart](#scraping) adds scrape annotations and, if you want them, ServiceMonitors and a PrometheusRule with [recording rules and starter alerts](#recording-rules-and-alerts).
@@ -191,12 +191,6 @@ Both ways of scraping add labels the exporter doesn't set: `job`, `instance` and
 
 When the exporter pod goes away, Prometheus marks its series stale, so they aren't added to the new pod's. If Prometheus misses that, for example while it is restarting itself, the old series stay visible for the query lookback (five minutes by default) and a sum counts each Application twice in that window. `ArgoCDApplicationCostIncrease` waits two hours before it fires, so it isn't affected.
 
-### Why the exporter is a separate Deployment
-
-Cost is the same whichever process reads it. If every API replica exported it, a `sum` would count each Application once per replica, and the count would change as the HPA scales. One exporter replica, like kube-state-metrics, exports it once. It uses the `Recreate` strategy, so two never run during an upgrade. While it restarts, the cost series have a gap of a minute or two, which `ArgoCDCostIntelligenceExporterAbsent` tolerates.
-
-Health metrics are the other way round: each replica reports its own requests and errors, so they come from every API replica.
-
 ## Security
 
 Anyone who can query your Prometheus sees every Application's cost. Argo CD's RBAC doesn't apply there. If that matters, restrict who may query Prometheus or Grafana, or turn the exporter off (`metrics.exporter.enabled=false`).
@@ -214,7 +208,7 @@ metrics:
           app.kubernetes.io/name: prometheus
 ```
 
-The list replaces the default, so it must name every Prometheus that scrapes these pods. One it doesn't name gets no answer on the metrics port: its scrapes usually time out (`context deadline exceeded`), every Cost Intelligence target shows as down, and, if you load the chart's alert rules, `ArgoCDCostIntelligenceExporterAbsent` fires. Kubernetes sets the `kubernetes.io/metadata.name` label on every namespace, so a namespace selector on it needs no labels of your own.
+The list replaces the default, so it must name every Prometheus that scrapes these pods. One it doesn't name gets no answer on the metrics port: its scrapes usually time out (`context deadline exceeded`), every Cost Intelligence target shows as down, and, if you load the chart's alert rules, `ArgoCDCostIntelligenceExporterAbsent` fires. Kubernetes sets the `kubernetes.io/metadata.name` label on every namespace, so a namespace selector on it needs no labels of your own. Leave out `podSelector` to admit every pod in the namespace.
 
 With an empty list, nothing may reach the metrics port. `/metrics` holds no secrets and needs no authentication; it carries no pod names, labels or annotations.
 

@@ -67,7 +67,7 @@ OpenCost can only answer for the days its Prometheus still keeps, which is often
 
 ### For Prometheus
 
-The exporter publishes each application's measured cost per hour over the last hour, split by resource, along with the idle part of it and the cloud service estimates CI pushed. Monthly projections, the change since a sync and anomalies aren't exported, and are left to PromQL and to the recording rules that come with the chart. [Prometheus metrics](metrics.md) lists the metrics and explains why the exporter runs as a single replica.
+The exporter publishes each application's measured cost per hour over the last hour, split by resource, along with the idle part of it and the cloud service estimates CI pushed. Monthly projections, the change since a sync and anomalies aren't exported, and are left to PromQL and to the recording rules that come with the chart. [Prometheus metrics](metrics.md) lists the metrics.
 
 ## Design decisions
 
@@ -96,6 +96,10 @@ Idle cost is the part of the CPU and memory cost spent on capacity the pods requ
 ### Rightsizing is advice from VPAs
 
 Rightsizing reads the Vertical Pod Autoscalers in the application's namespace. Only a VPA in `Off` mode counts as advice, and a VPA in any other mode already sets the requests itself, so the tab shows that workload as managed. A recommendation is used once the VPA has a day of history, which covers a full daily load cycle. Current requests and the possible savings come from OpenCost and not from the manifests, so they're priced the same way as the cost on the rest of the tab. Only requests are ever suggested, never limits.
+
+### The exporter runs as a single replica
+
+Cost is the same whichever process reads it. If every API replica exported it, a `sum` in Prometheus would count each application once per replica, and the total would change as the HPA scales. So one exporter replica exports it once, the way kube-state-metrics does, and it uses the `Recreate` strategy so that two never run during an upgrade. While it restarts, the cost series have a gap of a minute or two, which the `ArgoCDCostIntelligenceExporterAbsent` alert allows for. Health metrics are the other way round: each API replica reports its own requests and errors.
 
 ## Authorization
 

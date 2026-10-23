@@ -6,7 +6,7 @@ What the figures on an application's **Cost Intelligence** tab mean, where they 
 
 After each successful sync, the service asks OpenCost what the application cost over the previous 24 hours and stores the result. The tab shows the latest measurement, and its header says when it was taken.
 
-- **Monthly figures** are projected onto a 30-day month from the hours OpenCost has data for. With less than a day of data, as for a new application, the header says "Projected from N hours of data".
+- **Monthly figures** are projected onto a 30-day month from the hours OpenCost has data for. With less than a day of data, as for a new application, the header says "Projected from N hours of data". Less than 5 minutes of data is too little to project from, so a new application is first measured once OpenCost has 5 minutes of data for its namespace.
 - **A sync shows in full a day later.** A measurement covers the 24 hours before it, so the one taken right after a sync mostly reflects the previous version. The Trends tab shows the change from the next day on.
 - **Measured at install.** An application without a measurement when the service starts is measured then, without waiting for a sync. Its next sync measures it again.
 - **Stale** marks a measurement 7 days old or more.

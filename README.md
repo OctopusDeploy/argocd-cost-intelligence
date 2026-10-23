@@ -64,6 +64,7 @@ The guides are also published at [argocd-cost-intelligence.readthedocs.io](https
 
 | I want to... | Read |
 |---|---|
+| Understand the figures on the Cost Intelligence tab | [How costs are measured](docs/how-costs-are-measured.md) |
 | Install the plugin, upgrade it or remove it | [Installation](docs/installation.md) |
 | Install it when Git manages Argo CD | [Install when Git manages Argo CD](docs/gitops-install.md) |
 | Look up a Helm value or manage secrets | [Configuration](docs/configuration.md) |

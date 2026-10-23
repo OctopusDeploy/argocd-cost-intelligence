@@ -240,6 +240,8 @@ You don't need to add the notifications ClusterRole. The chart already gives the
 
 Sync your Argo CD release. Changing the init container restarts `argocd-server`. If it restarts before Cost Intelligence's UI is running, it starts without the plugin; see [If the tab doesn't appear](#if-the-tab-doesnt-appear).
 
+If the hook has run on this Argo CD before and you upgrade the release yourself with Helm 4, after installing it with Helm 4, the upgrade can fail with `conflict with "kubectl-patch"` on `extension.config`, `subscriptions` or another key from [What you'll add](#what-youll-add). Helm 4 upgrades a release it installed with server-side apply, which won't overwrite a value another tool set, and the hook set these with `kubectl patch`. Run the upgrade again with `--force-conflicts`, so Helm takes those values over. Argo CD syncing its own release doesn't stop on this: its server-side apply always forces conflicts, and client-side apply doesn't check them.
+
 ### Plain manifests or Kustomize
 
 These files go in the Kustomize overlay you use to install Argo CD. The ConfigMap patches add keys and leave the ones you have alone.

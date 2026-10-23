@@ -35,6 +35,7 @@ nav:
 - Introduction: index.md
 - Using it:
   - How costs are measured: how-costs-are-measured.md
+  - Limits and requirements: limits-and-requirements.md
   - Installation: installation.md
   - Install when Git manages Argo CD: gitops-install.md
   - Configuration: configuration.md

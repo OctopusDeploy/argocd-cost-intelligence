@@ -205,10 +205,12 @@ The Helm chart ([helm/README.md](../helm/README.md), [configuration.md](configur
 
 ## Known limitations
 
+The same limits for people using the service, with the supported versions, are in [Limits and requirements](limits-and-requirements.md).
+
 1. **Records are per namespace.** An application's stored namespace figures cover everything in its namespace; per-app figures exist only when the webhook carried `resources`.
 2. **IaC estimates are pushed, not pulled.** Cloud-service costs need a CI step that posts the Infracost output. `pushed_at` is the only freshness signal; the UI warns after 7 days.
 3. **24-hour window.** A sync's effect shows fully only after a day. A namespace younger than that is projected from the hours it has existed, which is noisier the shorter it is: a sync measured minutes after a first deploy finds little data, or none, and then records nothing.
-4. **A missed webhook is a missed measurement.** There is no periodic re-measure of `cost_actuals`, so an app that does not sync is not measured again, apart from the few retries of a sync that found no OpenCost data, which stop after 15 minutes. An OpenCost outage longer than that leaves those apps unmeasured until they sync or the service restarts (daily history and the exporter still read OpenCost, so cost over time keeps flowing). Measuring at install fills in only applications with no record at all.
+4. **A missed webhook is a missed measurement.** There is no periodic re-measure of `cost_actuals`, so an app that does not sync is not measured again, apart from the few retries of a sync that found no OpenCost data, which stop after 15 minutes. A sync that OpenCost fails to answer is not retried, so an OpenCost outage leaves the apps that synced during it unmeasured until they sync again, or until the service restarts for an app with no record (daily history and the exporter still read OpenCost, so cost over time keeps flowing). Measuring at install fills in only applications with no record at all.
 5. **Only this cluster is measured.** OpenCost measures the cluster it runs in, so a namespace of the same name here is not the namespace of an application that deploys to another cluster.
    - The sync webhook, the exporter and the measurement at install skip such an application, and the daily history recorder never records one. It has no cost records and no cost series. Measuring it needs this service and OpenCost in that cluster.
    - Its tab says it deploys to another cluster instead of showing its views (`otherCluster` in `ui/src/utils/destination.ts` applies the same rule to the Application that Argo CD hands the tab).

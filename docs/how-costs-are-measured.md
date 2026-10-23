@@ -67,4 +67,4 @@ A day with no cost means OpenCost reported nothing for it: the application's pod
 
 OpenCost measures only the cluster it runs in, so an application that Argo CD deploys to another cluster has no costs. Its tab says "Deploys to another cluster" instead. Measuring it needs OpenCost and Cost Intelligence in that cluster.
 
-The cluster is matched by name: an application is on this cluster only when its destination server is `https://kubernetes.default.svc` or empty and its destination name is `in-cluster` or empty. One that targets this cluster by its API server URL, or by a renamed in-cluster entry, is treated as being on another cluster. See [Known limitations](architecture.md#known-limitations).
+The cluster is matched by name: an application is on this cluster only when its destination server is `https://kubernetes.default.svc` or empty and its destination name is `in-cluster` or empty. One that targets this cluster by its API server URL, or by a renamed in-cluster entry, is treated as being on another cluster. See [Limits and requirements](limits-and-requirements.md#only-this-cluster-is-measured).

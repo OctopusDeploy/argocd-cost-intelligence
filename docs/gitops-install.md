@@ -401,7 +401,7 @@ Sync or apply your overlay. The `argocd-server` patch restarts it. If it restart
 
 ### Use the Argo CD extension installer instead
 
-The [Argo CD extension installer](https://github.com/argoproj-labs/argocd-extension-installer) can download the plugin in place of the init container above, and checks its checksum. It needs access to GitHub, or to wherever you host the files. With the Argo CD chart it runs from `server.extensions`; with plain manifests it replaces the init container in `cost-intel-argocd-server.yaml`, with `EXTENSIONS_DIR` set to `/tmp/extensions` (see its README) and Argo CD's `tmp` volume mounted at `/tmp`, where it downloads. Set `EXTENSION_URL` and `EXTENSION_CHECKSUM_URL` to the archive and the checksum file each release from 0.1.0 on attaches:
+The [Argo CD extension installer](https://github.com/argoproj-labs/argocd-extension-installer) can download the plugin in place of the init container above, and checks its checksum. It needs access to GitHub, or to wherever you host the files. With the Argo CD chart it runs from `server.extensions`; with plain manifests it replaces the init container in `cost-intel-argocd-server.yaml`, with `EXTENSIONS_DIR` set to `/tmp/extensions` (see its README) and Argo CD's `tmp` volume mounted at `/tmp`, where it downloads. Set `EXTENSION_URL` and `EXTENSION_CHECKSUM_URL` to the archive and the checksum file each release attaches:
 
 - `https://github.com/OctopusDeploy/argocd-cost-intelligence/releases/download/v<chart-version>/extension.tar.gz`
 - `https://github.com/OctopusDeploy/argocd-cost-intelligence/releases/download/v<chart-version>/extension_checksums.txt`

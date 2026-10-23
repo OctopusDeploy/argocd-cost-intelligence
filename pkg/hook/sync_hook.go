@@ -403,7 +403,7 @@ func MeasureNamespace(ctx context.Context, client *opencost.Client, namespace st
 
 	measured := &Namespace{name: namespace, measuredAt: time.Now(), metrics: mr.v, efficiency: er.v, pods: pr.v}
 	if !measured.HasData() {
-		logger.Printf("OpenCost has no data for namespace %s yet\n", namespace)
+		logger.Printf("OpenCost has no data, or too little, for namespace %s yet\n", namespace)
 		return measured, nil
 	}
 	logger.Printf("Measured costs of %s - CPU: $%.2f, Memory: $%.2f, Storage: $%.2f, GPU: $%.2f, Total: $%.2f\n",
@@ -424,11 +424,17 @@ func MeasureNamespace(ctx context.Context, client *opencost.Client, namespace st
 	return measured, nil
 }
 
-// HasData reports whether OpenCost had any data for the namespace. Without it, the namespace's cost is
-// unknown rather than zero. A namespace OpenCost has seen for only seconds can come back with a period
-// but no cost yet: that is no data either.
+// minMeasuredPeriod is the least OpenCost data a namespace's cost is projected from. OpenCost rounds
+// costs to five decimals, and seconds of data project onto a month by a factor in the hundreds of
+// thousands, so the rounding alone becomes dollars and the namespace and pod queries, rounded apart,
+// give an application a share larger than its own namespace.
+const minMeasuredPeriod = 5 * time.Minute
+
+// HasData reports whether OpenCost had enough data for the namespace. Without it, the namespace's cost
+// is unknown rather than zero. A namespace OpenCost has seen for less than minMeasuredPeriod, with or
+// without a cost yet, is no data either: the retries measure it again once it has more.
 func (n *Namespace) HasData() bool {
-	return n.metrics.MeasuredHours > 0 && n.metrics.AllocationTotals.TotalCost > 0
+	return n.metrics.MeasuredHours >= minMeasuredPeriod.Hours() && n.metrics.AllocationTotals.TotalCost > 0
 }
 
 // Record is app's cost record from the namespace's measurement. owners are the pod-owning resources

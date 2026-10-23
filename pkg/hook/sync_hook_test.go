@@ -534,6 +534,12 @@ func TestOnApplicationSync_NoData_RecordsNothing(t *testing.T) {
 		{name: "seconds of data and no cost yet", data: []map[string]opencost.AllocationData{{
 			"test-ns": {Start: time.Now().Add(-5 * time.Second), End: time.Now()},
 		}}},
+		{name: "minutes of data with a cost", data: []map[string]opencost.AllocationData{{
+			"test-ns": {Start: time.Now().Add(-3 * time.Minute), End: time.Now(), RAMCost: 0.00001},
+		}}},
+		{name: "a second short of the minimum period", data: []map[string]opencost.AllocationData{{
+			"test-ns": {Start: time.Now().Add(-minMeasuredPeriod + time.Second), End: time.Now(), RAMCost: 0.01},
+		}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -558,6 +564,27 @@ func TestOnApplicationSync_NoData_RecordsNothing(t *testing.T) {
 			assert.False(t, saved, "a namespace OpenCost has no data for has an unknown cost, not $0")
 		})
 	}
+}
+
+func TestOnApplicationSync_MinutesOfData_RecordsOnceThereAreEnough(t *testing.T) {
+	t.Parallel()
+
+	end := time.Now()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(opencost.AllocationResponse{Code: 200, Data: []map[string]opencost.AllocationData{{
+			"test-ns": {Start: end.Add(-minMeasuredPeriod), End: end, RAMCost: 0.01},
+		}}})
+	}))
+	defer srv.Close()
+
+	var saved *models.CostActual
+	store := &mockStorage{saveActualFn: func(_ context.Context, actual *models.CostActual) error { saved = actual; return nil }}
+
+	err := newTestHook(t, srv, store).OnApplicationSync(context.Background(), succeededSync())
+	require.NoError(t, err)
+	require.NotNil(t, saved, "the minimum period of data is enough to project from")
+	assert.InDelta(t, 86.4, saved.TotalMonthlyCost, 0.5) // 0.01 per 5 minutes over 720 hours
 }
 
 // newOpenCostWithDataAfter is an OpenCost that has no data for test-ns for the first noData queries of

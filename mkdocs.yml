@@ -60,6 +60,9 @@ theme:
   - content.action.edit
   - content.code.copy
   - navigation.footer
+  - navigation.sections
+  - navigation.top
+  - search.highlight
   palette:
   - media: '(prefers-color-scheme: light)'
     scheme: default

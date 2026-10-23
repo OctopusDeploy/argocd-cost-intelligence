@@ -93,3 +93,9 @@ Follow the backend log while you reproduce the problem: `docker compose logs -f 
 The pages under `docs/`, the README and `SECURITY.md` are published on Read the Docs with MkDocs. Write ordinary relative links that work on GitHub: links to files outside `docs/` are rewritten to GitHub at build time. A new page needs an entry in the `nav` of `mkdocs.yml`.
 
 `make docs` builds the site and fails on a broken link or anchor, as CI does. `make docs-serve` serves it with live reload.
+
+When you write or change a page:
+
+- Keep to one idea per paragraph.
+- Link to a page by its title, or a section by its heading, never by the file name: write `[Configuration](configuration.md)`, not `[configuration.md](configuration.md)`. Files that aren't on the site, such as `CONTRIBUTING.md`, keep their names.
+- Take screenshots in Argo CD's dark theme, on a local cluster with the mock OpenCost (see [Running it in Argo CD](#running-it-in-argo-cd)), and save them as WebP in `docs/images/`. Update the alt text with what the new screenshot shows.

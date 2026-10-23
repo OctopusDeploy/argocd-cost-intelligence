@@ -126,14 +126,16 @@ namespace_name:argocd_cost_intelligence_application_hourly_cost:sum
 
 ### An Application's workloads with kube-state-metrics
 
-`application_workload_info` maps Applications to workloads. Rename its labels to the other metric's with `label_replace`, then join. For example, the replicas each Application's Deployments want:
+`application_workload_info` maps Applications to workloads. Keep only the labels you join on with `group by`, rename them to the other metric's with `label_replace`, then join. Without the `group by`, the join fails with duplicate series whenever an old exporter pod's series are still visible beside the new pod's (see [Labels the scrape adds](#labels-the-scrape-adds)). For example, the replicas each Application's Deployments want:
 
 ```promql
 sum by (app_namespace, app_name) (
   kube_deployment_spec_replicas
   * on (namespace, deployment) group_left (app_namespace, app_name)
     label_replace(label_replace(label_replace(label_replace(
-      argocd_cost_intelligence_application_workload_info{workload_kind="Deployment"},
+      group by (namespace, name, workload_namespace, workload_name) (
+        argocd_cost_intelligence_application_workload_info{workload_kind="Deployment"}
+      ),
       "app_namespace", "$1", "namespace", "(.*)"),
       "app_name", "$1", "name", "(.*)"),
       "namespace", "$1", "workload_namespace", "(.*)"),
@@ -166,7 +168,7 @@ There's no metric for "cost change since the last sync" or "anomaly". Those are 
 
 ### Pod annotations (default)
 
-The chart adds `prometheus.io/scrape`, `prometheus.io/port` and `prometheus.io/path` to the API and exporter pods (`metrics.podAnnotations`), which the `kubernetes-pods` job of the `prometheus-community/prometheus` chart discovers. That job sets `honor_labels: true`; your own job must too, or Prometheus renames the exporter's `namespace` label to `exported_namespace` and the joins with `argocd_app_info` stop matching.
+The chart adds `prometheus.io/scrape`, `prometheus.io/port` and `prometheus.io/path` to the API and exporter pods (`metrics.podAnnotations`), which the `kubernetes-pods` job of the `prometheus-community/prometheus` chart discovers. That job sets `honor_labels: true` (in the chart since version 15.8.1); your own job must too, or Prometheus renames the exporter's `namespace` label to `exported_namespace` and the joins with `argocd_app_info` stop matching.
 
 ### Prometheus Operator
 
@@ -182,6 +184,12 @@ helm upgrade argocd-cost-intelligence \
 ```
 
 The labels are the ones your Prometheus selects ServiceMonitors and PrometheusRules by. This creates one ServiceMonitor for the API replicas and one for the exporter, which sets `honorLabels: true`. Turn the annotations off if your Prometheus also scrapes by annotation, or every series is scraped twice.
+
+### Labels the scrape adds
+
+Both ways of scraping add labels the exporter doesn't set: `job`, `instance` and `pod`, plus the pod's own labels with the `kubernetes-pods` job (and `node` in recent versions of its chart), or `service`, `endpoint` and `container` with a ServiceMonitor. The recording rule and the example queries aggregate them away, and the cost alert reads only the recording rule. Do the same in your own queries and dashboards rather than keeping `pod` or `instance`: each new exporter pod, after an upgrade or when Kubernetes moves it, starts new series.
+
+When the exporter pod goes away, Prometheus marks its series stale, so they aren't added to the new pod's. If Prometheus misses that, for example while it is restarting itself, the old series stay visible for the query lookback (five minutes by default) and a sum counts each Application twice in that window. `ArgoCDApplicationCostIncrease` waits two hours before it fires, so it isn't affected.
 
 ### Why the exporter is a separate Deployment
 

@@ -5,13 +5,13 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/OctopusDeploy/argocd-cost-intelligence?include_prereleases)](https://github.com/OctopusDeploy/argocd-cost-intelligence/releases)
 
-ArgoCD Cost Intelligence shows what each Argo CD application actually costs, in a **Cost Intelligence** tab inside the Argo CD UI. After every successful sync it asks [OpenCost](https://www.opencost.io) what the application's pods cost and keeps the result, so application owners see their cost where they already work. You need Argo CD and OpenCost running in the same cluster, and only the applications Argo CD deploys to that cluster are measured. If Argo CD also manages other clusters, the tab of an application deployed there says it isn't measured ([Known limitations](docs/architecture.md#known-limitations)).
+ArgoCD Cost Intelligence shows what each Argo CD application actually costs, in a **Cost Intelligence** tab inside the Argo CD UI. After every successful sync it asks [OpenCost](https://www.opencost.io) what the application's pods cost and keeps the result, so application owners see their cost where they already work. You need Argo CD and OpenCost running in the same cluster, and only the applications Argo CD deploys to that cluster are measured. If Argo CD also manages other clusters, the tab of an application deployed there says it isn't measured ([Limits and requirements](docs/limits-and-requirements.md#only-this-cluster-is-measured)).
 
 ![Actual costs: monthly cost, change since the last sync, rightsizing advice, cost breakdown and resource efficiency](docs/images/actual-costs.webp)
 
 ## Quick start
 
-Requires Argo CD 3.4 or 3.5, OpenCost 1.121.1+ and Helm 3.8+.
+Requires Argo CD 3.4 or 3.5 on a Kubernetes version it supports, OpenCost 1.121.1+ and Helm 3.8+ ([Limits and requirements](docs/limits-and-requirements.md)).
 
 <!-- The release workflow fails a release tag that doesn't match the --version below. -->
 ```bash
@@ -67,6 +67,7 @@ The guides are also published at [argocd-cost-intelligence.readthedocs.io](https
 | I want to... | Read |
 |---|---|
 | Understand the figures on the Cost Intelligence tab | [How costs are measured](docs/how-costs-are-measured.md) |
+| Check what it runs on and what it doesn't do | [Limits and requirements](docs/limits-and-requirements.md) |
 | Install the plugin, upgrade it or remove it | [Installation](docs/installation.md) |
 | Install it when Git manages Argo CD | [Install when Git manages Argo CD](docs/gitops-install.md) |
 | Look up a Helm value or manage secrets | [Configuration](docs/configuration.md) |

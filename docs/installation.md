@@ -38,7 +38,7 @@ The hook doesn't change Kubernetes RBAC for Argo CD. The webhook is sent only fo
 
 | You need | Notes |
 |---|---|
-| A Kubernetes cluster | Any cluster Argo CD supports. OpenCost measures only the cluster it runs in, so Cost Intelligence measures only the applications Argo CD deploys to this cluster. If Argo CD also manages other clusters, applications deployed there aren't measured, and their tab says so; see [Known limitations](architecture.md#known-limitations). |
+| A Kubernetes cluster | Any cluster Argo CD supports. OpenCost measures only the cluster it runs in, so Cost Intelligence measures only the applications Argo CD deploys to this cluster. If Argo CD also manages other clusters, applications deployed there aren't measured, and their tab says so; see [Limits and requirements](limits-and-requirements.md#only-this-cluster-is-measured). |
 | Argo CD 3.4 or 3.5 | The plugin uses the proxy extension feature, which the hook turns on. `argocd-notifications-controller` must be running in `argoCd.namespace`. |
 | OpenCost 1.121.1 or later | The backend and exporter call it on port 9003. The default URL is `http://opencost.opencost:9003`. See [opencost.io/docs/install](https://www.opencost.io/docs/install). |
 | Helm 3.8 or later | The chart is published as an OCI artifact. |
@@ -46,18 +46,7 @@ The hook doesn't change Kubernetes RBAC for Argo CD. The webhook is sent only fo
 | A default StorageClass | The bundled PostgreSQL claims a 20 GiB PVC. Without a default class, set `postgres.persistence.storageClassName`. |
 | metrics-server | The backend HPA needs it. Without it, set `costIntelligence.autoscaling.enabled=false`. |
 
-### Compatibility
-
-| Component | Supported | Last tested with |
-|---|---|---|
-| Argo CD | 3.4 and 3.5 | 3.5.0 |
-| OpenCost | 1.121.1+ (the label picker on Chargeback needs 1.120.3+) | 1.121.3 |
-| Kubernetes | Any version Argo CD supports | 1.31 (k3s) |
-| Helm | 3.8+ | 4.2.0 |
-| PostgreSQL | The bundled `postgres:15-alpine`, or an external instance | 15 |
-| Vertical Pod Autoscaler (optional) | A recommender serving `autoscaling.k8s.io/v1` | VPA 1.7.1, Goldilocks 4.16.2 |
-
-"Supported" means the versions the plugin is built for. "Last tested with" is the version we last ran it against. The UI runs on the React that Argo CD provides (16.14 on Argo CD 3.4, 19 on 3.5), so it only uses APIs that both have. Other versions may work too. If you try one, please tell us how it went.
+Supported and tested versions are in [Limits and requirements](limits-and-requirements.md#compatibility).
 
 ### Network
 

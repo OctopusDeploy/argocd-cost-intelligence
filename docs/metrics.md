@@ -30,7 +30,7 @@ Costs are in OpenCost's currency, usually USD. Multiply by 730 for a month (the 
 
 Each refresh replaces the series. An Application that has no workloads (only ConfigMaps, say) has no series. An Application that could not be measured, because OpenCost failed for one of its namespaces, has no cost series until it can be, rather than an old value; its `workload_info` stays. `exporter_refresh_errors_total` counts the failures. A deleted Application's series disappear at the next refresh.
 
-An Application that deploys to another cluster has no cost or `workload_info` series, because OpenCost measures only the cluster it runs in ([why](architecture.md#known-limitations)). Its cloud estimates come from CI, not OpenCost, so `application_estimated_hourly_cost` still has them. `exporter_remote_applications` counts these Applications.
+An Application that deploys to another cluster has no cost or `workload_info` series, because OpenCost measures only the cluster it runs in ([why](limits-and-requirements.md#only-this-cluster-is-measured)). Its cloud estimates come from CI, not OpenCost, so `application_estimated_hourly_cost` still has them. `exporter_remote_applications` counts these Applications.
 
 These metrics won't match the Cost Intelligence tab. The tab projects a month from the last 24 hours at each sync, while these are always the last hour, so they follow scaling, restarts and spot price changes as they happen.
 

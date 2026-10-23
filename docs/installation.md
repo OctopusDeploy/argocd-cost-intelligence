@@ -1,6 +1,6 @@
 # Installation
 
-This page covers installing ArgoCD Cost Intelligence with Helm, checking that it works, upgrading and removing it. Chart settings are in [configuration.md](configuration.md). If something goes wrong, see [operations.md](operations.md#troubleshooting).
+This page covers installing ArgoCD Cost Intelligence with Helm, checking that it works, upgrading and removing it. Chart settings are in [Configuration](configuration.md). If something goes wrong, see [Troubleshooting](operations.md#troubleshooting).
 
 ## What the chart installs
 
@@ -11,7 +11,7 @@ Everything goes into the `argocd-cost-intel` namespace, which the chart creates:
 | `argocd-cost-intelligence` | Deployment (HPA, 2 to 5 replicas), Service on 8080 | REST API and sync webhook |
 | `argocd-cost-intelligence-exporter` | Deployment, 1 replica | Publishes application cost as Prometheus metrics |
 | `argocd-cost-intelligence-ui` | Deployment, Service on 3000 | Serves the React bundle that `argocd-server` loads as an extension |
-| `postgres` | StatefulSet, headless Service, PVC `postgres-pvc` | Cost history. You can use an external database instead, see [configuration.md](configuration.md#external-postgresql) |
+| `postgres` | StatefulSet, headless Service, PVC `postgres-pvc` | Cost history. You can use an external database instead, see [External PostgreSQL](configuration.md#external-postgresql) |
 
 These names assume the release is called `argocd-cost-intelligence`. With another release name, the Deployments and Services are named after it.
 
@@ -55,7 +55,7 @@ The chart's NetworkPolicies only limit incoming traffic. The backend accepts `ar
 - If the OpenCost namespace limits incoming traffic, let pods from `argocd-cost-intel` reach port 9003.
 - If the Argo CD namespace limits outgoing traffic, let `argocd-server` reach `argocd-cost-intel` on ports 8080 and 3000, and `argocd-notifications-controller` reach it on 8080.
 
-[operations.md](operations.md#networkpolicy) explains how the policies work and what to do if your CNI blocks kubelet probes.
+[Operations](operations.md#networkpolicy) explains how the policies work and what to do if your CNI blocks kubelet probes.
 
 > **Warning:** Clusters that use Flannel on its own don't enforce NetworkPolicy. Install with `--set networkPolicy.enabled=false` there. Otherwise the policies do nothing, and you'd think you were protected when you aren't. k3s and k3d use Flannel too, but k3s has its own policy controller, so they enforce NetworkPolicy unless k3s was started with `--disable-network-policy`.
 
@@ -77,7 +77,7 @@ It runs as `opencost` in the `opencost` namespace, so the default OpenCost URL w
 
 ### Choose your settings
 
-**PostgreSQL password.** The chart stores it in a Secret called `postgres-credentials`. Don't commit it. To manage that Secret yourself, see [configuration.md](configuration.md#postgresql-credentials).
+**PostgreSQL password.** The chart stores it in a Secret called `postgres-credentials`. Don't commit it. To manage that Secret yourself, see [PostgreSQL credentials](configuration.md#postgresql-credentials).
 
 **OpenCost URL**, if it isn't `http://opencost.opencost:9003`: `--set openCost.baseURL=http://<service>.<namespace>.svc.cluster.local:9003`.
 
@@ -191,11 +191,15 @@ kubectl port-forward svc/argocd-cost-intelligence 18080:8080 -n argocd-cost-inte
 curl -s http://localhost:18080/health      # {"status":"ok"}
 ```
 
-Then open any Application in Argo CD. It has a **Cost Intelligence** tab. When the backend starts, it measures every application that has no cost yet, so most tabs show a cost within a few minutes, marked "Measured at install". If OpenCost has no data yet for an application's namespace, or doesn't answer, the backend tries again for about a quarter of an hour; after that the tab stays empty until the application's next successful sync. Each sync measures it again: Argo CD Notifications calls the webhook, the backend waits 5 seconds, asks OpenCost and stores the result, and the tab shows it within the UI's 30-second refresh. A new application takes a few minutes longer: its first sync creates its namespace, which OpenCost has no data for yet, so the backend measures it again after 1, 2, 4 and 8 minutes.
+Then open any Application in Argo CD. It has a **Cost Intelligence** tab. When the backend starts, it measures every application that has no cost yet, so most tabs show a cost within a few minutes, marked "Measured at install". If OpenCost has no data yet for an application's namespace, or doesn't answer, the backend tries again for about a quarter of an hour; after that the tab stays empty until the application's next successful sync.
+
+Each sync measures the application again: Argo CD Notifications calls the webhook, the backend waits 5 seconds, asks OpenCost and stores the result, and the tab shows it within the UI's 30-second refresh. A new application takes a few minutes longer: its first sync creates its namespace, which OpenCost has no data for yet, so the backend measures it again after 1, 2, 4 and 8 minutes.
 
 ## Optional: rightsizing
 
-Cost Intelligence can tell you which requests to set for each container and what that would save per month. It doesn't work this out itself. It reads the recommendations of the [Vertical Pod Autoscaler](https://github.com/kubernetes/autoscaler/tree/master/vertical-pod-autoscaler) (VPA) and prices them with OpenCost. Without a VPA the rest of the plugin works as usual and rightsizing stays hidden. The chart doesn't install a VPA, and the service never creates or changes one. It only reads them.
+Cost Intelligence can tell you which requests to set for each container and what that would save per month. It doesn't work this out itself. It reads the recommendations of the [Vertical Pod Autoscaler](https://github.com/kubernetes/autoscaler/tree/master/vertical-pod-autoscaler) (VPA) and prices them with OpenCost.
+
+Without a VPA the rest of the plugin works as usual and rightsizing stays hidden. The chart doesn't install a VPA, and the service never creates or changes one. It only reads them.
 
 You need three things:
 
@@ -280,10 +284,10 @@ The **Actual costs** tab then shows a full-stack monthly cost card: Kubernetes c
 
 By default the chart serves metrics on port 9102: each Application's cost per hour (from the exporter) and the health of each API replica. If your Prometheus scrapes by `prometheus.io/*` pod annotations (the `prometheus-community/prometheus` chart does), you don't need to do anything else, as long as it scrapes with `honor_labels: true`. Two settings are worth checking:
 
-- **Who may scrape.** The NetworkPolicy admits only `metrics.allowedFrom`, by default the `monitoring` namespace. If your Prometheus runs somewhere else, its scrapes time out until you set it; see [metrics.md](metrics.md#security).
-- **The Prometheus Operator.** Use `metrics.serviceMonitor.enabled`, `metrics.prometheusRule.enabled`, their `labels`, and `metrics.podAnnotations=false`. See [metrics.md](metrics.md#prometheus-operator).
+- **Who may scrape.** The NetworkPolicy admits only `metrics.allowedFrom`, by default the `monitoring` namespace. If your Prometheus runs somewhere else, its scrapes time out until you set it; see [Prometheus metrics](metrics.md#security).
+- **The Prometheus Operator.** Use `metrics.serviceMonitor.enabled`, `metrics.prometheusRule.enabled`, their `labels`, and `metrics.podAnnotations=false`. See [Prometheus metrics](metrics.md#prometheus-operator).
 
-Anyone who can query that Prometheus sees every Application's cost, whatever Argo CD's RBAC says. To export only the service's own health, set `metrics.exporter.enabled=false`. To export nothing, set `metrics.enabled=false`. [metrics.md](metrics.md) lists the metrics, how to join them with `argocd_app_info`, and example queries and alerts.
+Anyone who can query that Prometheus sees every Application's cost, whatever Argo CD's RBAC says. To export only the service's own health, set `metrics.exporter.enabled=false`. To export nothing, set `metrics.enabled=false`. [Prometheus metrics](metrics.md) lists the metrics, how to join them with `argocd_app_info`, and example queries and alerts.
 
 ## Upgrade
 

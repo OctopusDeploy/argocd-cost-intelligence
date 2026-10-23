@@ -1,6 +1,6 @@
 # Operations
 
-Running the service day to day: fixing problems, how the NetworkPolicies work, and looking after the database. For installing, see [installation.md](installation.md).
+Running the service day to day: fixing problems, how the NetworkPolicies work, and looking after the database. For installing, see [Installation](installation.md).
 
 ## Troubleshooting
 

@@ -23,6 +23,8 @@ export interface Tokens {
   accentWash: string;
   // hover tints a control's own background on pointer hover, whatever that background is.
   hover: string;
+  // brand is the octoicon's blue, the same on both themes as in Octopus's logo pack.
+  brand: string;
   // tile is the background of a card's icon tile, white in both themes as in Octopus Deploy;
   // tileIcon and tileAdvice are the icons drawn on it.
   tile: string;
@@ -51,6 +53,7 @@ const dark: Tokens = {
   accentText: '#6db3f4',
   accentWash: 'rgba(61, 143, 224, 0.18)',
   hover: 'rgba(255, 255, 255, 0.08)',
+  brand: '#0d80d8',
   tile: '#ffffff',
   tileIcon: '#1a77ca',
   tileAdvice: '#a06c00',
@@ -75,6 +78,7 @@ const light: Tokens = {
   accentText: '#0f64b0',
   accentWash: '#e6f1fb',
   hover: 'rgba(17, 26, 35, 0.05)',
+  brand: '#0d80d8',
   tile: '#ffffff',
   tileIcon: '#1a77ca',
   tileAdvice: '#a06c00',

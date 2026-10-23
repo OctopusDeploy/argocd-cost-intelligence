@@ -79,7 +79,7 @@ The guides are also published at [argocd-cost-intelligence.readthedocs.io](https
 
 ## Contributing
 
-Issues and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) first; commits need a DCO sign-off (`git commit -s`). Please report vulnerabilities privately as described in [SECURITY.md](SECURITY.md), and follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+Issues and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) first; commits need a DCO sign-off (`git commit -s`). Please report vulnerabilities privately as described in the [Security policy](SECURITY.md), and follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 

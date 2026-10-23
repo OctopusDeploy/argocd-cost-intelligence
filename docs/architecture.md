@@ -109,7 +109,7 @@ On application routes the service serves data only for the Application the heade
 
 The webhook doesn't go through the proxy, so there's no header to vouch for it and it needs a bearer token instead. The chart generates the token, unless you bring your own secret, and gives it to Argo CD Notifications. The user and group headers are never trusted, because whatever a client sends in them passes straight through the proxy.
 
-All of this depends on nothing else being able to reach the API. The chart's NetworkPolicy admits only Argo CD's server and notifications controller, plus its repo server when the access Application is in use, and it admits only the sources you list in `metrics.allowedFrom` to the metrics port. If your CNI doesn't exempt kubelet probes, it also admits the probe CIDRs you configure. The cost metrics carry every application's cost, so anyone who can query that Prometheus sees them whatever their Argo CD RBAC says. [SECURITY.md](../SECURITY.md) describes the full trust model.
+All of this depends on nothing else being able to reach the API. The chart's NetworkPolicy admits only Argo CD's server and notifications controller, plus its repo server when the access Application is in use, and it admits only the sources you list in `metrics.allowedFrom` to the metrics port. If your CNI doesn't exempt kubelet probes, it also admits the probe CIDRs you configure. The cost metrics carry every application's cost, so anyone who can query that Prometheus sees them whatever their Argo CD RBAC says. The [Security policy](../SECURITY.md) describes the full trust model.
 
 ## Extending it
 

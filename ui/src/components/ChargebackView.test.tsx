@@ -236,6 +236,33 @@ describe('ChargebackView results', () => {
     expect(within(rows[2]).getAllByRole('cell')[4].textContent).toBe('$0.00');
   });
 
+  it('rounds the cells so they add up to the total beside them, and the rows to the attributed cost', () => {
+    const exact = (labelValue: string, cpuCost: number, ramCost: number): ChargebackEntry => ({
+      labelValue,
+      cpuCost,
+      ramCost,
+      storageCost: 0,
+      networkCost: 0,
+      lbCost: 0,
+      totalCost: cpuCost + ramCost,
+      efficiency: 0.5,
+    });
+    // Each rounded on its own, CPU and memory would show as $0.09 each beside a total of $0.17, and
+    // the rows as $12.96, $12.84, $1.69 and $0.17 under an attributed cost of $27.65.
+    withEntries([exact('a', 6.4776, 6.4775), exact('b', 6.4224, 6.4223), exact('c', 1.6, 0.0851), exact('d', 0.085, 0.085)]);
+    const { container } = render(<ChargebackView namespaces={namespaces} />);
+
+    const rows = screen.getAllByRole('row');
+    expect(within(rows[4]).getAllByRole('cell').map(cell => cell.textContent).slice(0, 5)).toEqual([
+      '$0.09',
+      '$0.08',
+      '$0.00',
+      '$0.00',
+      '$0.17',
+    ]);
+    expect(container.querySelector('dd')?.textContent).toBe('$27.66');
+  });
+
   it('reads a value whose pods request nothing as having no requests, not as efficient', () => {
     withEntries([{ ...entry('batch', 400, 0), noRequests: true }, entry('jobs', 200, 0)]);
     render(<ChargebackView namespaces={namespaces} />);

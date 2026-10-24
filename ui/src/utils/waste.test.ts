@@ -62,7 +62,9 @@ describe('wasteTable', () => {
     expect(table.rows.map(row => row.applicationName)).toEqual(apps.map(a => a.applicationName));
     expect(table.total.count).toBe(7);
     expect(table.total.idleCost).toBe(156);
-    expect(table.total.saving).toBeCloseTo(table.rows.reduce((sum, row) => sum + (row.saving ?? 0), 0), 9);
+    // Each saving is shown in whole dollars, so the total adds up the rows as shown, not the exact sum.
+    expect(table.rows.map(row => row.saving)).toEqual([187.5, 187.5, 187.5, 187.5, 187.5, 187.5, null]);
+    expect(table.total.saving).toBe(1128);
   });
 
   it('counts only the apps with a lower request to suggest', () => {

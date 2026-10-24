@@ -53,6 +53,25 @@ describe('ChangeDriversCard', () => {
     expect(rows()).toEqual(['workerdeployment · $60.00 → $101.00+$41.00', 'Total change+$41.00']);
   });
 
+  it('rounds the changes so they add up to the total change', () => {
+    // Each rounded on its own, the two changes would show as +$1.01 above a total of +$2.01.
+    render(
+      <ChangeDriversCard
+        drivers={{
+          drivers: [
+            driver({ before: 1, after: 2.006, delta: 1.006 }),
+            driver({ key: 'deployment/api', name: 'api', before: 1, after: 2.006, delta: 1.006 }),
+          ],
+          smaller: 0,
+          smallerCount: 0,
+          total: 2.012,
+        }}
+      />
+    );
+
+    expect(rows().map(row => row?.slice(-6))).toEqual(['+$1.01', '+$1.00', '+$2.01']);
+  });
+
   it('renders nothing when no change is large enough to list', () => {
     const { container } = render(
       <ChangeDriversCard drivers={{ drivers: [], smaller: 0.4, smallerCount: 3, total: 0.4 }} />

@@ -13,6 +13,8 @@ import {
   formatRelativeTime,
   isStale,
   pluralize,
+  roundParts,
+  sumRounded,
 } from '../utils/format';
 
 const TITLE_ID = 'cost-intel-breakdown-title';
@@ -33,6 +35,16 @@ export const CostBreakdownCard: React.FC<{ data: CostData; namespace?: string }>
   const slices = costSlices(data);
   const total = slices.reduce((sum, slice) => sum + slice.value, 0);
   if (total <= 0) return <Notice>No cost breakdown for this measurement.</Notice>;
+  // Amounts are rounded so the rows add up to the total, and each row's parts to the row. The
+  // Kubernetes rows add up to the Kubernetes cost and the cloud services estimate is rounded on its
+  // own, as in the monthly cost, so the total is the one shown there.
+  const kubernetes = slices.filter(slice => slice.id !== 'cloud');
+  const kubernetesShown = roundParts(kubernetes.map(slice => slice.value));
+  const shown = slices.map(slice => {
+    const index = kubernetes.indexOf(slice);
+    return index >= 0 ? kubernetesShown[index] : roundParts([slice.value])[0];
+  });
+  const shownTotal = sumRounded(shown);
 
   const totals = data.opencostOutput?.allocationTotals;
   const cloud = data.cloudEstimate;
@@ -92,63 +104,67 @@ export const CostBreakdownCard: React.FC<{ data: CostData; namespace?: string }>
         style={{ width: '100%', borderCollapse: 'collapse', color: t.text, fontSize: '13px', fontVariantNumeric: 'tabular-nums' }}
       >
         <tbody>
-          {slices.map(slice => (
-            <React.Fragment key={slice.id}>
-              <tr style={{ borderTop: `1px solid ${t.hairline}` }}>
-                <th scope="row" style={rowHeader}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span
-                      aria-hidden="true"
-                      style={{ flexShrink: 0, width: '10px', height: '10px', borderRadius: '2px', backgroundColor: t.series[slice.slot] }}
-                    />
-                    {slice.label}
-                    {slice.id === 'cloud' && cloudResources.length > 0 && (
-                      <button type="button" aria-expanded={cloudOpen} onClick={() => setCloudOpen(open => !open)} style={toggleStyle}>
-                        {pluralize(cloudResources.length, 'resource')}
-                        <ChevronIcon expanded={cloudOpen} size={12} />
-                      </button>
-                    )}
-                  </span>
-                  {slice.id === 'cloud' && cloud && (
-                    <span
-                      style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px', paddingLeft: '20px', color: t.textMuted, fontSize: '12px' }}
-                    >
-                      {isStale(cloud.pushedAt) && <WarningIcon color={t.warning} size={12} />}
-                      {SOURCE_LABELS[cloud.source] ?? cloud.source} estimate from {formatRelativeTime(cloud.pushedAt)}
+          {slices.map((slice, index) => {
+            const children = slice.children ? roundParts(slice.children.map(part => part.value), shown[index]) : [];
+            const resources = slice.id === 'cloud' ? roundParts(cloudResources.map(resource => resource.monthlyCost), shown[index]) : [];
+            return (
+              <React.Fragment key={slice.id}>
+                <tr style={{ borderTop: `1px solid ${t.hairline}` }}>
+                  <th scope="row" style={rowHeader}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span
+                        aria-hidden="true"
+                        style={{ flexShrink: 0, width: '10px', height: '10px', borderRadius: '2px', backgroundColor: t.series[slice.slot] }}
+                      />
+                      {slice.label}
+                      {slice.id === 'cloud' && cloudResources.length > 0 && (
+                        <button type="button" aria-expanded={cloudOpen} onClick={() => setCloudOpen(open => !open)} style={toggleStyle}>
+                          {pluralize(cloudResources.length, 'resource')}
+                          <ChevronIcon expanded={cloudOpen} size={12} />
+                        </button>
+                      )}
                     </span>
-                  )}
-                </th>
-                <td style={amount}>{formatMoney(slice.value)}</td>
-                <td style={share}>{formatPercent(slice.value / total)}</td>
-              </tr>
-              {slice.children?.map(part => (
-                <tr key={part.label}>
-                  <th scope="row" style={subRowHeader}>
-                    {part.label}
+                    {slice.id === 'cloud' && cloud && (
+                      <span
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px', paddingLeft: '20px', color: t.textMuted, fontSize: '12px' }}
+                      >
+                        {isStale(cloud.pushedAt) && <WarningIcon color={t.warning} size={12} />}
+                        {SOURCE_LABELS[cloud.source] ?? cloud.source} estimate from {formatRelativeTime(cloud.pushedAt)}
+                      </span>
+                    )}
                   </th>
-                  <td style={subAmount}>{formatMoney(part.value)}</td>
-                  <td style={subShare}>{formatPercent(part.value / total)}</td>
+                  <td style={amount}>{formatMoney(shown[index])}</td>
+                  <td style={share}>{formatPercent(slice.value / total)}</td>
                 </tr>
-              ))}
-              {slice.id === 'cloud' &&
-                cloudOpen &&
-                cloudResources.map(resource => (
-                  <tr key={resource.name}>
+                {slice.children?.map((part, i) => (
+                  <tr key={part.label}>
                     <th scope="row" style={subRowHeader}>
-                      {resource.name}{' '}
-                      <span style={{ fontFamily: 'monospace', fontSize: '11px' }}>{resource.resourceType}</span>
+                      {part.label}
                     </th>
-                    <td style={subAmount}>{formatMoney(resource.monthlyCost, cloud?.currency)}</td>
-                    <td style={subShare}>{formatPercent(resource.monthlyCost / total)}</td>
+                    <td style={subAmount}>{formatMoney(children[i])}</td>
+                    <td style={subShare}>{formatPercent(part.value / total)}</td>
                   </tr>
                 ))}
-            </React.Fragment>
-          ))}
+                {slice.id === 'cloud' &&
+                  cloudOpen &&
+                  cloudResources.map((resource, i) => (
+                    <tr key={resource.name}>
+                      <th scope="row" style={subRowHeader}>
+                        {resource.name}{' '}
+                        <span style={{ fontFamily: 'monospace', fontSize: '11px' }}>{resource.resourceType}</span>
+                      </th>
+                      <td style={subAmount}>{formatMoney(resources[i], cloud?.currency)}</td>
+                      <td style={subShare}>{formatPercent(resource.monthlyCost / total)}</td>
+                    </tr>
+                  ))}
+              </React.Fragment>
+            );
+          })}
           <tr style={{ borderTop: `1px solid ${t.border}` }}>
             <th scope="row" style={{ ...rowHeader, padding: '10px 0', color: t.textStrong, fontWeight: 500 }}>
               Total
             </th>
-            <td style={{ ...amount, padding: '10px 0', fontWeight: 500 }}>{formatMoney(total)}</td>
+            <td style={{ ...amount, padding: '10px 0', fontWeight: 500 }}>{formatMoney(shownTotal)}</td>
             <td style={{ ...share, padding: '10px 0' }}>100%</td>
           </tr>
         </tbody>

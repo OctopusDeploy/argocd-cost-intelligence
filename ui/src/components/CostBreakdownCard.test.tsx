@@ -43,6 +43,32 @@ describe('CostBreakdownCard', () => {
     ]);
   });
 
+  it('rounds the rows so they add up to the total, and the sub-costs to their row', () => {
+    // Each rounded on its own, the rows would show as $0.09, $0.09 and $0.17 above a total of $0.34,
+    // and the sub-costs as $0.09 each under network.
+    render(
+      <CostBreakdownCard
+        data={withTotals({
+          cpuCost: 0.085,
+          memoryCost: 0.085,
+          networkCost: 0.174,
+          networkCrossZoneCost: 0.087,
+          networkInternetCost: 0.087,
+          totalCost: 0.344,
+        })}
+      />
+    );
+
+    expect(rows()).toEqual([
+      'CPU$0.0925%',
+      'Memory$0.0825%',
+      'Network$0.1751%',
+      'Cross-zone$0.0925%',
+      'Internet$0.0825%',
+      'Total$0.34100%',
+    ]);
+  });
+
   it('keeps shared costs collapsed and lists the largest services first when expanded', () => {
     render(<CostBreakdownCard data={withTotals({ sharedCost: 12.5, sharedCostBreakdown: { dns: 2.5, monitoring: 10 } })} />);
     const toggle = screen.getByRole('button', { name: /Shared costs/ });
@@ -62,6 +88,32 @@ describe('CostBreakdownCard', () => {
     render(<CostBreakdownCard data={withTotals({})} />);
 
     expect(screen.queryByRole('button', { name: /Shared costs/ })).toBeNull();
+  });
+
+  it('adds up to the monthly cost, with the cloud estimate rounded on its own', () => {
+    // Rounded as parts of one total, CPU would show as $1.01 above a total of $2.01, where the
+    // monthly cost shows Kubernetes $1.00 + cloud $1.00.
+    render(
+      <CostBreakdownCard
+        data={withTotals(
+          { cpuCost: 1.004, memoryCost: 0, networkCost: 0, totalCost: 1.004 },
+          {
+            totalMonthlyCost: 1.004,
+            cloudEstimate: {
+              source: 'infracost',
+              totalMonthlyCost: 1.004,
+              currency: 'USD',
+              resources: [],
+              pushedAt: new Date().toISOString(),
+            },
+          }
+        )}
+      />
+    );
+
+    expect(rows()[0]).toBe('CPU$1.0050%');
+    expect(rows().find(row => row?.startsWith('Cloud services'))).toContain('$1.00');
+    expect(rows().find(row => row?.startsWith('Total'))).toBe('Total$2.00100%');
   });
 
   it('flags a cloud estimate only once it is a week old', () => {

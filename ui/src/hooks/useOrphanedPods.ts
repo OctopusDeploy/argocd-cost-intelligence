@@ -10,17 +10,14 @@ export function useOrphanedPods(
   appCtx?: AppContext
 ): {
   pods: OrphanedPod[];
-  totalWasted: number;
   loading: boolean;
 } {
   const [pods, setPods] = useState<OrphanedPod[]>([]);
-  const [totalWasted, setTotalWasted] = useState(0);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!namespace) {
       setPods([]);
-      setTotalWasted(0);
       return;
     }
     let cancelled = false;
@@ -29,14 +26,10 @@ export function useOrphanedPods(
       .then(data => {
         if (!cancelled) {
           setPods(data.orphanedPods ?? []);
-          setTotalWasted(data.totalWastedCost ?? 0);
         }
       })
       .catch(() => {
-        if (!cancelled) {
-          setPods([]);
-          setTotalWasted(0);
-        }
+        if (!cancelled) setPods([]);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -44,5 +37,5 @@ export function useOrphanedPods(
     return () => { cancelled = true; };
   }, [namespace, appName, appCtx]);
 
-  return { pods, totalWasted, loading };
+  return { pods, loading };
 }

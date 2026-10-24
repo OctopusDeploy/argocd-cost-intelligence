@@ -77,6 +77,15 @@ describe('EfficiencyCard', () => {
     expect(screen.getByText('$240.57 / mo')).toBeTruthy();
   });
 
+  it('rounds the CPU and memory idle so they add up to the idle spend', () => {
+    // Each rounded on its own, they would show as $11.40 and $1.45 above idle spend of $12.86.
+    render(<EfficiencyCard efficiency={efficiency({ cpuIdleCost: 11.4043, ramIdleCost: 1.4536 })} />);
+
+    expect(screen.getByText('$11.41 / mo idle')).toBeTruthy();
+    expect(screen.getByText('$1.45 / mo idle')).toBeTruthy();
+    expect(screen.getByText('$12.86 / mo')).toBeTruthy();
+  });
+
   it('gives no verdict or percentage for a resource the pods request none of', () => {
     render(
       <EfficiencyCard

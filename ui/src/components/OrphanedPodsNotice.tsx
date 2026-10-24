@@ -3,7 +3,7 @@ import { ChevronIcon, WarningIcon } from './icons';
 import { useOrphanedPods } from '../hooks/useOrphanedPods';
 import { cardStyle, useTokens } from '../theme/tokens';
 import { AppContext } from '../utils/api';
-import { formatMoney } from '../utils/format';
+import { formatMoney, sumRounded } from '../utils/format';
 
 const LIST_ID = 'cost-intel-orphaned-pods';
 
@@ -16,10 +16,12 @@ export const OrphanedPodsNotice: React.FC<{ namespace: string; appName?: string;
   appCtx,
 }) => {
   const t = useTokens();
-  const { pods, totalWasted, loading } = useOrphanedPods(namespace, appName, appCtx);
+  const { pods, loading } = useOrphanedPods(namespace, appName, appCtx);
   const [open, setOpen] = useState(false);
 
   if (loading || pods.length === 0) return null;
+  // The sum of the pods as listed, so the list adds up to it.
+  const totalWasted = sumRounded(pods.map(pod => pod.totalCost));
 
   const headStyle: React.CSSProperties = {
     padding: '8px 12px 8px 0',

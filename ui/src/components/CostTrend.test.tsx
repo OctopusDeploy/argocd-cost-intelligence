@@ -62,6 +62,23 @@ describe('CostTrendComponent', () => {
     expect(screen.getByRole('button', { name: 'View as chart' })).toBeTruthy();
   });
 
+  it('rounds the total and the table so they add up as shown', () => {
+    // The days show as $12.96, $12.85 and $10.00, which the exact total of $35.7982 would not add up
+    // to, and the CPU and memory of the last, rounded on their own, as $5.00 each beside $10.00.
+    const uneven = [
+      day('2026-09-13', 12.9551),
+      day('2026-09-14', 12.8451),
+      { ...day('2026-09-15', 9.998), cpuCost: 4.995, memoryCost: 4.995, storageCost: 0.008 },
+    ];
+    render(<CostTrendComponent loading={false} error={null} dailyCosts={uneven} />);
+
+    expect(statValue('Total')).toBe('$35.81');
+
+    fireEvent.click(screen.getByRole('button', { name: 'View as table' }));
+    const latest = screen.getAllByRole('row')[1];
+    expect([...latest.querySelectorAll('td')].map(cell => cell.textContent)).toEqual(['$10.00', '$5.00', '$4.99', '$0.00', '$0.01']);
+  });
+
   describe('month-end forecast', () => {
     // Oct 4 – Oct 17 complete at $10/day, Oct 18 still being measured.
     const fortnight = [
@@ -88,6 +105,17 @@ describe('CostTrendComponent', () => {
       expect(screen.getByRole('group', { name: /Estimated month-end: \$280/ })).toBeTruthy();
       expect(screen.getByText('Est. month-end $280')).toBeTruthy();
       expect(screen.queryByText(/forecast appears after/)).toBeNull();
+    });
+
+    it('rounds what is spent and what is projected so they add up to the forecast', () => {
+      // At $10.0357 a day, each rounded on its own would show $141 so far + $141 projected under $281.
+      renderOn('2026-10-18T09:00:00Z', [
+        ...Array.from({ length: 14 }, (_, i) => day(`2026-10-${String(4 + i).padStart(2, '0')}`, 140.5 / 14)),
+        day('2026-10-18', 3),
+      ]);
+
+      expect(statValue('Month-end forecast')).toBe('$281');
+      expect(screen.getByText('Month-end forecast').parentElement?.textContent).toContain('$141 so far + $140 projected');
     });
 
     it('reads out today as still being measured and the forecast days after it', () => {

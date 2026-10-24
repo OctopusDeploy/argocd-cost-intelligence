@@ -1,5 +1,6 @@
 import { AppWaste } from './api';
 import { recommendCpuRequest } from './costInsights';
+import { sumRounded } from './format';
 
 export interface WasteRow extends AppWaste {
   // share is the idle cost as a fraction of the application's own cost.
@@ -33,15 +34,16 @@ export function wasteRow(app: AppWaste): WasteRow {
   };
 }
 
-// wasteTable lays out ranked applications and their total, which the rows add up to.
+// wasteTable lays out ranked applications and their total, which the rows add up to as shown: idle
+// spend in cents, savings in whole dollars.
 export function wasteTable(apps: AppWaste[]): WasteTable {
   const rows = apps.map(wasteRow);
   return {
     rows,
     total: {
       count: rows.length,
-      idleCost: rows.reduce((total, row) => total + row.idleCost, 0),
-      saving: rows.reduce((total, row) => total + (row.saving ?? 0), 0),
+      idleCost: sumRounded(rows.map(row => row.idleCost)),
+      saving: sumRounded(rows.map(row => row.saving ?? 0), 0),
       suggested: rows.filter(row => row.saving !== null).length,
     },
   };

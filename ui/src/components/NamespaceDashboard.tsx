@@ -24,7 +24,7 @@ import { useWasteRanking } from '../hooks/useWasteRanking';
 import { Tokens, useTokens } from '../theme/tokens';
 import { ClusterOverhead, CostData, NamespaceSummary } from '../utils/api';
 import { efficiencyLevel, hasRequests, recommendCpuRequest } from '../utils/costInsights';
-import { formatMoney, formatPercent, pluralize } from '../utils/format';
+import { formatMoney, formatPercent, pluralize, sumRounded } from '../utils/format';
 import { PAIRED_ROW_MIN, SIDE_LIST_MIN } from '../utils/layout';
 import { ArgoApplication, splitNamespaceByApp } from '../utils/namespaceApps';
 
@@ -164,7 +164,8 @@ const NamespacesView: React.FC<NamespacesViewProps> = ({ data, urlNamespace, onS
         stats={[
           {
             label: 'Cluster monthly cost',
-            value: formatMoney(clusterTotal),
+            // The sum of the namespaces as listed, so the list adds up to it. Shares use the exact sum.
+            value: formatMoney(sumRounded(namespaces.map(ns => ns.totalCost))),
             detail: `${pluralize(namespaces.length, 'namespace')} · ${pluralize(appCount, 'app')}`,
           },
           clusterIdleStat(namespaces, onShowIdleApps, t),

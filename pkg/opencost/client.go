@@ -158,11 +158,14 @@ const MinMeasuredPeriod = 5 * time.Minute
 // measuredPeriod returns the period OpenCost has data for across a response: the earliest
 // start and latest end of its allocations. Pods are scaled by this shared period rather
 // than each by its own, so a pod replaced during the window is not projected onto a whole
-// month alongside its replacement, and the pods still add up to the namespace total.
+// month alongside its replacement, and the pods still add up to the namespace total. A namespace's
+// claimed volumes that no pod mounts are left out: OpenCost dates that entry from the start of the
+// window, whenever the volumes were created, so a namespace a few minutes old would be projected as
+// if it had run all day, far below its own applications. Their cost still counts.
 func measuredPeriod(resp AllocationResponse) (start, end time.Time) {
 	for _, allocations := range resp.Data {
 		for key, alloc := range allocations {
-			if isVirtualAllocation(key) {
+			if isVirtualAllocation(key) || isUnmountedVolumes(alloc) {
 				continue
 			}
 			if !alloc.Start.IsZero() && (start.IsZero() || alloc.Start.Before(start)) {
@@ -193,6 +196,13 @@ func windowParam(start, end time.Time) string {
 // __idle__ or __unallocated__, rather than a real namespace, pod or label value.
 func isVirtualAllocation(key string) bool {
 	return len(key) > 2 && key[0] == '_' && key[len(key)-1] == '_'
+}
+
+// isUnmountedVolumes reports whether alloc is the entry OpenCost lists a namespace's claimed
+// volumes that no pod mounts under, as one more pod (<namespace>-unmounted-pvcs).
+func isUnmountedVolumes(alloc AllocationData) bool {
+	ns := alloc.Properties.Namespace
+	return ns != "" && alloc.Properties.Pod == ns+"-unmounted-pvcs"
 }
 
 func (c *Client) GetNamespaceCost(ctx context.Context, namespace string) (*models.OpenCostMetrics, error) {

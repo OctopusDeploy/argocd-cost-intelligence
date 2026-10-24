@@ -40,6 +40,8 @@ Set values with `--set key=value` or with a values file (`-f`). If the file hold
 | Key | Default | Description |
 |---|---|---|
 | `postgres.enabled` | `true` | Deploy the bundled StatefulSet. For `false`, see [External PostgreSQL](#external-postgresql). |
+| `postgres.host` | `""` | The external database's host name or IP, with `postgres.enabled=false`. Empty connects to `postgres.<namespace.name>.svc.cluster.local`. Setting it while `postgres.enabled=true` stops the install with an error. |
+| `postgres.port` | `""` | The external database's port, with `postgres.enabled=false`. Empty uses `postgres.service.port`. |
 | `postgres.image.repository` / `.tag` / `.pullPolicy` | `postgres` / `15-alpine` / `IfNotPresent` | |
 | `postgres.replicaCount` | `1` | Leave it at 1: the bundled PostgreSQL is one instance on one volume. |
 | `postgres.sslMode` | `disable` | Connection mode (`DB_SSL_MODE`): `disable`, `require` or `verify-full`. Plaintext is fine only for the bundled database inside the cluster. |
@@ -163,9 +165,22 @@ Every profile still needs the same `postgres.auth.*` and `namespace.create=false
 
 ## External PostgreSQL
 
-Set `postgres.enabled=false` to skip the bundled StatefulSet, PVC, Service and NetworkPolicy. Then provide `postgres.auth.existingSecret` (with `username` and `password`), `postgres.auth.database`, and `postgres.sslMode=require` or `verify-full`.
+Set `postgres.enabled=false` to skip the bundled StatefulSet, PVC, Service and NetworkPolicy. Then provide `postgres.host`, `postgres.port` if it isn't 5432, `postgres.auth.existingSecret` (with `username` and `password`), `postgres.auth.database`, and `postgres.sslMode=require` or `verify-full`.
 
-The chart has no value for the database host. The backend and exporter always connect to `postgres.<namespace.name>.svc.cluster.local` on `postgres.service.port`, so make that name resolve to your database. An ExternalName Service called `postgres` in the release namespace does it. With `verify-full`, the server certificate has to match that name.
+```yaml
+postgres:
+  enabled: false
+  host: cost-db.example.internal
+  port: 5432
+  sslMode: verify-full
+  auth:
+    existingSecret: cost-db-credentials
+    database: cost_intelligence
+```
+
+The Secret has to exist in the release namespace before you install. The host can be a Service in another namespace (`<service>.<namespace>.svc.cluster.local`), a managed database's endpoint or an IP. With `verify-full`, the server certificate has to match it. The service creates its tables when it starts, so the database user needs to be allowed to create tables in that database.
+
+Without `postgres.host`, the chart connects to `postgres.<namespace.name>.svc.cluster.local`, so an ExternalName Service called `postgres` in the release namespace keeps working.
 
 ## Running without Helm
 
@@ -179,7 +194,7 @@ The chart sets these variables from its values, so you only need them when you r
 | `METRICS_PORT` | `9102` | The port that serves Prometheus `/metrics`, apart from the API port, so in API mode it must differ from `SERVER_PORT` and `0` turns metrics off. The exporter needs it. |
 | `EXPORTER_INTERVAL` | `5m` | How often the exporter measures every Application, at least `1m`. Exporter mode only. |
 | `WEBHOOK_SECRET` | required | The bearer token Argo CD Notifications sends to `/on-sync`, at least 16 characters. Not needed in exporter mode. |
-| `DB_HOST` | `localhost` | PostgreSQL host. The chart has no value for it. |
+| `DB_HOST` | `localhost` | PostgreSQL host. |
 | `DB_PORT` | `5432` | PostgreSQL port. |
 | `DB_USER` | `cost_user` | Database user. |
 | `DB_PASSWORD` | required | Database password. |

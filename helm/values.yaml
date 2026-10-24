@@ -100,7 +100,13 @@ costIntelligence:
 
 # PostgreSQL Configuration
 postgres:
+  # false uses a PostgreSQL you already run instead of deploying one.
   enabled: true
+
+  # External PostgreSQL only (enabled: false): its host name or IP and its port. An empty host
+  # connects to postgres.<namespace.name>.svc.cluster.local; an empty port uses service.port.
+  host: ""
+  port: ""
 
   # StatefulSet configuration
   replicaCount: 1

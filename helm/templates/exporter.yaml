@@ -56,9 +56,9 @@ spec:
           value: {{ .Values.costIntelligence.logLevel | quote }}
         # PostgreSQL, for the cloud estimates CI pushes.
         - name: DB_HOST
-          value: {{ include "argocd-cost-intelligence.postgres.host" . }}
+          value: {{ include "argocd-cost-intelligence.postgres.host" . | quote }}
         - name: DB_PORT
-          value: "{{ .Values.postgres.service.port }}"
+          value: "{{ include "argocd-cost-intelligence.postgres.port" . }}"
         - name: DB_USER
           valueFrom:
             secretKeyRef:

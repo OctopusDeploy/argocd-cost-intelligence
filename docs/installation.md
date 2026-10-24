@@ -26,7 +26,7 @@ The chart also runs a post-install/post-upgrade hook Job that changes Argo CD it
 | `argocd-notifications-secret` | The key `cost-intel-webhook-token`, the bearer token the webhook sends |
 | `argocd-server` Deployment | An init container, `cost-intel-extension`, and a volume that fetch the UI bundle from the UI Service |
 
-The hook works with Argo CD's `install.yaml` and with its Helm chart, whatever the release is called. It only writes keys of its own, named after `cost-intel`, and removes the trigger and template 0.1.0 wrote if you haven't changed them, so your triggers, templates and `policy.csv` stay as they are. `subscriptions` is one key shared by every subscription: the hook changes it only when its entry is missing or 0.1.0's is still there, and keeps your entries and comments, but the list's formatting may change. If `argocd-notifications-cm` or `argocd-rbac-cm` doesn't exist, the hook skips it and logs that.
+The hook works with Argo CD's `install.yaml` and with its Helm chart, whatever the release is called. It only writes keys of its own, named after `cost-intel`, so your triggers, templates and `policy.csv` stay as they are. `subscriptions` is one key shared by every subscription: the hook adds its entry only when it's missing, and keeps your entries and comments, but the list's formatting may change. If `argocd-notifications-cm` or `argocd-rbac-cm` doesn't exist, the hook skips it and logs that.
 
 The hook then restarts `argocd-notifications-controller`, the UI Deployment and `argocd-server`, so the Argo CD UI reloads during an install or upgrade. When the hook succeeds it deletes its own ServiceAccount, ClusterRole and Job.
 

@@ -49,14 +49,14 @@ Check that a new test can fail: break the behaviour, watch the test fail, then r
 
 ### Commit messages
 
-Write the subject in the imperative mood ("Fix daily history gap", not "Fixed"), keep it under about 72 characters, and explain the reason in the body when it is not obvious.
+Use [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/): start the subject with a type such as `feat`, `fix`, `docs`, `ci` or `deps`, with an optional scope (`feat(ui): ...`), and write the rest in the imperative mood ("fix: fill the daily history gap", not "fixed"). Keep it under about 72 characters, and explain the reason in the body when it is not obvious.
 
 ### Sign-off (DCO)
 
 This project uses the [Developer Certificate of Origin](https://developercertificate.org/). Certify that you wrote the change, or have the right to submit it under the project's licence, by signing off each commit:
 
 ```bash
-git commit -s -m "Fix daily history gap"
+git commit -s -m "fix: fill the daily history gap"
 ```
 
 This adds a `Signed-off-by: Your Name <you@example.com>` line. If you forgot, run `git commit --amend -s` or `git rebase --signoff main`.

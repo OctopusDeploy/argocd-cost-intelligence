@@ -147,6 +147,12 @@ func monthlyFactor(start, end time.Time) float64 {
 	return monthHours / end.Sub(start).Hours()
 }
 
+// MinMeasuredPeriod is the least OpenCost data a cost is projected from. OpenCost rounds costs to
+// five decimals, and seconds of data project onto a month by a factor in the hundreds of thousands,
+// so the rounding alone becomes dollars: a namespace and its pods, queried and rounded apart, would
+// give an application a share larger than its own namespace.
+const MinMeasuredPeriod = 5 * time.Minute
+
 // measuredPeriod returns the period OpenCost has data for across a response: the earliest
 // start and latest end of its allocations. Pods are scaled by this shared period rather
 // than each by its own, so a pod replaced during the window is not projected onto a whole
@@ -694,8 +700,6 @@ func (c *Client) GetChargeback(ctx context.Context, labelKey, namespace string) 
 }
 
 func parseChargebackEntries(alloc AllocationResponse, summary SummaryAllocationResponse) []models.ChargebackEntry {
-	monthlyMultiplier := monthlyFactor(measuredPeriod(alloc))
-
 	// Efficiency by label value, measured as an application's is (setRequestEfficiency) rather than
 	// read from OpenCost, which counts pods that request nothing as 100% efficient.
 	type usageAgg struct {
@@ -722,7 +726,14 @@ func parseChargebackEntries(alloc AllocationResponse, summary SummaryAllocationR
 		}
 	}
 
-	type costAgg struct{ cpu, ram, pv, network, lb, total float64 }
+	// Each label value is projected from its own period, the way a namespace is: the response covers
+	// workloads of every age, so the period it shares is the oldest one's, and a value whose pods
+	// started an hour ago would show an hour of cost spread over a day. A value with less than
+	// MinMeasuredPeriod of data is left out until it has more, as a namespace is.
+	type costAgg struct {
+		cpu, ram, pv, network, lb, total float64
+		start, end                       time.Time
+	}
 	costs := make(map[string]*costAgg)
 
 	for _, allocations := range alloc.Data {
@@ -741,11 +752,21 @@ func parseChargebackEntries(alloc AllocationResponse, summary SummaryAllocationR
 			c.network += a.NetworkCost
 			c.lb += a.LoadBalancerCost
 			c.total += a.componentCost()
+			if !a.Start.IsZero() && (c.start.IsZero() || a.Start.Before(c.start)) {
+				c.start = a.Start
+			}
+			if a.End.After(c.end) {
+				c.end = a.End
+			}
 		}
 	}
 
 	entries := make([]models.ChargebackEntry, 0, len(costs))
 	for labelVal, cost := range costs {
+		if !cost.start.IsZero() && cost.end.After(cost.start) && cost.end.Sub(cost.start) < MinMeasuredPeriod {
+			continue
+		}
+		monthlyMultiplier := monthlyFactor(cost.start, cost.end)
 		var efficiency float64
 		var noRequests bool
 		if u, ok := usage[labelVal]; ok {

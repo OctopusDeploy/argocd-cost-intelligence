@@ -539,7 +539,7 @@ func TestOnApplicationSync_NoData_RecordsNothing(t *testing.T) {
 			"test-ns": {Start: time.Now().Add(-3 * time.Minute), End: time.Now(), RAMCost: 0.00001},
 		}}},
 		{name: "a second short of the minimum period", data: []map[string]opencost.AllocationData{{
-			"test-ns": {Start: time.Now().Add(-minMeasuredPeriod + time.Second), End: time.Now(), RAMCost: 0.01},
+			"test-ns": {Start: time.Now().Add(-opencost.MinMeasuredPeriod + time.Second), End: time.Now(), RAMCost: 0.01},
 		}}},
 	}
 	for _, tt := range tests {
@@ -574,7 +574,7 @@ func TestOnApplicationSync_MinutesOfData_RecordsOnceThereAreEnough(t *testing.T)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(opencost.AllocationResponse{Code: 200, Data: []map[string]opencost.AllocationData{{
-			"test-ns": {Start: end.Add(-minMeasuredPeriod), End: end, RAMCost: 0.01},
+			"test-ns": {Start: end.Add(-opencost.MinMeasuredPeriod), End: end, RAMCost: 0.01},
 		}}})
 	}))
 	defer srv.Close()

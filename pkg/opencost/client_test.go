@@ -618,6 +618,86 @@ func TestParseChargebackEntries_ScalesByMeasuredPeriod(t *testing.T) {
 	assert.InDelta(t, 60.0, got[0].TotalCost, 1e-9) // 1.0 * 720/12
 }
 
+// A workload that started an hour ago is projected from its own hour, not from the day the
+// cluster's oldest workload has been running, as its namespace's record is.
+func TestParseChargebackEntries_ScalesEachValueByItsOwnPeriod(t *testing.T) {
+	t.Parallel()
+
+	end := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	alloc := AllocationResponse{
+		Data: []map[string]AllocationData{{
+			"old":   {Start: end.Add(-24 * time.Hour), End: end, CPUCost: 2.4, TotalCost: 2.4},
+			"young": {Start: end.Add(-time.Hour), End: end, CPUCost: 0.1, TotalCost: 0.1},
+		}},
+	}
+	got := parseChargebackEntries(alloc, SummaryAllocationResponse{})
+	require.Len(t, got, 2)
+	byValue := map[string]float64{}
+	for _, e := range got {
+		byValue[e.LabelValue] = e.TotalCost
+	}
+	assert.InDelta(t, 72.0, byValue["old"], 1e-9)   // 2.4 * 720/24
+	assert.InDelta(t, 72.0, byValue["young"], 1e-9) // 0.1 * 720/1
+}
+
+// A value OpenCost has seen for less than MinMeasuredPeriod is left out: seconds of data project its
+// rounding onto dollars.
+func TestParseChargebackEntries_LeavesOutValuesWithTooLittleData(t *testing.T) {
+	t.Parallel()
+
+	end := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	alloc := AllocationResponse{
+		Data: []map[string]AllocationData{{
+			"old":    {Start: end.Add(-24 * time.Hour), End: end, CPUCost: 2.4, TotalCost: 2.4},
+			"enough": {Start: end.Add(-MinMeasuredPeriod), End: end, CPUCost: 0.00001, TotalCost: 0.00001},
+			"new":    {Start: end.Add(-MinMeasuredPeriod + time.Second), End: end, CPUCost: 0.00001, TotalCost: 0.00001},
+		}},
+	}
+	got := parseChargebackEntries(alloc, SummaryAllocationResponse{})
+	values := make([]string, 0, len(got))
+	for _, e := range got {
+		values = append(values, e.LabelValue)
+	}
+	assert.ElementsMatch(t, []string{"old", "enough"}, values)
+}
+
+// A value whose period OpenCost doesn't report is kept and projected by the default factor, as
+// monthlyFactor projects any unknown period.
+func TestParseChargebackEntries_UnknownPeriodUsesDefaultFactor(t *testing.T) {
+	t.Parallel()
+
+	alloc := AllocationResponse{
+		Data: []map[string]AllocationData{{"team-a": {CPUCost: 1.0, TotalCost: 1.0}}},
+	}
+	got := parseChargebackEntries(alloc, SummaryAllocationResponse{})
+	require.Len(t, got, 1)
+	assert.InDelta(t, defaultMonthlyFactor, got[0].TotalCost, 1e-9)
+}
+
+// A value's pods in several sets share its own period, the earliest start to the latest end, not the
+// period of an older value beside it.
+func TestParseChargebackEntries_ValuePeriodSpansItsPods(t *testing.T) {
+	t.Parallel()
+
+	end := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	alloc := AllocationResponse{
+		Data: []map[string]AllocationData{
+			{
+				"old":    {Start: end.Add(-24 * time.Hour), End: end, CPUCost: 2.4, TotalCost: 2.4},
+				"team-a": {Start: end.Add(-6 * time.Hour), End: end.Add(-time.Hour), CPUCost: 1.0, TotalCost: 1.0},
+			},
+			{"team-a": {Start: end.Add(-2 * time.Hour), End: end, CPUCost: 1.0, TotalCost: 1.0}},
+		},
+	}
+	got := parseChargebackEntries(alloc, SummaryAllocationResponse{})
+	require.Len(t, got, 2)
+	byValue := map[string]float64{}
+	for _, e := range got {
+		byValue[e.LabelValue] = e.TotalCost
+	}
+	assert.InDelta(t, 240.0, byValue["team-a"], 1e-9) // 2.0 * 720/6
+}
+
 // roundedAllocation is a pod as OpenCost reports it ten minutes after it started: each field is
 // rounded to five decimals on its own, so totalCost (0.00149) is not cpuCost + ramCost (0.00150).
 func roundedAllocation(end time.Time) AllocationData {

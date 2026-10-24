@@ -424,17 +424,11 @@ func MeasureNamespace(ctx context.Context, client *opencost.Client, namespace st
 	return measured, nil
 }
 
-// minMeasuredPeriod is the least OpenCost data a namespace's cost is projected from. OpenCost rounds
-// costs to five decimals, and seconds of data project onto a month by a factor in the hundreds of
-// thousands, so the rounding alone becomes dollars and the namespace and pod queries, rounded apart,
-// give an application a share larger than its own namespace.
-const minMeasuredPeriod = 5 * time.Minute
-
 // HasData reports whether OpenCost had enough data for the namespace. Without it, the namespace's cost
-// is unknown rather than zero. A namespace OpenCost has seen for less than minMeasuredPeriod, with or
-// without a cost yet, is no data either: the retries measure it again once it has more.
+// is unknown rather than zero. A namespace OpenCost has seen for less than opencost.MinMeasuredPeriod,
+// with or without a cost yet, is no data either: the retries measure it again once it has more.
 func (n *Namespace) HasData() bool {
-	return n.metrics.MeasuredHours >= minMeasuredPeriod.Hours() && n.metrics.AllocationTotals.TotalCost > 0
+	return n.metrics.MeasuredHours >= opencost.MinMeasuredPeriod.Hours() && n.metrics.AllocationTotals.TotalCost > 0
 }
 
 // Record is app's cost record from the namespace's measurement. owners are the pod-owning resources

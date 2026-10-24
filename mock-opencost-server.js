@@ -832,17 +832,28 @@ async function route(req, res) {
     res.writeHead(response.code || 200);
     res.end(JSON.stringify(response));
   } else if (pathname === '/assets') {
-    // Simulate EKS control-plane fee: $72/mo ÷ 30 = $2.40/day
+    // Simulate EKS control-plane fee: $72/mo ÷ 30 = $2.40/day. OpenCost returns one set of
+    // assets keyed by provider/account/project/category/cluster/type/service/providerID/name
+    // and ignores `aggregate`, so clients find the fee by its type.
+    const rfc3339 = (d) => d.toISOString().replace(/\.\d{3}Z$/, 'Z');
+    const now = Date.now();
+    const start = rfc3339(new Date(now - 24 * 60 * 60 * 1000));
+    const end = rfc3339(new Date(now));
     res.writeHead(200);
     res.end(JSON.stringify({
       code: 200,
-      data: [{
-        ClusterManagement: {
+      data: {
+        'AWS/__undefined__/__undefined__/Management/mock-cluster/ClusterManagement/Kubernetes/__undefined__/__undefined__': {
           type: 'ClusterManagement',
-          properties: { provider: 'AWS', cluster: 'mock-cluster' },
+          properties: { category: 'Management', provider: 'AWS', service: 'Kubernetes', cluster: 'mock-cluster' },
+          labels: {},
+          window: { start, end },
+          start,
+          end,
+          minutes: 1440,
           totalCost: 2.4,
         },
-      }],
+      },
     }));
   } else if (pathname === '/pricingSourceStatus') {
     res.writeHead(200);

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ChevronIcon } from './icons';
 import { cardStyle, Tokens, useTokens } from '../theme/tokens';
-import { formatMoney, formatPercent } from '../utils/format';
+import { formatMoney, formatPercent, roundColumns, roundParts } from '../utils/format';
 import { NAME_COLUMN, SPACER_COLUMN } from '../utils/layout';
 import { ControllerGroup } from '../utils/podGroups';
 
@@ -91,6 +91,10 @@ export const ControllerCostTable: React.FC<Props> = ({ groups }) => {
           {groups.map((group, index) => {
             const open = expanded.has(group.key);
             const groupId = `cost-intel-controller-${index}`;
+            // Rounded so the cells beside each total add up to it, and the pods to their controller.
+            const [groupTotal] = roundParts([group.totalCost]);
+            const [groupCpu, groupRam] = roundColumns([group.cpuCost, group.ramCost], group.totalCost, groupTotal);
+            const podTotals = roundParts(group.pods.map(pod => pod.totalCost), groupTotal);
             return (
               <div key={group.key} id={groupId} role="rowgroup" style={{ ...cardStyle(t), margin: '8px 0', overflow: 'hidden' }}>
                 <div role="row" style={{ ...row, minHeight: '52px' }}>
@@ -132,13 +136,13 @@ export const ControllerCostTable: React.FC<Props> = ({ groups }) => {
                     {group.pods.length}
                   </span>
                   <span role="cell" style={numeric}>
-                    {formatMoney(group.cpuCost)}
+                    {formatMoney(groupCpu)}
                   </span>
                   <span role="cell" style={numeric}>
-                    {formatMoney(group.ramCost)}
+                    {formatMoney(groupRam)}
                   </span>
                   <span role="cell" style={{ ...numeric, color: t.textStrong, fontWeight: 500 }}>
-                    {formatMoney(group.totalCost)}
+                    {formatMoney(groupTotal)}
                   </span>
                   <span role="cell" style={cell}>
                     <Share fraction={group.share} t={t} />
@@ -146,34 +150,38 @@ export const ControllerCostTable: React.FC<Props> = ({ groups }) => {
                 </div>
 
                 {open &&
-                  group.pods.map(pod => (
-                    <div
-                      key={pod.name}
-                      role="row"
-                      style={{ ...row, minHeight: '40px', backgroundColor: t.surfaceSunken, borderTop: `1px solid ${t.border}` }}
-                    >
-                      <span role="cell" />
-                      <span role="rowheader" title={pod.name} style={{ ...cell, ...truncated, paddingLeft: '31px' }}>
-                        {pod.name}
-                      </span>
-                      <span role="cell" style={{ ...cell, color: t.textMuted }}>
-                        Pod
-                      </span>
-                      <span role="cell" />
-                      <span role="cell" style={numeric}>
-                        {formatMoney(pod.cpuCost)}
-                      </span>
-                      <span role="cell" style={numeric}>
-                        {formatMoney(pod.ramCost)}
-                      </span>
-                      <span role="cell" style={numeric}>
-                        {formatMoney(pod.totalCost)}
-                      </span>
-                      <span role="cell" style={cell}>
-                        <Share fraction={total > 0 ? pod.totalCost / total : 0} t={t} />
-                      </span>
-                    </div>
-                  ))}
+                  group.pods.map((pod, podIndex) => {
+                    const podTotal = podTotals[podIndex];
+                    const [podCpu, podRam] = roundColumns([pod.cpuCost, pod.ramCost], pod.totalCost, podTotal);
+                    return (
+                      <div
+                        key={pod.name}
+                        role="row"
+                        style={{ ...row, minHeight: '40px', backgroundColor: t.surfaceSunken, borderTop: `1px solid ${t.border}` }}
+                      >
+                        <span role="cell" />
+                        <span role="rowheader" title={pod.name} style={{ ...cell, ...truncated, paddingLeft: '31px' }}>
+                          {pod.name}
+                        </span>
+                        <span role="cell" style={{ ...cell, color: t.textMuted }}>
+                          Pod
+                        </span>
+                        <span role="cell" />
+                        <span role="cell" style={numeric}>
+                          {formatMoney(podCpu)}
+                        </span>
+                        <span role="cell" style={numeric}>
+                          {formatMoney(podRam)}
+                        </span>
+                        <span role="cell" style={numeric}>
+                          {formatMoney(podTotal)}
+                        </span>
+                        <span role="cell" style={cell}>
+                          <Share fraction={total > 0 ? pod.totalCost / total : 0} t={t} />
+                        </span>
+                      </div>
+                    );
+                  })}
               </div>
             );
           })}

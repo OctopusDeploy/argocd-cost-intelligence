@@ -12,7 +12,7 @@ import { useUrlState } from '../hooks/useUrlState';
 import { cardStyle, Tokens, useTokens, visuallyHidden } from '../theme/tokens';
 import { ChargebackEntry, NamespaceSummary } from '../utils/api';
 import { efficiencyLevel } from '../utils/costInsights';
-import { formatMoney, formatPercent, pluralize } from '../utils/format';
+import { formatMoney, formatPercent, pluralize, roundParts, sumRounded } from '../utils/format';
 import { FALLBACK_LABEL_KEYS, sameLabelKey, suggestLabelKeys } from '../utils/labelKeys';
 import { NAME_COLUMN, SPACER_COLUMN } from '../utils/layout';
 
@@ -219,18 +219,20 @@ const Results: React.FC<ResultsProps> = ({ entries, totalCost, loading, error, l
   }
 
   const largest = entries[0];
+  // The attributed cost is the sum of the rows as shown, so the rows add up to it.
+  const attributed = sumRounded(entries.map(entry => entry.totalCost));
 
   return (
     <div>
       <div role="status" style={visuallyHidden}>
-        {`${pluralize(entries.length, 'value')} of ${labelKey}, ${formatMoney(totalCost)} attributed.`}
+        {`${pluralize(entries.length, 'value')} of ${labelKey}, ${formatMoney(attributed)} attributed.`}
       </div>
 
       <StatStrip
         stats={[
           {
             label: 'Attributed cost',
-            value: formatMoney(totalCost),
+            value: formatMoney(attributed),
             detail: `Grouped by ${labelKey}${scope}`,
           },
           {
@@ -338,43 +340,50 @@ const ChargebackTable: React.FC<TableProps> = ({ entries, totalCost, labelKey, l
           </div>
 
           <div role="rowgroup">
-            {entries.map(entry => (
-              <div
-                key={entry.labelValue}
-                role="row"
-                style={{ ...row, ...cardStyle(t), margin: '8px 0', minHeight: '52px' }}
-              >
-                <span role="rowheader" style={{ ...cell, color: t.textStrong, fontWeight: 500 }}>
-                  <Truncated text={entry.labelValue} />
-                </span>
-                <span role="cell" style={numeric}>
-                  {formatMoney(entry.cpuCost)}
-                </span>
-                <span role="cell" style={numeric}>
-                  {formatMoney(entry.ramCost)}
-                </span>
-                <span role="cell" style={numeric}>
-                  {formatMoney(entry.storageCost)}
-                </span>
-                <span role="cell" style={numeric}>
-                  {formatMoney(entry.networkCost + entry.lbCost)}
-                </span>
-                {gpu && (
-                  <span role="cell" style={numeric}>
-                    {formatMoney(entry.gpuCost ?? 0)}
+            {entries.map(entry => {
+              // Rounded so the cells beside the total add up to it.
+              const [cpuCost, ramCost, storageCost, networkCost, gpuCost] = roundParts(
+                [entry.cpuCost, entry.ramCost, entry.storageCost, entry.networkCost + entry.lbCost, entry.gpuCost ?? 0],
+                entry.totalCost,
+              );
+              return (
+                <div
+                  key={entry.labelValue}
+                  role="row"
+                  style={{ ...row, ...cardStyle(t), margin: '8px 0', minHeight: '52px' }}
+                >
+                  <span role="rowheader" style={{ ...cell, color: t.textStrong, fontWeight: 500 }}>
+                    <Truncated text={entry.labelValue} />
                   </span>
-                )}
-                <span role="cell" style={{ ...numeric, color: t.textStrong, fontWeight: 500 }}>
-                  {formatMoney(entry.totalCost)}
-                </span>
-                <span role="cell" style={cell}>
-                  <Share fraction={totalCost > 0 ? entry.totalCost / totalCost : 0} t={t} />
-                </span>
-                <span role="cell" style={numeric}>
-                  <Efficiency ratio={entry.efficiency} noRequests={entry.noRequests} t={t} />
-                </span>
-              </div>
-            ))}
+                  <span role="cell" style={numeric}>
+                    {formatMoney(cpuCost)}
+                  </span>
+                  <span role="cell" style={numeric}>
+                    {formatMoney(ramCost)}
+                  </span>
+                  <span role="cell" style={numeric}>
+                    {formatMoney(storageCost)}
+                  </span>
+                  <span role="cell" style={numeric}>
+                    {formatMoney(networkCost)}
+                  </span>
+                  {gpu && (
+                    <span role="cell" style={numeric}>
+                      {formatMoney(gpuCost)}
+                    </span>
+                  )}
+                  <span role="cell" style={{ ...numeric, color: t.textStrong, fontWeight: 500 }}>
+                    {formatMoney(entry.totalCost)}
+                  </span>
+                  <span role="cell" style={cell}>
+                    <Share fraction={totalCost > 0 ? entry.totalCost / totalCost : 0} t={t} />
+                  </span>
+                  <span role="cell" style={numeric}>
+                    <Efficiency ratio={entry.efficiency} noRequests={entry.noRequests} t={t} />
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

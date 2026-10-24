@@ -25,7 +25,7 @@ import {
   SharedNamespace,
   sharedNamespace,
 } from '../utils/costInsights';
-import { formatMoney, formatPercent, formatSignedPercent, pluralize } from '../utils/format';
+import { formatMoney, formatPercent, formatSignedPercent, pluralize, sumRounded } from '../utils/format';
 import { THREE_CARD_COLUMNS_MIN } from '../utils/layout';
 import { hasAdvice } from '../utils/rightsizing';
 
@@ -131,7 +131,8 @@ export const CostActual: React.FC<CostActualProps> = ({
         stats={[
           {
             label: 'Monthly cost',
-            value: formatMoney(kubernetes + cloud),
+            // The sum of the two figures as shown, so the Kubernetes cost stays the one on every page.
+            value: formatMoney(sumRounded([kubernetes, cloud])),
             detail:
               cloud > 0
                 ? `Kubernetes ${formatMoney(kubernetes)} + cloud ${formatMoney(cloud)}`

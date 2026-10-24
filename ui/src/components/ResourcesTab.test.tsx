@@ -36,7 +36,6 @@ describe('ResourcesTab', () => {
   beforeEach(() => {
     vi.mocked(useOrphanedPods).mockReturnValue({
       pods: [],
-      totalWasted: 0,
       loading: false,
     });
   });
@@ -108,7 +107,6 @@ describe('ResourcesTab', () => {
           totalCost: 3.5,
         },
       ],
-      totalWasted: 3.5,
       loading: false,
     });
     const ctx = { namespace: 'argocd', name: 'shop-web', project: 'shop' };

@@ -10,7 +10,7 @@ import { cardStyle, Tokens, useTokens } from '../theme/tokens';
 import { DailyCost } from '../utils/api';
 import { summarizeDaily } from '../utils/dailyStats';
 import { forecastMonthEnd, MIN_TREND_DAYS, utcDay } from '../utils/forecast';
-import { formatDay, formatDayIn, formatEstimate, formatMoney, pluralize } from '../utils/format';
+import { formatDay, formatDayIn, formatEstimate, formatMoney, pluralize, roundColumns, roundParts, sumRounded } from '../utils/format';
 import {
   bucketDays,
   completeDays,
@@ -89,7 +89,12 @@ export const CostTrendComponent: React.FC<CostTrendProps> = ({ loading, error, d
   // spent, keeps them.
   const complete = completeDays(inRange, today, range?.range.from ?? recentFrom);
   const summary = summarizeDaily(complete.length > 0 ? complete : data);
-  const total = data.reduce((sum, day) => sum + day.totalCost, 0);
+  // The sum of the days as the table lists them, so the table adds up to it.
+  const total = sumRounded(data.map(day => day.totalCost));
+  // Rounded as the forecast is shown, so what is spent and what is projected add up to it.
+  const [spent, projected] = showForecast
+    ? roundParts([showForecast.spent, showForecast.projected], showForecast.total, Math.abs(showForecast.total) >= 100 ? 0 : 2)
+    : [0, 0];
   // Without a forecast, say how many more days of data it needs, so its absence is not a mystery.
   const daysToForecast = forecast || !reachesToday ? 0 : MIN_TREND_DAYS - completeDays(recent, today, recentFrom).length;
   const axisTo = showForecast && showForecast.monthEnd > shown.to ? showForecast.monthEnd : shown.to;
@@ -119,7 +124,7 @@ export const CostTrendComponent: React.FC<CostTrendProps> = ({ loading, error, d
                   {
                     label: 'Month-end forecast',
                     value: formatEstimate(showForecast.total),
-                    detail: `${formatEstimate(showForecast.spent, showForecast.total)} so far + ${formatEstimate(showForecast.projected, showForecast.total)} projected`,
+                    detail: `${formatEstimate(spent, showForecast.total)} so far + ${formatEstimate(projected, showForecast.total)} projected`,
                   },
                 ]
               : []),
@@ -338,19 +343,24 @@ const DailyCostTable: React.FC<{ days: DailyCost[]; t: Tokens }> = ({ days, t })
           </tr>
         </thead>
         <tbody>
-          {[...days].reverse().map(day => (
-            <tr key={day.date}>
-              <th scope="row" style={{ ...cellStyle, fontWeight: 400, textAlign: 'left' }}>
-                {formatDay(day.date, true)}
-              </th>
-              <td style={{ ...cellStyle, color: t.textStrong }}>{formatMoney(day.totalCost)}</td>
-              {COST_COLUMNS.map(([label, cost]) => (
-                <td key={label} style={cellStyle}>
-                  {formatMoney(cost(day))}
-                </td>
-              ))}
-            </tr>
-          ))}
+          {[...days].reverse().map(day => {
+            // Rounded so the columns never add up to more than the total, which also holds what has no
+            // column, such as load balancers and GPUs.
+            const columns = roundColumns(COST_COLUMNS.map(([, cost]) => cost(day)), day.totalCost);
+            return (
+              <tr key={day.date}>
+                <th scope="row" style={{ ...cellStyle, fontWeight: 400, textAlign: 'left' }}>
+                  {formatDay(day.date, true)}
+                </th>
+                <td style={{ ...cellStyle, color: t.textStrong }}>{formatMoney(day.totalCost)}</td>
+                {COST_COLUMNS.map(([label], index) => (
+                  <td key={label} style={cellStyle}>
+                    {formatMoney(columns[index])}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

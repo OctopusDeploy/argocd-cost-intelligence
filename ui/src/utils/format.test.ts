@@ -18,6 +18,9 @@ import {
   isPartialMeasurement,
   isStale,
   pluralize,
+  roundColumns,
+  roundParts,
+  sumRounded,
 } from './format';
 
 describe('formatMoney', () => {
@@ -29,6 +32,86 @@ describe('formatMoney', () => {
     expect(formatMoney(0.5972, 'USD', 4)).toBe('$0.5972');
     expect(formatMoney(12, 'EUR')).toBe('€12.00');
     expect(formatMoney(162.75, 'USD', 0)).toBe('$163');
+  });
+});
+
+describe('roundParts', () => {
+  it('makes rounded parts add up to the rounded total', () => {
+    // 0.09 + 0.09 would be shown against a total of 0.17.
+    expect(roundParts([0.087, 0.087])).toEqual([0.09, 0.08]);
+    // 11.40 + 1.45 would be shown against idle spend of 12.86.
+    expect(roundParts([11.4043, 1.4536])).toEqual([11.41, 1.45]);
+  });
+
+  it('gives the leftover cents to the largest remainders', () => {
+    expect(roundParts([1.004, 1.004, 1.007])).toEqual([1.01, 1, 1.01]);
+    expect(roundParts([0.333, 0.333, 0.334], 1)).toEqual([0.33, 0.33, 0.34]);
+  });
+
+  it('leaves parts that already add up as they are', () => {
+    expect(roundParts([11.4048, 1.5552])).toEqual([11.4, 1.56]);
+    expect(roundParts([0.29, 0.71])).toEqual([0.29, 0.71]);
+    expect(roundParts([])).toEqual([]);
+  });
+
+  it('adds up to a total that is itself rounded', () => {
+    // A row of 12.9649 shown as 12.97 after its own parent's rounding, where 11.40 + 1.56 would be less.
+    expect(roundParts([11.4048, 1.5601], 12.97)).toEqual([11.41, 1.56]);
+  });
+
+  it('rounds each part on its own when they do not add up to the total', () => {
+    expect(roundParts([5.7, 0.78], 6.4368)).toEqual([5.7, 0.78]);
+    // Each part could take a cent here, but the parts are three cents off the total.
+    expect(roundParts([1, 1, 1, 1, 1], 5.03)).toEqual([1, 1, 1, 1, 1]);
+    // A total a whole cent above its parts holds something they don't.
+    expect(roundParts([0.5], 0.51)).toEqual([0.5]);
+  });
+
+  it('never shows an exact zero as a cent', () => {
+    expect(roundParts([0, 0], 0.01)).toEqual([0, 0]);
+    expect(roundParts([0.0099, 0, 0], 0.0199)).toEqual([0.01, 0, 0]);
+  });
+
+  it('shows float noise below zero as zero, without a sign', () => {
+    const [, , other] = roundParts([1.0548101881246619, 4.723641146602001, -8.881784197001252e-16], 5.778451334726663);
+    expect(formatMoney(other)).toBe('$0.00');
+  });
+
+  it('rounds negative halves away from zero, as formatMoney does', () => {
+    expect(roundParts([-0.125])).toEqual([-0.13]);
+    expect(formatMoney(roundParts([-1.005])[0])).toBe(formatMoney(-1.005));
+  });
+
+  it('rounds to whole units for whole-dollar estimates', () => {
+    expect(roundParts([100.6, 50.6], 151.2, 0)).toEqual([101, 50]);
+  });
+
+  it('handles negative parts of a signed change', () => {
+    // 2.01 and 0.00 would be shown against a change of 2.00.
+    expect(roundParts([2.006, -0.003])).toEqual([2, 0]);
+  });
+});
+
+describe('roundColumns', () => {
+  it('keeps the columns within a total that holds more than they do', () => {
+    // CPU 4.995 and memory 4.995 would both show as 5.00 beside a total of 10.00 that also holds
+    // 0.008 of storage.
+    expect(roundColumns([4.995, 4.995], 9.998)).toEqual([5, 4.99]);
+    expect(roundColumns([1.2, 3.4], 6)).toEqual([1.2, 3.4]);
+  });
+
+  it('adds up to a total that is itself rounded', () => {
+    // A controller of 0.174 shown as 0.17 after its app's rounding: 0.09 and 0.09 would be more.
+    expect(roundColumns([0.087, 0.087], 0.174, 0.17)).toEqual([0.09, 0.08]);
+  });
+});
+
+describe('sumRounded', () => {
+  it('adds the amounts as they are shown', () => {
+    // Rows shown as 12.96, 12.84 and 1.69 add up to 27.49, not the exact 27.48.
+    expect(sumRounded([12.9551, 12.8447, 1.6851])).toBe(27.49);
+    expect(sumRounded([150.4, 20.4], 0)).toBe(170);
+    expect(sumRounded([-0.125, -0.125])).toBe(-0.26);
   });
 });
 

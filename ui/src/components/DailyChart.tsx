@@ -4,7 +4,7 @@ import { Tokens, useTokens, visuallyHidden } from '../theme/tokens';
 import { DailyCost } from '../utils/api';
 import { niceTicks, tickDecimals } from '../utils/chartScale';
 import { MonthForecast } from '../utils/forecast';
-import { formatDay, formatEstimate, formatMoney, formatMonth } from '../utils/format';
+import { formatDay, formatEstimate, formatMoney, formatMonth, roundParts } from '../utils/format';
 import { addDays, fromFirstCost, spanDays } from '../utils/ranges';
 import { chartHeight, dayLabelCount } from '../utils/layout';
 
@@ -326,6 +326,11 @@ interface ChartTooltipProps {
 // ChartTooltip is visual only; the status region above announces the same day to screen readers.
 const ChartTooltip: React.FC<ChartTooltipProps> = ({ slot, partial, left, top, t }) => {
   const { day } = slot;
+  // Other is everything beyond CPU and memory, such as storage and network, rounded so the three add
+  // up to the day's total.
+  const [cpu, memory, other] = day
+    ? roundParts([day.cpuCost, day.memoryCost, Math.max(0, day.totalCost - day.cpuCost - day.memoryCost)], day.totalCost)
+    : [0, 0, 0];
   return (
     <div
       aria-hidden="true"
@@ -361,7 +366,7 @@ const ChartTooltip: React.FC<ChartTooltipProps> = ({ slot, partial, left, top, t
           ? 'Forecast from the trend'
           : partial
             ? `Still being measured${slot.trend === undefined ? '' : ` · trend ${formatMoney(slot.trend)} / day`}`
-            : `CPU ${formatMoney(day.cpuCost)} · Memory ${formatMoney(day.memoryCost)} · Other ${formatMoney(day.networkCost + day.storageCost)}`}
+            : `CPU ${formatMoney(cpu)} · Memory ${formatMoney(memory)} · Other ${formatMoney(other)}`}
       </span>
     </div>
   );

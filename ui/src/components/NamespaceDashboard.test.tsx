@@ -109,7 +109,7 @@ describe('NamespaceDashboard', () => {
     });
     vi.mocked(useClusterOverhead).mockReturnValue({ overhead: null, loading: false, error: '500: failed to retrieve cluster overhead' });
     vi.mocked(useDataQuality).mockReturnValue({ pricingSource: 'estimated', message: 'Public cloud list prices (on-demand)' });
-    vi.mocked(useOrphanedPods).mockReturnValue({ pods: [], totalWasted: 0, loading: false });
+    vi.mocked(useOrphanedPods).mockReturnValue({ pods: [], loading: false });
     vi.mocked(useChargeback).mockReturnValue({ entries: [], totalCost: 0, loading: false, error: null });
     reloadWaste.mockClear();
     vi.mocked(useWasteRanking).mockReturnValue({
@@ -142,6 +142,19 @@ describe('NamespaceDashboard', () => {
     expect(stat('Cluster monthly cost')).toEqual({ value: '$2,883.60', detail: '2 namespaces · 3 apps' });
     expect(stat('Control plane fee')).toEqual({ value: 'Not available', detail: "OpenCost didn't return cluster assets" });
     expect(stat('Pricing').value).toBe('Estimated');
+  });
+
+  it('adds up the cluster cost from the namespaces as listed', () => {
+    withNamespaceData({
+      namespaces: [
+        { namespace: 'argocd', totalCost: 2018.1051, idleCost: 899.19, appCount: 2, measuredAt },
+        { namespace: 'prometheus', totalCost: 865.5051, idleCost: 416.16, appCount: 1, measuredAt },
+      ],
+    });
+    render(<NamespaceDashboard />);
+
+    // The namespaces are listed as $2,018.11 and $865.51; their exact sum would show as $2,883.61.
+    expect(stat('Cluster monthly cost').value).toBe('$2,883.62');
   });
 
   it('shows idle spend as a share of the cost it was measured for', () => {

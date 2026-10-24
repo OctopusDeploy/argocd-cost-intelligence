@@ -3,7 +3,7 @@ import { CardHeader } from './CardHeader';
 import { ChangeIcon, TrendIcon } from './icons';
 import { cardStyle, Tokens, useTokens } from '../theme/tokens';
 import { ChangeDriver, ChangeDrivers, NOT_TIED_TO_A_POD } from '../utils/costInsights';
-import { formatMoney, formatSignedMoney, pluralize } from '../utils/format';
+import { formatMoney, formatSignedMoney, pluralize, roundParts } from '../utils/format';
 
 const TITLE_ID = 'cost-intel-drivers-title';
 
@@ -18,6 +18,10 @@ const STATUS_LABELS: Record<NonNullable<ChangeDriver['status']>, string | null> 
 export const ChangeDriversCard: React.FC<{ drivers: ChangeDrivers }> = ({ drivers }) => {
   const t = useTokens();
   if (drivers.drivers.length === 0) return null;
+  // Rounded so the rows add up to the total change below them.
+  const parts = drivers.drivers.map(driver => driver.delta);
+  if (drivers.smallerCount > 0) parts.push(drivers.smaller);
+  const shown = roundParts(parts, drivers.total);
 
   const rowHeader: React.CSSProperties = { padding: '8px 12px 8px 0', fontWeight: 400, textAlign: 'left', minWidth: 0 };
   const amount: React.CSSProperties = { padding: '8px 0', color: t.textStrong, textAlign: 'right', verticalAlign: 'top' };
@@ -46,7 +50,7 @@ export const ChangeDriversCard: React.FC<{ drivers: ChangeDrivers }> = ({ driver
           <col style={{ width: '120px' }} />
         </colgroup>
         <tbody>
-          {drivers.drivers.map(driver => (
+          {drivers.drivers.map((driver, index) => (
             <tr key={driver.key} style={{ borderTop: `1px solid ${t.hairline}` }}>
               <th scope="row" style={rowHeader}>
                 <span title={driver.name} style={{ ...truncated, color: t.textStrong }}>
@@ -55,7 +59,7 @@ export const ChangeDriversCard: React.FC<{ drivers: ChangeDrivers }> = ({ driver
                 <span style={{ ...detail, ...truncated }}>{driverDetail(driver)}</span>
               </th>
               <td style={amount}>
-                <SignedAmount amount={driver.delta} t={t} />
+                <SignedAmount amount={shown[index]} t={t} />
               </td>
             </tr>
           ))}
@@ -64,7 +68,7 @@ export const ChangeDriversCard: React.FC<{ drivers: ChangeDrivers }> = ({ driver
               <th scope="row" style={{ ...rowHeader, color: t.textMuted }}>
                 {pluralize(drivers.smallerCount, 'smaller change')}
               </th>
-              <td style={{ ...amount, color: t.text }}>{formatSignedMoney(drivers.smaller)}</td>
+              <td style={{ ...amount, color: t.text }}>{formatSignedMoney(shown[drivers.drivers.length])}</td>
             </tr>
           )}
           <tr style={{ borderTop: `1px solid ${t.border}` }}>

@@ -4,7 +4,7 @@ import { CheckIcon, ErrorIcon, GaugeIcon, InfoIcon, WarningIcon } from './icons'
 import { cardStyle, Tokens, useTokens } from '../theme/tokens';
 import { EfficiencyMetrics } from '../utils/api';
 import { efficiencyLevel, EfficiencyLevel, hasRequests } from '../utils/costInsights';
-import { formatBytes, formatCores, formatMoney, formatPercent } from '../utils/format';
+import { formatBytes, formatCores, formatMoney, formatPercent, roundParts } from '../utils/format';
 
 const TITLE_ID = 'cost-intel-efficiency-title';
 
@@ -37,6 +37,8 @@ export const EfficiencyCard: React.FC<{ efficiency: EfficiencyMetrics; namespace
 }) => {
   const t = useTokens();
   const showPeak = e.cpuCoresUsedMax > 0 || e.ramBytesUsedMax > 0;
+  // Rounded so the CPU and memory idle add up to the idle spend below them.
+  const [cpuIdle, ramIdle] = roundParts([e.cpuIdleCost, e.ramIdleCost]);
   const requested = hasRequests(e);
 
   return (
@@ -75,7 +77,7 @@ export const EfficiencyCard: React.FC<{ efficiency: EfficiencyMetrics; namespace
         request={e.cpuCoresRequested}
         limit={e.cpuCoresLimit}
         format={formatCores}
-        idleCost={e.cpuIdleCost}
+        idleCost={cpuIdle}
         t={t}
       />
       <Meter
@@ -86,7 +88,7 @@ export const EfficiencyCard: React.FC<{ efficiency: EfficiencyMetrics; namespace
         request={e.ramBytesRequested}
         limit={e.ramBytesLimit}
         format={formatBytes}
-        idleCost={e.ramIdleCost}
+        idleCost={ramIdle}
         t={t}
       />
 

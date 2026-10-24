@@ -146,6 +146,21 @@ describe('CostActual', () => {
     });
   });
 
+  it('shows a monthly cost that adds up to its Kubernetes and cloud parts as shown', () => {
+    // The exact sum of $2.008 would show as $2.01 above Kubernetes $1.00 + cloud $1.00.
+    const base = fixture();
+    const data = fixture({
+      totalMonthlyCost: 1.004,
+      cloudEstimate: { ...base.cloudEstimate!, totalMonthlyCost: 1.004 },
+    });
+    render(<CostActual data={data} trend={null} loading={false} error={null} />);
+
+    expect(stat('Monthly cost')).toEqual({
+      value: '$2.00',
+      detail: 'Kubernetes $1.00 + cloud $1.00',
+    });
+  });
+
   it('says so when there is no earlier measurement to compare with', () => {
     render(<CostActual data={fixture()} trend={null} loading={false} error={null} />);
 

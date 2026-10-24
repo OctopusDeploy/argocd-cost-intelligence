@@ -24,6 +24,64 @@ export function formatMoney(amount: number, currency = 'USD', fractionDigits = 2
   return formatter.format(amount);
 }
 
+// roundParts rounds amounts shown beside their total so the rounded parts add up to the rounded
+// total: each part is rounded down, then the units left over go to the parts with the largest
+// remainders. A part can therefore be a cent off its own rounding, but a part of exactly zero stays
+// zero. The total may be a figure as shown, itself rounded, such as a row whose parts are its
+// columns. When the parts can't add up to the total that way, as on records stored before totals
+// were their sum, each part is rounded on its own.
+export function roundParts(parts: number[], total = sum(parts), fractionDigits = 2): number[] {
+  const unit = 10 ** fractionDigits;
+  const scaled = parts.map(part => clean(part * unit));
+  const own = scaled.map(part => roundUnits(part) / unit);
+  if (Math.abs(clean(sum(parts) * unit) - clean(total * unit)) >= 1) return own;
+
+  const floors = scaled.map(Math.floor);
+  let left = roundUnits(clean(total * unit)) - sum(floors);
+  if (left < 0) return own;
+  const order = scaled
+    .map((part, i) => ({ i, remainder: clean(part - floors[i]), part }))
+    .filter(({ part }) => part !== 0)
+    .sort((a, b) => b.remainder - a.remainder || b.part - a.part || a.i - b.i);
+  for (const { i } of order) {
+    if (left === 0) break;
+    floors[i] += 1;
+    left -= 1;
+  }
+  if (left > 0) return own;
+  // + 0 turns the -0 of a part of float noise below zero into 0, which formats without a sign.
+  return floors.map(part => part / unit + 0);
+}
+
+// roundColumns rounds the columns shown beside a row's total when the total holds more than they do,
+// such as CPU and memory beside a total that also holds storage and network: the rest of the exact
+// total is rounded as one hidden part, so the columns never add up to more than the total as shown.
+export function roundColumns(columns: number[], total: number, shownTotal = total, fractionDigits = 2): number[] {
+  return roundParts([...columns, total - sum(columns)], shownTotal, fractionDigits).slice(0, columns.length);
+}
+
+// sumRounded adds amounts as they are shown, each rounded, so a grand total under a list of rows
+// is the sum of the rows a reader sees.
+export function sumRounded(amounts: number[], fractionDigits = 2): number {
+  const unit = 10 ** fractionDigits;
+  return sum(amounts.map(amount => roundUnits(clean(amount * unit)))) / unit;
+}
+
+// roundUnits rounds half away from zero, as Intl.NumberFormat does, so -0.125 is -0.13 as formatMoney
+// shows it, where Math.round would give -0.12.
+function roundUnits(scaled: number): number {
+  return Math.sign(scaled) * Math.round(Math.abs(scaled)) + 0;
+}
+
+function sum(values: number[]): number {
+  return values.reduce((acc, value) => acc + value, 0);
+}
+
+// clean drops the floating-point noise of a scaled amount, so 0.29 * 100 is 29 and not 28.999….
+function clean(scaled: number): number {
+  return Math.round(scaled * 1e6) / 1e6;
+}
+
 // formatEstimate renders a projected amount: whole dollars from $100, where cents would claim a
 // precision a forecast does not have. Pass the headline figure as reference so the parts of an
 // estimate are rounded like the whole.

@@ -3,7 +3,7 @@ import { CardHeader } from './CardHeader';
 import { Share } from './ControllerCostTable';
 import { AppsIcon, ChevronIcon, WarningIcon } from './icons';
 import { cardStyle, useTokens } from '../theme/tokens';
-import { formatMoney, formatRelativeTime, isStale, pluralize } from '../utils/format';
+import { formatMoney, formatRelativeTime, isStale, pluralize, roundColumns, roundParts } from '../utils/format';
 import { NAME_COLUMN, SPACER_COLUMN } from '../utils/layout';
 import { AppCost } from '../utils/namespaceApps';
 
@@ -106,6 +106,10 @@ export const NamespaceAppsTable: React.FC<Props> = ({ apps, totalCost }) => {
             const detail = app.visible
               ? `${pluralize(app.controllers.length, 'controller')} · ${pluralize(app.podCount, 'pod')}`
               : 'Not listed by Argo CD';
+            // Rounded so the cells beside each total add up to it, and the controllers to their app.
+            const [appTotal] = roundParts([app.totalCost]);
+            const [appCpu, appRam] = roundColumns([app.cpuCost, app.ramCost], app.totalCost, appTotal);
+            const controllerTotals = roundParts(app.controllers.map(controller => controller.totalCost), appTotal);
             return (
               <div key={key} id={groupId} role="rowgroup" style={{ ...cardStyle(t), margin: '8px 0', overflow: 'hidden' }}>
                 <div role="row" style={{ ...row, minHeight: '56px' }}>
@@ -148,13 +152,13 @@ export const NamespaceAppsTable: React.FC<Props> = ({ apps, totalCost }) => {
                     <span style={{ color: t.textMuted, fontSize: '12px' }}>{detail}</span>
                   </span>
                   <span role="cell" style={numeric}>
-                    {money(app, app.cpuCost)}
+                    {money(app, appCpu)}
                   </span>
                   <span role="cell" style={numeric}>
-                    {money(app, app.ramCost)}
+                    {money(app, appRam)}
                   </span>
                   <span role="cell" style={{ ...numeric, color: t.textStrong, fontWeight: 500 }}>
-                    {money(app, app.totalCost)}
+                    {money(app, appTotal)}
                   </span>
                   <span role="cell" style={cell}>
                     {app.visible && <Share fraction={app.share} t={t} />}
@@ -170,34 +174,38 @@ export const NamespaceAppsTable: React.FC<Props> = ({ apps, totalCost }) => {
                 </div>
 
                 {open &&
-                  app.controllers.map(controller => (
-                    <div
-                      key={controller.key}
-                      role="row"
-                      style={{ ...row, minHeight: '44px', backgroundColor: t.surfaceSunken, borderTop: `1px solid ${t.border}` }}
-                    >
-                      <span role="cell" />
-                      <span role="rowheader" style={{ ...cell, ...truncated, paddingLeft: '31px' }}>
-                        {controller.name}{' '}
-                        <span style={{ color: t.textMuted, fontSize: '12px' }}>
-                          {controller.kind} · {pluralize(controller.pods.length, 'pod')}
+                  app.controllers.map((controller, controllerIndex) => {
+                    const controllerTotal = controllerTotals[controllerIndex];
+                    const [controllerCpu, controllerRam] = roundColumns([controller.cpuCost, controller.ramCost], controller.totalCost, controllerTotal);
+                    return (
+                      <div
+                        key={controller.key}
+                        role="row"
+                        style={{ ...row, minHeight: '44px', backgroundColor: t.surfaceSunken, borderTop: `1px solid ${t.border}` }}
+                      >
+                        <span role="cell" />
+                        <span role="rowheader" style={{ ...cell, ...truncated, paddingLeft: '31px' }}>
+                          {controller.name}{' '}
+                          <span style={{ color: t.textMuted, fontSize: '12px' }}>
+                            {controller.kind} · {pluralize(controller.pods.length, 'pod')}
+                          </span>
                         </span>
-                      </span>
-                      <span role="cell" style={numeric}>
-                        {formatMoney(controller.cpuCost)}
-                      </span>
-                      <span role="cell" style={numeric}>
-                        {formatMoney(controller.ramCost)}
-                      </span>
-                      <span role="cell" style={numeric}>
-                        {formatMoney(controller.totalCost)}
-                      </span>
-                      <span role="cell" style={cell}>
-                        <Share fraction={totalCost > 0 ? controller.totalCost / totalCost : 0} t={t} />
-                      </span>
-                      <span role="cell" />
-                    </div>
-                  ))}
+                        <span role="cell" style={numeric}>
+                          {formatMoney(controllerCpu)}
+                        </span>
+                        <span role="cell" style={numeric}>
+                          {formatMoney(controllerRam)}
+                        </span>
+                        <span role="cell" style={numeric}>
+                          {formatMoney(controllerTotal)}
+                        </span>
+                        <span role="cell" style={cell}>
+                          <Share fraction={totalCost > 0 ? controller.totalCost / totalCost : 0} t={t} />
+                        </span>
+                        <span role="cell" />
+                      </div>
+                    );
+                  })}
               </div>
             );
           })}

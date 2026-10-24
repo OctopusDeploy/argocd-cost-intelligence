@@ -61,6 +61,7 @@ These are the invariants most likely to be broken by a well-meant change.
 **Monthly projection.** OpenCost is queried with a 24h window and costs are projected onto a 30-day month from the period it actually has data for (`monthlyFactor` / `measuredPeriod` in `pkg/opencost/client.go`). A namespace younger than a day gets a larger factor. Never multiply an OpenCost cost by a fixed 30.
 
 **Namespace vs. application scope.** A cost record's own columns measure the whole deployment namespace; `app_json` (`CostActual.App`) holds the application's share: the pods of the controllers Argo CD lists in the webhook's `resources`, matched by `models.ManagedResources.OwnsPod`.
+- Both are measured from one pod-level answer (`PodAllocations.Namespace` and `ForApplication`): OpenCost rounds every allocation on its own, so a namespace read apart from its pods can come out below its only application. The namespace query is only the fallback when the pods can't be read.
 - Aggregate namespaces once (`ListNamespaces`). Summing records across apps in one namespace double-counts.
 - App routes serve `CostActual.ForApplication()` (`scope: "application"`, or `"namespace"` for old records without `app_json`). Never mix the two scopes in one comparison (`comparableHistory`).
 - The notifications template must send `{{.app.spec.destination.namespace}}` (where the app deploys), the app's `resources` and its destination cluster (`destinationServer`, `destinationName`); see `deploy/argocd-notifications-patch.yaml`.

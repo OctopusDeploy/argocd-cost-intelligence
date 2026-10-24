@@ -149,8 +149,8 @@ func monthlyFactor(start, end time.Time) float64 {
 
 // MinMeasuredPeriod is the least OpenCost data a cost is projected from. OpenCost rounds costs to
 // five decimals, and seconds of data project onto a month by a factor in the hundreds of thousands,
-// so the rounding alone becomes dollars: a namespace and its pods, queried and rounded apart, would
-// give an application a share larger than its own namespace.
+// so the rounding alone becomes dollars. Even above it the rounding is cents, which is why a
+// namespace is measured from the same pods as its applications (PodAllocations.Namespace).
 const MinMeasuredPeriod = 5 * time.Minute
 
 // measuredPeriod returns the period OpenCost has data for across a response: the earliest
@@ -440,6 +440,22 @@ func (p *PodAllocations) Pods() []models.PodCost {
 // namespace's pods ran. Nil without pods.
 func (p *PodAllocations) Efficiency() *models.EfficiencyMetrics {
 	return podEfficiency(p.resp)
+}
+
+// Namespace measures the whole namespace from its pods: their monthly cost and its breakdown, with
+// the claimed volumes no pod mounts, which OpenCost lists in the namespace as one more pod
+// (<namespace>-unmounted-pvcs). OpenCost rounds every allocation to five decimals on its own, so the
+// namespace read once and read pod by pod differ by that rounding, which a short period projects onto
+// a month as cents: measured from the same allocations, rounding never puts an application measured
+// over the namespace's period above it. Without the raw allocations, as the pods are stored on their
+// own. Nil when the answer measured no period, such as a namespace with no pods yet.
+func (p *PodAllocations) Namespace() *models.OpenCostMetrics {
+	metrics := parseOpenCostResponse(p.resp, p.start, p.end)
+	if metrics.MeasuredHours == 0 {
+		return nil
+	}
+	metrics.ResourceDetails = nil
+	return metrics
 }
 
 // ForApplication measures the pods the application's resources own: their monthly cost and its

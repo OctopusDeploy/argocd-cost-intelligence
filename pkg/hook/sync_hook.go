@@ -401,18 +401,29 @@ func MeasureNamespace(ctx context.Context, client *opencost.Client, namespace st
 		logger.Printf("Warning: failed to query OpenCost pod breakdown for %s: %v\n", namespace, pr.err)
 	}
 
-	measured := &Namespace{name: namespace, measuredAt: time.Now(), metrics: mr.v, efficiency: er.v, pods: pr.v}
+	// The namespace is measured from the same pods as its applications, so that rounding never puts a
+	// share above its namespace; its own allocation is the fallback when its pods are not known, and
+	// its raw allocations are the ones stored with the record either way.
+	metrics := mr.v
+	if pr.v != nil {
+		if pods := pr.v.Namespace(); pods != nil {
+			pods.ResourceDetails = mr.v.ResourceDetails
+			metrics = pods
+		}
+	}
+
+	measured := &Namespace{name: namespace, measuredAt: time.Now(), metrics: metrics, efficiency: er.v, pods: pr.v}
 	if !measured.HasData() {
 		logger.Printf("OpenCost has no data, or too little, for namespace %s yet\n", namespace)
 		return measured, nil
 	}
 	logger.Printf("Measured costs of %s - CPU: $%.2f, Memory: $%.2f, Storage: $%.2f, GPU: $%.2f, Total: $%.2f\n",
 		namespace,
-		mr.v.AllocationTotals.CPUCost,
-		mr.v.AllocationTotals.MemoryCost,
-		mr.v.AllocationTotals.StorageCost,
-		mr.v.AllocationTotals.GPUCost,
-		mr.v.AllocationTotals.TotalCost,
+		metrics.AllocationTotals.CPUCost,
+		metrics.AllocationTotals.MemoryCost,
+		metrics.AllocationTotals.StorageCost,
+		metrics.AllocationTotals.GPUCost,
+		metrics.AllocationTotals.TotalCost,
 	)
 	if er.v != nil {
 		logger.Printf("Measured efficiency - CPU: %.1f%%, RAM: %.1f%%, Total: %.1f%%\n",

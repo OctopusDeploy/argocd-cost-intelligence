@@ -48,6 +48,35 @@ var redisResources = models.ManagedResources{
 	{Kind: "CronJob", Name: "test-cronjob", Namespace: "argocd"},
 }
 
+func TestNamespace_MeasuresEveryPodAndWhatBelongsToNoPod(t *testing.T) {
+	t.Parallel()
+
+	pods := sharedNamespace()
+	pods.resp.Data[0]["argocd-unmounted-pvcs"] = AllocationData{PVCost: 0.1}
+
+	got := pods.Namespace()
+
+	require.NotNil(t, got)
+	assert.InDelta(t, (0.2+0.004+0.001+0.01)*30, got.AllocationTotals.CPUCost, 1e-9)
+	assert.InDelta(t, (0.05+0.001+0.02)*30, got.AllocationTotals.MemoryCost, 1e-9)
+	assert.InDelta(t, 0.1*30, got.AllocationTotals.StorageCost, 1e-9, "a claimed volume no pod mounts is still the namespace's")
+	assert.InDelta(t, 24.0, got.MeasuredHours, 1e-9)
+	assert.Nil(t, got.ResourceDetails, "the pods are stored on their own")
+
+	app := pods.ForApplication(redisResources)
+	assert.Less(t, app.TotalMonthlyCost, got.AllocationTotals.TotalCost)
+}
+
+func TestNamespace_NoMeasuredPeriod(t *testing.T) {
+	t.Parallel()
+
+	assert.Nil(t, (&PodAllocations{}).Namespace(), "no pods")
+	noPeriod := &PodAllocations{resp: AllocationResponse{Data: []map[string]AllocationData{{
+		"__unmounted__": {PVCost: 0.1},
+	}}}}
+	assert.Nil(t, noPeriod.Namespace(), "nothing that ran")
+}
+
 func TestForApplication_MeasuresOnlyTheApplicationsPods(t *testing.T) {
 	t.Parallel()
 

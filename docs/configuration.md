@@ -180,7 +180,7 @@ postgres:
     database: cost_intelligence
 ```
 
-The Secret has to exist in the chart's namespace (`namespace.name`) before you install. Create that namespace yourself and set `namespace.create=false`, or the install fails because the namespace already exists.
+The Secret has to exist in the chart's namespace (`namespace.name`) before you install. Create that namespace yourself and set `namespace.create=false`, or the install fails because the namespace already exists. [PostgreSQL credentials](#postgresql-credentials) has the commands.
 
 The host can be a Service in another namespace (`<service>.<namespace>.svc.cluster.local`), a managed database's endpoint or an IP. With `verify-full`, the server certificate has to match it. The service creates its tables when it starts, so the database user needs to be allowed to create tables in that database.
 

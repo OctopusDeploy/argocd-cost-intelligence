@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"maps"
 	"math"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -1311,10 +1313,12 @@ func classifyPricingSource(msg string) string {
 	return "real"
 }
 
-// AssetsResponse mirrors the top-level shape of GET /assets.
+// AssetsResponse mirrors the top-level shape of GET /assets: one set of assets for the
+// window, keyed by their properties joined with "/". OpenCost ignores `aggregate` here,
+// so an asset is found by its type, not by its key.
 type AssetsResponse struct {
-	Code int                    `json:"code"`
-	Data []map[string]AssetData `json:"data"`
+	Code int                  `json:"code"`
+	Data map[string]AssetData `json:"data"`
 }
 
 type AssetProperties struct {
@@ -1341,7 +1345,6 @@ func (c *Client) GetClusterOverhead(ctx context.Context) (*models.ClusterOverhea
 	}
 	q := u.Query()
 	q.Set("window", "24h")
-	q.Set("aggregate", "type")
 	u.RawQuery = q.Encode()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), http.NoBody)
@@ -1365,15 +1368,22 @@ func (c *Client) GetClusterOverhead(ctx context.Context) (*models.ClusterOverhea
 		return nil, fmt.Errorf("decoding assets response: %w", err)
 	}
 
-	for _, bucket := range result.Data {
-		if mgmt, ok := bucket["ClusterManagement"]; ok {
-			return &models.ClusterOverhead{
-				ControlPlaneCost: mgmt.TotalCost * monthlyFactor(mgmt.Start, mgmt.End),
-				Provider:         mgmt.Properties.Provider,
-				Cluster:          mgmt.Properties.Cluster,
-			}, nil
+	// OpenCost reports one ClusterManagement asset per cluster and provisioner, so the fees
+	// add up; keys are sorted so the provider and cluster shown are stable between requests.
+	overhead := &models.ClusterOverhead{}
+	found := false
+	for _, key := range slices.Sorted(maps.Keys(result.Data)) {
+		asset := result.Data[key]
+		if asset.Type != "ClusterManagement" {
+			continue
 		}
+		if !found {
+			overhead.Provider = asset.Properties.Provider
+			overhead.Cluster = asset.Properties.Cluster
+			found = true
+		}
+		overhead.ControlPlaneCost += asset.TotalCost * monthlyFactor(asset.Start, asset.End)
 	}
 
-	return &models.ClusterOverhead{}, nil
+	return overhead, nil
 }

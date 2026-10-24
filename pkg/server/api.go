@@ -876,7 +876,7 @@ func (s *CostAPIServer) handleGetChargebackLabels(w http.ResponseWriter, r *http
 
 // GET /api/cost-analysis/cluster/overhead
 // Returns the cluster control-plane fee (EKS/GKE/AKS) from OpenCost /assets.
-// Returns controlPlaneCost=0 for self-managed clusters — never an error.
+// Returns controlPlaneCost=0 for self-managed clusters; only an OpenCost failure is an error.
 func (s *CostAPIServer) handleGetClusterOverhead(w http.ResponseWriter, r *http.Request) {
 	overhead, err := s.opencostCli.GetClusterOverhead(r.Context())
 	if err != nil {

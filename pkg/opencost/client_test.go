@@ -1075,3 +1075,132 @@ func TestGetContainerAllocations_OneEntryPerContainerOfEachPod(t *testing.T) {
 		CPUCoreHours: 12, RAMByteHours: 24 << 30, CPUCost: 0.38, RAMCost: 0.1,
 	}, web)
 }
+
+// ---- GetClusterOverhead ----
+
+// assetsFixture is GET /assets as OpenCost 1.121.3 (Helm chart 2.5.33) returns it: one set of
+// assets keyed by their properties, not a list of sets keyed by type.
+const assetsFixture = `{
+  "code": 200,
+  "data": {
+    "AWS/__undefined__/__undefined__/Compute/prod/Node/Kubernetes/i-0abc/ip-10-0-1-5": {
+      "type": "Node",
+      "properties": {"category": "Compute", "provider": "AWS", "service": "Kubernetes", "cluster": "prod", "name": "ip-10-0-1-5", "providerID": "i-0abc"},
+      "labels": {},
+      "window": {"start": "2026-10-23T00:00:00Z", "end": "2026-10-24T00:00:00Z"},
+      "start": "2026-10-23T00:00:00Z",
+      "end": "2026-10-24T00:00:00Z",
+      "minutes": 1440,
+      "totalCost": 9.5
+    },
+    "AWS/__undefined__/__undefined__/Management/prod/ClusterManagement/Kubernetes/__undefined__/__undefined__": {
+      "type": "ClusterManagement",
+      "properties": {"category": "Management", "provider": "AWS", "service": "Kubernetes", "cluster": "prod"},
+      "labels": {},
+      "window": {"start": "2026-10-23T00:00:00Z", "end": "2026-10-24T00:00:00Z"},
+      "start": "2026-10-23T00:00:00Z",
+      "end": "2026-10-24T00:00:00Z",
+      "minutes": 1440,
+      "totalCost": 2.4
+    }
+  }
+}`
+
+func TestGetClusterOverhead_FindsClusterManagementByType(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/assets", r.URL.Path)
+		assert.Equal(t, "24h", r.URL.Query().Get("window"))
+		assert.Empty(t, r.URL.Query().Get("aggregate"), "OpenCost ignores aggregate on /assets")
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(assetsFixture))
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, 5*time.Second, nil)
+	got, err := client.GetClusterOverhead(context.Background())
+	require.NoError(t, err)
+
+	// $2.40 over 24 hours projects to $72 a month; the node's cost is not part of it.
+	assert.InDelta(t, 72.0, got.ControlPlaneCost, 1e-9)
+	assert.Equal(t, "AWS", got.Provider)
+	assert.Equal(t, "prod", got.Cluster)
+}
+
+func TestGetClusterOverhead_NoClusterManagement_ReturnsZero(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code": 200, "data": {
+			"__undefined__/__undefined__/__undefined__/Compute/local/Node/Kubernetes/__undefined__/k3d-node": {
+				"type": "Node", "properties": {"category": "Compute", "cluster": "local"}, "totalCost": 0.8
+			}
+		}}`))
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, 5*time.Second, nil)
+	got, err := client.GetClusterOverhead(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, &models.ClusterOverhead{}, got)
+}
+
+func TestGetClusterOverhead_EmptySet_ReturnsZero(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code": 200, "data": {}}`))
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, 5*time.Second, nil)
+	got, err := client.GetClusterOverhead(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, &models.ClusterOverhead{}, got)
+}
+
+func TestGetClusterOverhead_SeveralClusterManagementAssets_AddsFees(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code": 200, "data": {
+			"GCP/__undefined__/__undefined__/Management/prod/ClusterManagement/Kubernetes/__undefined__/__undefined__": {
+				"type": "ClusterManagement", "properties": {"provider": "GCP", "cluster": "prod"},
+				"start": "2026-10-23T00:00:00Z", "end": "2026-10-24T00:00:00Z", "totalCost": 2.4
+			},
+			"AWS/__undefined__/__undefined__/Management/prod/ClusterManagement/Kubernetes/__undefined__/__undefined__": {
+				"type": "ClusterManagement", "properties": {"provider": "AWS", "cluster": "prod"},
+				"start": "2026-10-23T00:00:00Z", "end": "2026-10-24T00:00:00Z", "totalCost": 1.2
+			}
+		}}`))
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, 5*time.Second, nil)
+	got, err := client.GetClusterOverhead(context.Background())
+	require.NoError(t, err)
+
+	assert.InDelta(t, 108.0, got.ControlPlaneCost, 1e-9)
+	// The first key in sorted order names the provider, whatever order the map is read in.
+	assert.Equal(t, "AWS", got.Provider)
+	assert.Equal(t, "prod", got.Cluster)
+}
+
+func TestGetClusterOverhead_Non200Response(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "Error getting assets: boom", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, 5*time.Second, nil)
+	_, err := client.GetClusterOverhead(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "500")
+}

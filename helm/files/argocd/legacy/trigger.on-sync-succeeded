@@ -1,3 +1,0 @@
-- when: app.status.operationState.phase in ["Succeeded"] and app.status.operationState.finishedAt != ""
-  oncePer: app.status.operationState.finishedAt
-  send: [app-sync-succeeded]

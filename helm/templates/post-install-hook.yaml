@@ -45,10 +45,6 @@ spec:
           value: {{ .Values.argoCd.namespace | quote }}
         - name: NOTIFICATIONS_PATCH
           value: {{ dict "data" $notifications | toJson | toJson }}
-        - name: LEGACY_TRIGGER
-          value: {{ .Files.Get "files/argocd/legacy/trigger.on-sync-succeeded" | toJson }}
-        - name: LEGACY_TEMPLATE
-          value: {{ .Files.Get "files/argocd/legacy/template.app-sync-succeeded" | toJson }}
         - name: RBAC_POLICY
           value: {{ .Files.Get "files/argocd/policy.cost-intel.csv" | toJson }}
         - name: EXTENSION_INIT_CONTAINER
@@ -153,10 +149,8 @@ spec:
             echo "Configuring Argo CD notifications..."
             kubectl patch cm argocd-notifications-cm -n "$ARGOCD_NAMESPACE" --type merge -p "$NOTIFICATIONS_PATCH"
 
-            # An entry is ours if it sends our trigger to our webhook. 0.1.0 wrote one that sends
-            # on-sync-succeeded to it instead; that one is replaced.
+            # An entry is ours if it sends our trigger to our webhook.
             OURS='(.recipients // [] | any_c(. == "cost-intel")) and (.triggers // [] | any_c(. == "cost-intel-on-sync-succeeded"))'
-            LEGACY='(keys | length) == 2 and (.recipients // [] | length) == 1 and .recipients[0] == "cost-intel" and (.triggers // [] | length) == 1 and .triggers[0] == "on-sync-succeeded"'
             ENTRY='{"recipients": ["cost-intel"], "triggers": ["cost-intel-on-sync-succeeded"]}'
             CM_JSON=$(kubectl get cm argocd-notifications-cm -n "$ARGOCD_NAMESPACE" -o json)
             SUBS=$(printf '%s' "$CM_JSON" | jq -r '.data.subscriptions // ""')
@@ -166,14 +160,10 @@ spec:
               exit 1
             fi
             HAS_OURS=$(printf '%s\n' "$SUBS" | yq "(. // []) | [.[] | select($OURS)] | length")
-            HAS_LEGACY=$(printf '%s\n' "$SUBS" | yq "(. // []) | [.[] | select($LEGACY)] | length")
-            if [ "$HAS_OURS" -gt 0 ] && [ "$HAS_LEGACY" -eq 0 ]; then
+            if [ "$HAS_OURS" -gt 0 ]; then
               echo "  subscriptions already has the cost-intel entry"
             else
-              EDIT="(. // []) | del(.[] | select($LEGACY))"
-              if [ "$HAS_OURS" -eq 0 ]; then
-                EDIT="$EDIT | . += [$ENTRY] | . style=\"\" | .[-1] style=\"\" | .[-1][] style=\"\""
-              fi
+              EDIT="(. // []) | . += [$ENTRY] | . style=\"\" | .[-1] style=\"\" | .[-1][] style=\"\""
               NEW=$(printf '%s\n' "$SUBS" | yq "$EDIT")
               # The test op makes this a compare-and-swap: if someone changed subscriptions since it
               # was read, the patch fails and the Job retries from the top.
@@ -186,25 +176,6 @@ spec:
               fi
               kubectl patch cm argocd-notifications-cm -n "$ARGOCD_NAMESPACE" --type json -p "$PATCH"
               echo "  added the cost-intel entry to subscriptions"
-            fi
-
-            # 0.1.0 wrote these two under names from Argo CD's notifications catalog. Remove them only
-            # if they still hold exactly what it wrote; anything else is the user's.
-            # The trigger stays while a subscription or defaultTriggers still names it, and the
-            # template stays while a trigger still sends it, such as a kept trigger.
-            CM_JSON=$(kubectl get cm argocd-notifications-cm -n "$ARGOCD_NAMESPACE" -o json)
-            if printf '%s' "$CM_JSON" | jq -e \
-              '[.data.subscriptions // "", .data.defaultTriggers // ""] | any(test("(^|[^A-Za-z0-9-])on-sync-succeeded"))' >/dev/null; then
-              echo "  kept trigger.on-sync-succeeded in argocd-notifications-cm: a subscription or defaultTriggers still names it"
-            else
-              remove_if_unchanged argocd-notifications-cm trigger.on-sync-succeeded "$LEGACY_TRIGGER"
-            fi
-            CM_JSON=$(kubectl get cm argocd-notifications-cm -n "$ARGOCD_NAMESPACE" -o json)
-            if printf '%s' "$CM_JSON" | jq -e \
-              '[.data // {} | to_entries[] | select(.key | startswith("trigger.")) | .value | contains("app-sync-succeeded")] | any' >/dev/null; then
-              echo "  kept template.app-sync-succeeded in argocd-notifications-cm: a trigger still sends it"
-            else
-              remove_if_unchanged argocd-notifications-cm template.app-sync-succeeded "$LEGACY_TEMPLATE"
             fi
           else
             echo "argocd-notifications-cm not found in $ARGOCD_NAMESPACE: skipped notifications, so syncs will not be measured"

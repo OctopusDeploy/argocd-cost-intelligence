@@ -8,7 +8,7 @@ Running the service day to day: fixing problems, how the NetworkPolicies work, a
 
 Run the checks in [Check that it works](installation.md#check-that-it-works). These are the usual causes:
 
-- The `cost-intel-extension` init container is missing from `argocd-server`. Either the hook failed, or something that manages the Deployment reverted it. A failed hook Job is kept, so you can read its log: `kubectl logs -n argocd-cost-intel job/argocd-cost-intelligence-post-install`.
+- The `cost-intel-extension` init container is missing from `argocd-server`. Either the hook failed or [never ran](#helm-install-times-out-before-the-hook-runs), or something that manages the Deployment reverted it. A failed hook Job is kept, so you can read its log: `kubectl logs -n argocd-cost-intel job/argocd-cost-intelligence-post-install`.
 - The init container couldn't download the bundle, so `/tmp/extensions` is empty. It retries 5 times and then gives up quietly. Its log has the reason: `kubectl logs -n argocd <argocd-server-pod> -c cost-intel-extension`. Usually the UI pod wasn't running yet, or the chart's NetworkPolicy blocks the download because `argoCd.namespace` doesn't match the namespace Argo CD runs in. Check egress rules between the two namespaces too. Restart `argocd-server` once it's fixed.
 - The tab shows "401: Unauthorized extension request". Argo CD refused the call before it reached the backend. The `argocd-server` log has `permission denied: extensions, invoke, cost-intel`. The hook allows `role:admin` through `policy.cost-intel.csv` in `argocd-rbac-cm`, unless `argoCd.rbac.grantAdmin` is off. Every other role needs the rule from [Grant access in Argo CD](installation.md#grant-access-in-argo-cd).
 - The tab shows an error instead of costs. Check that `server.enable.proxy.extension` is `"true"` in `argocd-cmd-params-cm` and that `argocd-server` restarted after it changed, because it reads that setting only when it starts. Then check that `extension.config` in `argocd-cm` points at the backend Service on port 8080, not the UI Service.
@@ -28,6 +28,20 @@ Common causes:
 - `argoCd.namespace` doesn't match where Argo CD runs.
 - The ServiceAccount or ClusterRole that the hook creates was rejected. Check the Job's events.
 - A rollout in the Argo CD namespace didn't finish in time.
+
+### Helm install times out before the hook runs
+
+Helm runs the post-install hook only once everything the chart deploys is ready. If `helm install --wait` times out first, the release is marked `failed` and the hook never runs, so there is no hook Job to read and Argo CD has none of the plugin's configuration: `argocd-cm` has no `extension.config`.
+
+Find the pod that wasn't ready, for example the UI pod failing its probes on a cluster short of CPU, and fix it (see [Pods don't start or stay unready](#pods-dont-start-or-stay-unready)):
+
+```bash
+kubectl get pods -n argocd-cost-intel
+```
+
+Then run the command from [Upgrade](installation.md#upgrade) with the version you installed. Helm accepts an upgrade of a release whose install failed, and the hook runs again after it. Uninstalling and installing again also works.
+
+With `--atomic` (`--rollback-on-failure` in Helm 4), Helm uninstalls the release instead, so install it again once the pods can start.
 
 ### "Cluster-wide costs are turned off"
 

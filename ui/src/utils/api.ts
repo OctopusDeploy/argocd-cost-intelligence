@@ -238,6 +238,8 @@ export interface ChargebackEntry {
   lbCost: number;
   totalCost: number;
   efficiency: number;
+  // Set when the value's pods request no CPU or memory, so efficiency has nothing to measure against.
+  noRequests?: boolean;
 }
 
 export interface ClusterOverhead {

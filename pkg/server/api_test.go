@@ -174,7 +174,7 @@ func newTestAPIServer(t *testing.T, store storage.CostStorage, opts ...Option) *
 				Data: opencost.SummaryAllocationResponseData{
 					Sets: []opencost.SummaryAllocationSet{{
 						Allocations: map[string]opencost.SummaryAllocationData{
-							"ns": {CPUCoreRequestAverage: 1, CPUCoreUsageAverage: 0.4, Efficiency: 0.55},
+							"ns": {CPUCoreRequestAverage: 1, CPUCoreUsageAverage: 0.4, CPUCost: 0.3},
 						},
 					}},
 				},
@@ -1157,7 +1157,7 @@ func newOrphanedPodsTestServer(t *testing.T) *CostAPIServer {
 				Data: opencost.SummaryAllocationResponseData{
 					Sets: []opencost.SummaryAllocationSet{{
 						Allocations: map[string]opencost.SummaryAllocationData{
-							"default": {CPUCoreRequestAverage: 1, CPUCoreUsageAverage: 0.4, Efficiency: 0.55},
+							"default": {CPUCoreRequestAverage: 1, CPUCoreUsageAverage: 0.4, CPUCost: 0.3},
 						},
 					}},
 				},

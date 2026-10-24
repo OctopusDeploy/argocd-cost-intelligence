@@ -45,7 +45,8 @@ func TestParseSummaryResponse_SingleWindow(t *testing.T) {
 			RAMByteRequestAverage: 512 * 1024 * 1024,
 			RAMByteUsageAverage:   358 * 1024 * 1024,
 			RAMByteLimitAverage:   1024 * 1024 * 1024,
-			Efficiency:            0.55,
+			CPUCost:               0.3,
+			RAMCost:               0.1,
 		},
 	})
 	got := parseSummaryResponse(resp)
@@ -53,7 +54,7 @@ func TestParseSummaryResponse_SingleWindow(t *testing.T) {
 
 	assert.InDelta(t, 0.4, got.CPUEfficiency, 1e-9)
 	assert.InDelta(t, float64(358*1024*1024)/float64(512*1024*1024), got.RAMEfficiency, 1e-9)
-	assert.InDelta(t, 0.55, got.TotalEfficiency, 1e-9)
+	assert.InDelta(t, (0.4*0.3+358.0/512*0.1)/0.4, got.TotalEfficiency, 1e-9) // weighted by cost
 	assert.InDelta(t, 1.0, got.CPUCoresRequested, 1e-9)
 	assert.InDelta(t, 0.4, got.CPUCoresUsed, 1e-9)
 	assert.InDelta(t, float64(512*1024*1024), got.RAMBytesRequested, 1e-9)
@@ -67,32 +68,31 @@ func TestParseSummaryResponse_SingleWindow(t *testing.T) {
 func TestParseSummaryResponse_ZeroRequests_NoDivisionByZero(t *testing.T) {
 	t.Parallel()
 
-	// Non-zero efficiency keeps the record from being nil, but zero request averages
-	// must not cause division by zero.
+	// Zero request averages must not cause division by zero.
 	resp := summaryResp(map[string]SummaryAllocationData{
-		"my-namespace": {Efficiency: 0.55},
+		"my-namespace": {CPUCoreUsageAverage: 0.2, CPUCost: 0.3},
 	})
 	got := parseSummaryResponse(resp)
 	require.NotNil(t, got)
 
 	assert.InDelta(t, 0.0, got.CPUEfficiency, 1e-9)
 	assert.InDelta(t, 0.0, got.RAMEfficiency, 1e-9)
+	assert.InDelta(t, 0.0, got.TotalEfficiency, 1e-9)
 }
 
 func TestParseSummaryResponse_MultipleNamespaces_Aggregated(t *testing.T) {
 	t.Parallel()
 
 	resp := summaryResp(map[string]SummaryAllocationData{
-		"ns-1": {CPUCoreRequestAverage: 1.0, CPUCoreUsageAverage: 0.5, Efficiency: 0.5},
-		"ns-2": {CPUCoreRequestAverage: 1.0, CPUCoreUsageAverage: 0.3, Efficiency: 0.7},
+		"ns-1": {CPUCoreRequestAverage: 1.0, CPUCoreUsageAverage: 0.5, CPUCost: 0.2},
+		"ns-2": {CPUCoreRequestAverage: 1.0, CPUCoreUsageAverage: 0.3, CPUCost: 0.2},
 	})
 	got := parseSummaryResponse(resp)
 	require.NotNil(t, got)
 
 	// cpuEff = (0.5+0.3) / (1.0+1.0) = 0.4
 	assert.InDelta(t, 0.4, got.CPUEfficiency, 1e-9)
-	// TotalEfficiency = (0.5+0.7)/2 = 0.6
-	assert.InDelta(t, 0.6, got.TotalEfficiency, 1e-9)
+	assert.InDelta(t, 0.4, got.TotalEfficiency, 1e-9)
 }
 
 func TestParseSummaryResponse_LimitFields_Forwarded(t *testing.T) {
@@ -106,7 +106,6 @@ func TestParseSummaryResponse_LimitFields_Forwarded(t *testing.T) {
 			RAMByteRequestAverage: 512 * 1024 * 1024,
 			RAMByteUsageAverage:   256 * 1024 * 1024,
 			RAMByteLimitAverage:   2 * 1024 * 1024 * 1024,
-			Efficiency:            0.5,
 		},
 	})
 	got := parseSummaryResponse(resp)
@@ -331,7 +330,8 @@ func TestGetNamespaceSummary_Success(t *testing.T) {
 				CPUCoreUsageAverage:   0.4,
 				RAMByteRequestAverage: 512 * 1024 * 1024,
 				RAMByteUsageAverage:   358 * 1024 * 1024,
-				Efficiency:            0.55,
+				CPUCost:               0.3,
+				RAMCost:               0.1,
 			},
 		}))
 	}))
@@ -344,7 +344,7 @@ func TestGetNamespaceSummary_Success(t *testing.T) {
 
 	assert.IsType(t, &models.EfficiencyMetrics{}, got)
 	assert.InDelta(t, 0.4, got.CPUEfficiency, 1e-9)
-	assert.InDelta(t, 0.55, got.TotalEfficiency, 1e-9)
+	assert.InDelta(t, (0.4*0.3+358.0/512*0.1)/0.4, got.TotalEfficiency, 1e-9)
 }
 
 func TestGetNamespaceSummary_Non200Response(t *testing.T) {
@@ -610,12 +610,125 @@ func TestParseChargebackEntries_ScalesByMeasuredPeriod(t *testing.T) {
 	end := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
 	alloc := AllocationResponse{
 		Data: []map[string]AllocationData{{
-			"team-a": {Start: end.Add(-12 * time.Hour), End: end, TotalCost: 1.0},
+			"team-a": {Start: end.Add(-12 * time.Hour), End: end, CPUCost: 1.0, TotalCost: 1.0},
 		}},
 	}
 	got := parseChargebackEntries(alloc, SummaryAllocationResponse{})
 	require.Len(t, got, 1)
 	assert.InDelta(t, 60.0, got[0].TotalCost, 1e-9) // 1.0 * 720/12
+}
+
+// roundedAllocation is a pod as OpenCost reports it ten minutes after it started: each field is
+// rounded to five decimals on its own, so totalCost (0.00149) is not cpuCost + ramCost (0.00150).
+func roundedAllocation(end time.Time) AllocationData {
+	return AllocationData{
+		Start:     end.Add(-10 * time.Minute),
+		End:       end,
+		CPUCost:   0.00132,
+		RAMCost:   0.00018,
+		TotalCost: 0.00149,
+	}
+}
+
+func TestParsePodBreakdown_TotalIsTheSumOfItsParts(t *testing.T) {
+	t.Parallel()
+
+	end := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	pod := roundedAllocation(end)
+	pod.PVCost = 0.00002
+	pod.NetworkCost = 0.00001
+	got := parsePodBreakdown(AllocationResponse{Data: []map[string]AllocationData{{"web-1": pod}}})
+	require.Len(t, got, 1)
+
+	// Ten minutes project onto a month by 4320: OpenCost's own total would give 6.4368, $0.04 short
+	// of CPU + memory.
+	assert.InDelta(t, 5.7024, got[0].CPUCost, 1e-9)
+	assert.InDelta(t, 0.7776, got[0].RAMCost, 1e-9)
+	assert.InDelta(t, (0.00132+0.00018+0.00002+0.00001)*4320, got[0].TotalCost, 1e-9, "storage and network stay in the total")
+}
+
+func TestParseChargebackEntries_TotalIsTheSumOfItsParts(t *testing.T) {
+	t.Parallel()
+
+	end := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	team := roundedAllocation(end)
+	team.PVCost = 0.00002
+	team.LoadBalancerCost = 0.00001
+	got := parseChargebackEntries(AllocationResponse{Data: []map[string]AllocationData{{"team-a": team}}}, SummaryAllocationResponse{})
+	require.Len(t, got, 1)
+
+	e := got[0]
+	assert.InDelta(t, e.CPUCost+e.RAMCost+e.StorageCost+e.NetworkCost+e.LBCost, e.TotalCost, 1e-9)
+	assert.InDelta(t, (0.00132+0.00018+0.00002+0.00001)*4320, e.TotalCost, 1e-9)
+}
+
+func TestParseOrphanedPods_TotalIsTheSumOfItsParts(t *testing.T) {
+	t.Parallel()
+
+	end := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	pod := AllocationData{Start: end.Add(-10 * time.Minute), End: end, PVCost: 0.00031, LoadBalancerCost: 0.00002, TotalCost: 0.00034}
+	got := parseOrphanedPods(AllocationResponse{Data: []map[string]AllocationData{{"stuck-1": pod}}})
+	require.Len(t, got, 1)
+
+	assert.InDelta(t, 0.00031*4320, got[0].StorageCost, 1e-9)
+	assert.InDelta(t, (0.00031+0.00002)*4320, got[0].TotalCost, 1e-9)
+}
+
+func TestParseDailyTimeSeries_TotalIsTheSumOfItsParts(t *testing.T) {
+	t.Parallel()
+
+	end := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	got := parseDailyTimeSeries(AllocationResponse{Data: []map[string]AllocationData{{"web-1": roundedAllocation(end)}}})
+	require.Len(t, got, 1)
+
+	assert.InDelta(t, got[0].CPUCost+got[0].MemoryCost, got[0].TotalCost, 1e-12)
+}
+
+func TestParseChargebackEntries_Efficiency(t *testing.T) {
+	t.Parallel()
+
+	end := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	alloc := AllocationResponse{Data: []map[string]AllocationData{{
+		"requested":   {Start: end.Add(-24 * time.Hour), End: end, CPUCost: 0.3, RAMCost: 0.1},
+		"cpu-only":    {Start: end.Add(-24 * time.Hour), End: end, CPUCost: 0.3, RAMCost: 0.1},
+		"no-requests": {Start: end.Add(-24 * time.Hour), End: end, CPUCost: 0.3, RAMCost: 0.1},
+		"unmeasured":  {Start: end.Add(-24 * time.Hour), End: end, CPUCost: 0.3, RAMCost: 0.1},
+	}}}
+	// OpenCost reports efficiency 1.0 for pods that use CPU and memory without requesting any, and
+	// counts the unrequested memory of "cpu-only" as 100% efficient.
+	summary := summaryResp(map[string]SummaryAllocationData{
+		"requested": {
+			CPUCoreRequestAverage: 1, CPUCoreUsageAverage: 0.4, CPUCost: 0.3,
+			RAMByteRequestAverage: 512, RAMByteUsageAverage: 256, RAMCost: 0.1,
+		},
+		"cpu-only":    {CPUCoreRequestAverage: 1, CPUCoreUsageAverage: 0.4, CPUCost: 0.3, RAMByteUsageAverage: 256, RAMCost: 0.1},
+		"no-requests": {CPUCoreUsageAverage: 0.4, CPUCost: 0.3, RAMByteUsageAverage: 256, RAMCost: 0.1},
+	})
+	byLabel := map[string]models.ChargebackEntry{}
+	for _, e := range parseChargebackEntries(alloc, summary) {
+		byLabel[e.LabelValue] = e
+	}
+
+	assert.InDelta(t, (0.4*0.3+0.5*0.1)/0.4, byLabel["requested"].Efficiency, 1e-9, "weighted by cost")
+	assert.False(t, byLabel["requested"].NoRequests)
+	assert.InDelta(t, 0.4, byLabel["cpu-only"].Efficiency, 1e-9, "memory without a request stays out")
+	assert.False(t, byLabel["cpu-only"].NoRequests)
+	assert.Zero(t, byLabel["no-requests"].Efficiency)
+	assert.True(t, byLabel["no-requests"].NoRequests)
+	assert.Zero(t, byLabel["unmeasured"].Efficiency)
+	assert.False(t, byLabel["unmeasured"].NoRequests, "a value the summary lacks is not measured, not unrequested")
+}
+
+func TestParseSummaryResponse_ResourceWithoutRequestsStaysOutOfTheTotal(t *testing.T) {
+	t.Parallel()
+
+	// OpenCost would report 0.7 here (0.4 for CPU, 100% for unrequested memory, weighted by cost).
+	got := parseSummaryResponse(summaryResp(map[string]SummaryAllocationData{
+		"ns": {CPUCoreRequestAverage: 1, CPUCoreUsageAverage: 0.4, CPUCost: 0.2, RAMByteUsageAverage: 256, RAMCost: 0.2},
+	}))
+	require.NotNil(t, got)
+
+	assert.InDelta(t, 0.4, got.TotalEfficiency, 1e-9)
 }
 
 func TestGetNamespaceCost_DecodesMeasuredPeriodFromWire(t *testing.T) {

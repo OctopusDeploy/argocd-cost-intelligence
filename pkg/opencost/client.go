@@ -731,8 +731,8 @@ func parseChargebackEntries(alloc AllocationResponse, summary SummaryAllocationR
 	// started an hour ago would show an hour of cost spread over a day. A value with less than
 	// MinMeasuredPeriod of data is left out until it has more, as a namespace is.
 	type costAgg struct {
-		cpu, ram, pv, network, lb, total float64
-		start, end                       time.Time
+		cpu, ram, gpu, pv, network, lb, total float64
+		start, end                            time.Time
 	}
 	costs := make(map[string]*costAgg)
 
@@ -748,6 +748,7 @@ func parseChargebackEntries(alloc AllocationResponse, summary SummaryAllocationR
 			c := costs[labelVal]
 			c.cpu += a.CPUCost
 			c.ram += a.RAMCost
+			c.gpu += a.GPUCost
 			c.pv += a.PVCost
 			c.network += a.NetworkCost
 			c.lb += a.LoadBalancerCost
@@ -778,6 +779,7 @@ func parseChargebackEntries(alloc AllocationResponse, summary SummaryAllocationR
 			LabelValue:  labelVal,
 			CPUCost:     cost.cpu * monthlyMultiplier,
 			RAMCost:     cost.ram * monthlyMultiplier,
+			GPUCost:     cost.gpu * monthlyMultiplier,
 			StorageCost: cost.pv * monthlyMultiplier,
 			NetworkCost: cost.network * monthlyMultiplier,
 			LBCost:      cost.lb * monthlyMultiplier,

@@ -734,12 +734,14 @@ func TestParseChargebackEntries_TotalIsTheSumOfItsParts(t *testing.T) {
 	team := roundedAllocation(end)
 	team.PVCost = 0.00002
 	team.LoadBalancerCost = 0.00001
+	team.GPUCost = 0.00004
 	got := parseChargebackEntries(AllocationResponse{Data: []map[string]AllocationData{{"team-a": team}}}, SummaryAllocationResponse{})
 	require.Len(t, got, 1)
 
 	e := got[0]
-	assert.InDelta(t, e.CPUCost+e.RAMCost+e.StorageCost+e.NetworkCost+e.LBCost, e.TotalCost, 1e-9)
-	assert.InDelta(t, (0.00132+0.00018+0.00002+0.00001)*4320, e.TotalCost, 1e-9)
+	assert.InDelta(t, e.CPUCost+e.RAMCost+e.GPUCost+e.StorageCost+e.NetworkCost+e.LBCost, e.TotalCost, 1e-9)
+	assert.InDelta(t, 0.00004*4320, e.GPUCost, 1e-9)
+	assert.InDelta(t, (0.00132+0.00018+0.00002+0.00001+0.00004)*4320, e.TotalCost, 1e-9)
 }
 
 func TestParseOrphanedPods_TotalIsTheSumOfItsParts(t *testing.T) {

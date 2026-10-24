@@ -233,6 +233,8 @@ export interface ChargebackEntry {
   labelValue: string;
   cpuCost: number;
   ramCost: number;
+  // Missing from a backend older than the UI, during an upgrade.
+  gpuCost?: number;
   storageCost: number;
   networkCost: number;
   lbCost: number;

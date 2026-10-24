@@ -124,7 +124,7 @@ Before you run it, know what the hook does to your existing configuration:
 
 ### Grant access in Argo CD
 
-Viewers need permission to invoke the extension, and `get` on an Application to see its tab (they usually have that already). On Argo CD 3.5 and later the extension is denied to everyone until a policy allows it, `admin` included. Without a rule the tab shows "401: Unauthorized extension request".
+Viewers need permission to invoke the extension, and `get` on an Application to see its tab (they usually have that already). Argo CD denies the extension to everyone until a policy allows it, `admin` included. Without a rule the tab shows "401: Unauthorized extension request".
 
 The hook allows the built-in `admin` role. It writes this line to `policy.cost-intel.csv`, a key of its own in `argocd-rbac-cm`:
 

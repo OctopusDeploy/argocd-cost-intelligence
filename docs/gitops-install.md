@@ -15,7 +15,7 @@ These are all the changes the hook makes to Argo CD. You'll add each of them to 
 | `argocd-server` Deployment | an init container and a volume at `/tmp/extensions` | Puts the plugin's JavaScript where `argocd-server` loads UI extensions from |
 | `argocd-cm` ConfigMap | `extension.config` | Tells Argo CD where to send the plugin's API calls |
 | `argocd-cmd-params-cm` ConfigMap | `server.enable.proxy.extension` | Turns on proxy extensions, which are off by default |
-| `argocd-rbac-cm` ConfigMap | `policy.cost-intel.csv` | Lets users open the plugin. On Argo CD 3.5 and later it is denied to everyone until a policy allows it |
+| `argocd-rbac-cm` ConfigMap | `policy.cost-intel.csv` | Lets users open the plugin. Argo CD denies it to everyone until a policy allows it |
 | `argocd-notifications-cm` ConfigMap | `service.webhook.cost-intel`, `trigger.cost-intel-on-sync-succeeded`, `template.cost-intel-sync-succeeded`, `subscriptions` | Calls Cost Intelligence after each successful sync, which is when costs are recorded |
 | `argocd-notifications-secret` Secret | `cost-intel-webhook-token` | The token the webhook sends, so Cost Intelligence accepts the call |
 

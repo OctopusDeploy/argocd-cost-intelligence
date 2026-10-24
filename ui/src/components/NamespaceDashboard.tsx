@@ -146,7 +146,12 @@ const NamespacesView: React.FC<NamespacesViewProps> = ({ data, urlNamespace, onS
   if (namespacesLoading && namespaces.length === 0) return <Notice>Loading namespaces…</Notice>;
   if (namespacesError) return <ErrorNotice message={namespacesError} />;
   if (namespaces.length === 0) {
-    return <Notice>No cost data yet. Costs appear after Argo CD syncs an application.</Notice>;
+    return (
+      <Notice>
+        No cost data yet. Cost Intelligence measures each application once OpenCost has a few minutes of data for
+        its namespace, and again after each sync. If nothing shows up, sync an application.
+      </Notice>
+    );
   }
 
   const clusterTotal = namespaces.reduce((sum, ns) => sum + ns.totalCost, 0);

@@ -62,10 +62,24 @@ Create the name of the service account to use
 {{- end }}
 
 {{/*
-Postgres hostname
+Postgres hostname: postgres.host for an external database, otherwise the bundled one's Service.
 */}}
 {{- define "argocd-cost-intelligence.postgres.host" -}}
-{{- printf "postgres.%s.svc.cluster.local" .Values.namespace.name }}
+{{- if and .Values.postgres.enabled .Values.postgres.host }}
+{{- fail "postgres.host is for an external database. Set postgres.enabled=false to use it, or leave postgres.host empty for the bundled one." }}
+{{- end }}
+{{- default (printf "postgres.%s.svc.cluster.local" .Values.namespace.name) .Values.postgres.host }}
+{{- end }}
+
+{{/*
+Postgres port: postgres.port for an external database, otherwise postgres.service.port.
+*/}}
+{{- define "argocd-cost-intelligence.postgres.port" -}}
+{{- if .Values.postgres.enabled }}
+{{- .Values.postgres.service.port }}
+{{- else }}
+{{- default .Values.postgres.service.port .Values.postgres.port }}
+{{- end }}
 {{- end }}
 
 {{/*

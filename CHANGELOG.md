@@ -4,6 +4,10 @@ All notable changes to this project are listed here. The format follows [Keep a 
 
 ## [Unreleased]
 
+### Added
+
+- `postgres.host` and `postgres.port` point the chart at a PostgreSQL you already run, with `postgres.enabled=false`, without an ExternalName Service. An ExternalName Service called `postgres` still works when `postgres.host` is empty.
+
 ## [0.1.0]
 
 The first public release.

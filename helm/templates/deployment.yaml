@@ -64,9 +64,9 @@ spec:
         - name: METRICS_PORT
           value: {{ ternary .Values.metrics.port 0 .Values.metrics.enabled | quote }}
         - name: DB_HOST
-          value: {{ include "argocd-cost-intelligence.postgres.host" . }}
+          value: {{ include "argocd-cost-intelligence.postgres.host" . | quote }}
         - name: DB_PORT
-          value: "{{ .Values.postgres.service.port }}"
+          value: "{{ include "argocd-cost-intelligence.postgres.port" . }}"
         - name: DB_USER
           valueFrom:
             secretKeyRef:

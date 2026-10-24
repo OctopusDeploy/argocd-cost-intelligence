@@ -184,6 +184,24 @@
           "type": "boolean",
           "description": "Deploy the bundled PostgreSQL. false uses an external one."
         },
+        "host": {
+          "type": "string",
+          "description": "External PostgreSQL host name or IP, with enabled false. Empty uses postgres.<namespace.name>.svc.cluster.local."
+        },
+        "port": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            },
+            {
+              "type": "string",
+              "maxLength": 0
+            }
+          ],
+          "description": "External PostgreSQL port, with enabled false. Empty uses service.port."
+        },
         "replicaCount": {
           "type": "integer",
           "description": "Leave at 1: the bundled PostgreSQL is one instance on one volume.",

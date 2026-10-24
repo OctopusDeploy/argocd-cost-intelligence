@@ -60,6 +60,16 @@ These come from a test cluster with sample OpenCost data, in the Argo CD dark th
 
 </details>
 
+## Compared with the OpenCost UI
+
+ArgoCD Cost Intelligence gets its costs from OpenCost, and you can keep using the OpenCost UI alongside it.
+
+The OpenCost UI covers the whole cluster. It breaks cost down by Kubernetes objects, such as node, namespace, controller or pod, and you can build your own reports and dashboards there. Where OpenCost is set up for them, it also shows cloud bills, assets, external services and AI inference cost. For cloud services this project shows only the Infracost estimates your CI pushes, not the bills.
+
+ArgoCD Cost Intelligence works per Argo CD application. It counts only the controllers Argo CD manages for the application and measures it again at every sync, so the tab shows how much the last sync changed the cost. It also stores the cost of each day in PostgreSQL, for 400 days by default, so the history outlives OpenCost's own retention.
+
+Your Argo CD RBAC configuration controls who can see an application's cost and the cluster-wide page, and people sign in with the Argo CD login they already have. The optional Prometheus metrics are the exception, as anyone who can query that Prometheus sees every application's cost. The OpenCost UI doesn't come with a login of its own, so who can open it depends on how you expose it, for example with a port-forward or an ingress.
+
 ## Documentation
 
 The guides are also published at [argocd-cost-intelligence.readthedocs.io](https://argocd-cost-intelligence.readthedocs.io/).

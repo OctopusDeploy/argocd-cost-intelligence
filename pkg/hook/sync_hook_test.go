@@ -493,6 +493,68 @@ func TestOnApplicationSync_WithResources_MeasuresTheApplicationsOwnPods(t *testi
 	assert.InDelta(t, 270.0, saved.App.TotalMonthlyCost, 1e-9) // 9 * 30
 }
 
+// OpenCost rounds every allocation to five decimals on its own, so ten minutes of a namespace read
+// once (CPU 0.00263, memory 0.00035) and the same ten minutes read pod by pod (2 x CPU 0.00132,
+// memory 0.00018) differ by 0.00002, which projects onto a month by 4320 as $0.09. These are the
+// figures of a record whose application, the namespace's only one, cost $12.96 against its namespace's
+// $12.87.
+func TestOnApplicationSync_WithResources_RoundingNeverPutsTheShareAboveTheNamespace(t *testing.T) {
+	t.Parallel()
+
+	end := time.Now().Truncate(time.Minute)
+	start := end.Add(-10 * time.Minute)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path != "/allocation" {
+			http.NotFound(w, r)
+			return
+		}
+		allocations := map[string]opencost.AllocationData{
+			"podinfo": {Start: start, End: end, Minutes: 10, CPUCost: 0.00263, RAMCost: 0.00035, TotalCost: 0.00298},
+		}
+		if r.URL.Query().Get("aggregate") == "pod" {
+			allocations = map[string]opencost.AllocationData{}
+			for _, pod := range []string{"podinfo-55dd7c9466-vkv59", "podinfo-55dd7c9466-zs7pf"} {
+				allocations[pod] = opencost.AllocationData{
+					Start: start, End: end, Minutes: 10, CPUCost: 0.00132, RAMCost: 0.00018, TotalCost: 0.0015,
+					Properties: opencost.AllocationProperties{Pod: pod, Namespace: "podinfo", ControllerKind: "deployment", Controller: "podinfo"},
+				}
+			}
+		}
+		_ = json.NewEncoder(w).Encode(opencost.AllocationResponse{Code: 200, Data: []map[string]opencost.AllocationData{allocations}})
+	}))
+	defer srv.Close()
+
+	var saved *models.CostActual
+	store := &mockStorage{saveActualFn: func(_ context.Context, actual *models.CostActual) error { saved = actual; return nil }}
+
+	err := newTestHook(t, srv, store).OnApplicationSync(context.Background(), &models.SyncNotification{
+		ApplicationName:      "podinfo",
+		ApplicationNamespace: "argocd",
+		Namespace:            "podinfo",
+		SyncResult:           "Succeeded",
+		SyncTimestamp:        time.Now(),
+		Resources:            []models.ManagedResource{{Kind: "Deployment", Name: "podinfo", Namespace: "podinfo"}},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, saved)
+	require.NotNil(t, saved.App)
+
+	assert.LessOrEqual(t, saved.App.TotalMonthlyCost, saved.TotalMonthlyCost, "an application's share is part of its namespace")
+	assert.InDelta(t, saved.TotalMonthlyCost, saved.App.TotalMonthlyCost, 1e-9, "the namespace's only application is all of it")
+	for name, costs := range map[string]struct{ app, namespace float64 }{
+		"CPU":    {saved.App.OpenCostOutput.AllocationTotals.CPUCost, saved.OpenCostOutput.AllocationTotals.CPUCost},
+		"memory": {saved.App.OpenCostOutput.AllocationTotals.MemoryCost, saved.OpenCostOutput.AllocationTotals.MemoryCost},
+	} {
+		assert.LessOrEqual(t, costs.app, costs.namespace, name)
+	}
+	podsTotal := 0.0
+	for _, pod := range saved.Pods {
+		podsTotal += pod.TotalCost
+	}
+	assert.InDelta(t, saved.TotalMonthlyCost, podsTotal, 1e-9, "the namespace's pods add up to it")
+}
+
 func TestOnApplicationSync_WithResources_PodFailure_MeasuresNamespaceOnly(t *testing.T) {
 	t.Parallel()
 

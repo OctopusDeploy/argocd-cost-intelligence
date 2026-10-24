@@ -11,7 +11,7 @@ ArgoCD Cost Intelligence shows what each Argo CD application actually costs, in 
 
 ## Quick start
 
-Requires Argo CD 3.4 or 3.5 on a Kubernetes version it supports, OpenCost 1.121.1+ and Helm 3.8+ ([Limits and requirements](docs/limits-and-requirements.md)).
+Requires Argo CD 3.4, 3.5 or 3.6 on a Kubernetes version it supports, OpenCost 1.121.1+ and Helm 3.8+ ([Limits and requirements](docs/limits-and-requirements.md)).
 
 <!-- The release workflow fails a release tag that doesn't match the --version below. -->
 ```bash
@@ -24,7 +24,7 @@ helm install argocd-cost-intelligence \
   --wait --timeout 10m
 ```
 
-A post-install hook registers the extension and the notification webhook in Argo CD. If Git manages Argo CD itself, the hook's changes would be reverted: turn it off and follow [Install when Git manages Argo CD](docs/gitops-install.md) instead. On Argo CD 3.5 only the built-in `admin` role can see the tab at first; see [Grant access in Argo CD](docs/installation.md#grant-access-in-argo-cd) for other roles.
+A post-install hook registers the extension and the notification webhook in Argo CD. If Git manages Argo CD itself, the hook's changes would be reverted: turn it off and follow [Install when Git manages Argo CD](docs/gitops-install.md) instead. At first only the built-in `admin` role can see the tab; see [Grant access in Argo CD](docs/installation.md#grant-access-in-argo-cd) for other roles.
 
 Sync an application, wait a few seconds, and open its **Cost Intelligence** tab.
 

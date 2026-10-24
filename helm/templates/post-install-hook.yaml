@@ -181,7 +181,7 @@ spec:
             echo "argocd-notifications-cm not found in $ARGOCD_NAMESPACE: skipped notifications, so syncs will not be measured"
           fi
 
-          # Argo CD 3.5 denies extensions to everyone, admin included, until a policy allows them.
+          # Argo CD denies extensions to everyone, admin included, until a policy allows them.
           # It appends every policy.<name>.csv key to policy.csv, so this key is ours alone and
           # policy.csv is never touched.
           {{- if dig "rbac" "grantAdmin" true .Values.argoCd }}

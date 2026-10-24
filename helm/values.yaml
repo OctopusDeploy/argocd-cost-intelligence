@@ -184,7 +184,7 @@ argoCd:
 
   rbac:
     # Have the hook write policy.cost-intel.csv in argocd-rbac-cm, which lets role:admin open the
-    # extension. Argo CD 3.5 denies extensions to everyone until a policy allows them. The hook
+    # extension. Argo CD denies extensions to everyone until a policy allows them. The hook
     # never changes policy.csv. Set false to manage the rule yourself; the hook then removes the
     # key if it still holds what the hook wrote.
     grantAdmin: true

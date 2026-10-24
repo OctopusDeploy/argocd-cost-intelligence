@@ -8,7 +8,7 @@ The chart deploys the backend API, the UI plugin, a bundled PostgreSQL StatefulS
 
 ## Requirements
 
-Argo CD 3.4 or 3.5 on a Kubernetes version it supports, OpenCost 1.121.1+ reachable from the release namespace, Helm 3.8+. Argo CD and OpenCost run in the same cluster, and only the applications Argo CD deploys to that cluster are measured ([limits and requirements](https://github.com/OctopusDeploy/argocd-cost-intelligence/blob/main/docs/limits-and-requirements.md)). Details: [installation guide](https://github.com/OctopusDeploy/argocd-cost-intelligence/blob/main/docs/installation.md).
+Argo CD 3.4, 3.5 or 3.6 on a Kubernetes version it supports, OpenCost 1.121.1+ reachable from the release namespace, Helm 3.8+. Argo CD and OpenCost run in the same cluster, and only the applications Argo CD deploys to that cluster are measured ([limits and requirements](https://github.com/OctopusDeploy/argocd-cost-intelligence/blob/main/docs/limits-and-requirements.md)). Details: [installation guide](https://github.com/OctopusDeploy/argocd-cost-intelligence/blob/main/docs/installation.md).
 
 ## Install
 

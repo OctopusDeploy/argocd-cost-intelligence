@@ -28,7 +28,7 @@ A change is done when lint, typecheck, test and build all pass and `find src -na
 
 - Argo CD does not load a plugin by URL. `argocd-server` serves every file in `/tmp/extensions` as `/extensions.js`, and the bundle calls `window.extensionsAPI.registerAppViewExtension` / `registerSystemLevelExtension`.
 - With the chart, an init container added to `argocd-server` downloads `index.js` from the chart's UI service (`ui/Dockerfile`: `http-server` on port 3000) into that directory. The chart's post-install hook does this (`ui.autoRegister`).
-- React is not bundled. webpack maps `react` / `react-dom` to the `window.React` / `window.ReactDOM` that Argo CD sets: React 16.14 on Argo CD 3.4, React 19 on 3.5. Use only APIs React 16.14 has (no `useSyncExternalStore`, `useId`, `useTransition` or `react-dom/client`); ESLint rejects them. Keep `"jsx": "react"` in `tsconfig.json`.
+- React is not bundled. webpack maps `react` / `react-dom` to the `window.React` / `window.ReactDOM` that Argo CD sets: React 16.14 on Argo CD 3.4, React 19 on 3.5 and 3.6. Use only APIs React 16.14 has (no `useSyncExternalStore`, `useId`, `useTransition` or `react-dom/client`); ESLint rejects them. Keep `"jsx": "react"` in `tsconfig.json`.
 - The system-level extension is registered inside `setTimeout(0)` on purpose; the comment in `src/index.tsx` explains why.
 - API calls go to `/extensions/cost-intel/...`, Argo CD's extension proxy (`DEFAULT_BASE_URL` in `src/utils/api.ts`). There is no other endpoint to configure. App calls send the `Argocd-Application-Name` / `Argocd-Project-Name` headers; cluster-wide calls send the headers of the application named by `/config`'s `clusterScopeApp`. See the [authorization model](../docs/architecture.md#authorization).
 

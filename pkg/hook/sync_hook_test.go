@@ -186,7 +186,8 @@ func newOpenCostTestServerWithPodPeaks(t *testing.T, podPeaks bool) *httptest.Se
 								CPUCoreUsageAverage:   0.4,
 								RAMByteRequestAverage: 512 * 1024 * 1024,
 								RAMByteUsageAverage:   358 * 1024 * 1024,
-								Efficiency:            0.55,
+								CPUCost:               0.3,
+								RAMCost:               0.1,
 							},
 						},
 					}},
@@ -406,7 +407,7 @@ func TestOnApplicationSync_Success_StoresCostAndEfficiency(t *testing.T) {
 
 	require.NotNil(t, saved.Efficiency, "efficiency should be populated")
 	assert.InDelta(t, 0.4, saved.Efficiency.CPUEfficiency, 1e-9)
-	assert.InDelta(t, 0.55, saved.Efficiency.TotalEfficiency, 1e-9)
+	assert.InDelta(t, (0.4*0.3+358.0/512*0.1)/0.4, saved.Efficiency.TotalEfficiency, 1e-9) // weighted by cost
 	// OpenCost drops the peak from aggregated allocations, so the namespace's is its pods'.
 	assert.InDelta(t, 0.7, saved.Efficiency.CPUCoresUsedMax, 1e-9, "peak CPU should be the pods'")
 	assert.InDelta(t, float64(500*1024*1024), saved.Efficiency.RAMBytesUsedMax, 1e-9, "peak RAM should be the pods'")
@@ -954,7 +955,7 @@ func TestOnApplicationSync_PodFailure_IsNonFatal(t *testing.T) {
 				Data: opencost.SummaryAllocationResponseData{
 					Sets: []opencost.SummaryAllocationSet{{
 						Allocations: map[string]opencost.SummaryAllocationData{
-							"test-ns": {CPUCoreRequestAverage: 1, CPUCoreUsageAverage: 0.4, Efficiency: 0.55},
+							"test-ns": {CPUCoreRequestAverage: 1, CPUCoreUsageAverage: 0.4, CPUCost: 0.3},
 						},
 					}},
 				},

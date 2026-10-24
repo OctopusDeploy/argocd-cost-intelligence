@@ -114,6 +114,15 @@ type AllocationData struct {
 	RawAllocationOnly            *RawAllocationOnly        `json:"rawAllocationOnly,omitempty"`
 }
 
+// componentCost is what an allocation costs in the resources this service reports: CPU, GPU, memory,
+// storage, network and load balancers, the parts AllocationTotals.TotalCost adds up. OpenCost's own
+// totalCost is not used: it rounds every field to five decimals on its own, so once a short period is
+// projected onto a month it drifts from the sum of the parts shown beside it, and it carries shared
+// and external costs that no view shows.
+func (a AllocationData) componentCost() float64 {
+	return a.CPUCost + a.GPUCost + a.RAMCost + a.PVCost + a.NetworkCost + a.LoadBalancerCost
+}
+
 func (c *Client) logf(format string, args ...any) {
 	if c.logger != nil {
 		c.logger.Printf(format, args...)
@@ -244,7 +253,6 @@ type SummaryAllocationData struct {
 	RAMByteUsageAverage   float64   `json:"ramByteUsageAverage"`
 	RAMByteLimitAverage   float64   `json:"ramByteLimitAverage"`
 	RAMCost               float64   `json:"ramCost"`
-	Efficiency            float64   `json:"efficiency"`
 }
 
 func (c *Client) GetNamespaceSummary(ctx context.Context, namespace string) (*models.EfficiencyMetrics, error) {
@@ -558,8 +566,19 @@ func podEfficiency(resp AllocationResponse) *models.EfficiencyMetrics {
 		return nil
 	}
 
-	// Weighted by cost, as OpenCost weighs its own total efficiency. A resource the pods request none
-	// of has no efficiency, so it stays out of the total rather than counting as 0%.
+	setRequestEfficiency(&e, cpuCost, ramCost)
+
+	monthlyMultiplier := monthlyFactor(periodStart, periodEnd)
+	e.CPUIdleCost = cpuIdle * monthlyMultiplier
+	e.RAMIdleCost = ramIdle * monthlyMultiplier
+	return &e
+}
+
+// setRequestEfficiency sets how much of their CPU and memory requests pods use, from the requests and
+// usage already in e. The total is weighted by cost, as OpenCost weighs its own. A resource the pods
+// request none of has no efficiency, so it stays out of the total rather than counting as 0%, or as
+// 100% as OpenCost counts it; without any request the total is 0.
+func setRequestEfficiency(e *models.EfficiencyMetrics, cpuCost, ramCost float64) {
 	var weighted, weight float64
 	if e.CPUCoresRequested > 0 {
 		e.CPUEfficiency = e.CPUCoresUsed / e.CPUCoresRequested
@@ -574,11 +593,6 @@ func podEfficiency(resp AllocationResponse) *models.EfficiencyMetrics {
 	if weight > 0 {
 		e.TotalEfficiency = weighted / weight
 	}
-
-	monthlyMultiplier := monthlyFactor(periodStart, periodEnd)
-	e.CPUIdleCost = cpuIdle * monthlyMultiplier
-	e.RAMIdleCost = ramIdle * monthlyMultiplier
-	return &e
 }
 
 // unusedCost is the part of a cost paid for requested capacity that went unused.
@@ -682,11 +696,29 @@ func (c *Client) GetChargeback(ctx context.Context, labelKey, namespace string) 
 func parseChargebackEntries(alloc AllocationResponse, summary SummaryAllocationResponse) []models.ChargebackEntry {
 	monthlyMultiplier := monthlyFactor(measuredPeriod(alloc))
 
-	// Build efficiency map keyed by label value
-	effMap := make(map[string]float64)
+	// Efficiency by label value, measured as an application's is (setRequestEfficiency) rather than
+	// read from OpenCost, which counts pods that request nothing as 100% efficient.
+	type usageAgg struct {
+		e                models.EfficiencyMetrics
+		cpuCost, ramCost float64
+	}
+	usage := make(map[string]*usageAgg)
 	for _, set := range summary.Data.Sets {
 		for labelVal, a := range set.Allocations {
-			effMap[labelVal] = a.Efficiency
+			if isVirtualAllocation(labelVal) {
+				continue
+			}
+			u, ok := usage[labelVal]
+			if !ok {
+				u = &usageAgg{}
+				usage[labelVal] = u
+			}
+			u.e.CPUCoresRequested += a.CPUCoreRequestAverage
+			u.e.CPUCoresUsed += a.CPUCoreUsageAverage
+			u.e.RAMBytesRequested += a.RAMByteRequestAverage
+			u.e.RAMBytesUsed += a.RAMByteUsageAverage
+			u.cpuCost += a.CPUCost
+			u.ramCost += a.RAMCost
 		}
 	}
 
@@ -708,12 +740,19 @@ func parseChargebackEntries(alloc AllocationResponse, summary SummaryAllocationR
 			c.pv += a.PVCost
 			c.network += a.NetworkCost
 			c.lb += a.LoadBalancerCost
-			c.total += a.TotalCost
+			c.total += a.componentCost()
 		}
 	}
 
 	entries := make([]models.ChargebackEntry, 0, len(costs))
 	for labelVal, cost := range costs {
+		var efficiency float64
+		var noRequests bool
+		if u, ok := usage[labelVal]; ok {
+			setRequestEfficiency(&u.e, u.cpuCost, u.ramCost)
+			efficiency = u.e.TotalEfficiency
+			noRequests = u.e.CPUCoresRequested <= 0 && u.e.RAMBytesRequested <= 0
+		}
 		entries = append(entries, models.ChargebackEntry{
 			LabelValue:  labelVal,
 			CPUCost:     cost.cpu * monthlyMultiplier,
@@ -722,7 +761,8 @@ func parseChargebackEntries(alloc AllocationResponse, summary SummaryAllocationR
 			NetworkCost: cost.network * monthlyMultiplier,
 			LBCost:      cost.lb * monthlyMultiplier,
 			TotalCost:   cost.total * monthlyMultiplier,
-			Efficiency:  effMap[labelVal],
+			Efficiency:  efficiency,
+			NoRequests:  noRequests,
 		})
 	}
 
@@ -853,7 +893,7 @@ func parseOrphanedPods(resp AllocationResponse) []models.OrphanedPod {
 				continue
 			}
 			// Skip if no meaningful cost remains (pod fully wound down)
-			if alloc.TotalCost*monthlyMultiplier < minCostThreshold {
+			if alloc.componentCost()*monthlyMultiplier < minCostThreshold {
 				continue
 			}
 			// Skip OpenCost virtual entries like __idle__ or __unallocated__
@@ -878,7 +918,7 @@ func parseOrphanedPods(resp AllocationResponse) []models.OrphanedPod {
 				CPUCost:        alloc.CPUCost * monthlyMultiplier,
 				RAMCost:        alloc.RAMCost * monthlyMultiplier,
 				StorageCost:    alloc.PVCost * monthlyMultiplier,
-				TotalCost:      alloc.TotalCost * monthlyMultiplier,
+				TotalCost:      alloc.componentCost() * monthlyMultiplier,
 			})
 		}
 	}
@@ -995,13 +1035,10 @@ func parseDailyTimeSeries(resp AllocationResponse) []models.DailyCost {
 			totalMem += alloc.RAMCost
 			totalNetwork += alloc.NetworkCost
 			totalStorage += alloc.PVCost
-			totalCost += alloc.TotalCost
+			totalCost += alloc.componentCost()
 		}
 		if date == "" {
 			continue
-		}
-		if totalCost == 0 {
-			totalCost = totalCPU + totalMem + totalNetwork + totalStorage
 		}
 
 		dailyCosts = append(dailyCosts, models.DailyCost{
@@ -1034,7 +1071,7 @@ func parsePodBreakdown(resp AllocationResponse) []models.PodCost {
 			if existing, ok := podMap[name]; ok {
 				existing.CPUCost += alloc.CPUCost
 				existing.RAMCost += alloc.RAMCost
-				existing.TotalCost += alloc.TotalCost
+				existing.TotalCost += alloc.componentCost()
 			} else {
 				podMap[name] = &models.PodCost{
 					Name:           name,
@@ -1043,7 +1080,7 @@ func parsePodBreakdown(resp AllocationResponse) []models.PodCost {
 					ControllerKind: alloc.Properties.ControllerKind,
 					CPUCost:        alloc.CPUCost,
 					RAMCost:        alloc.RAMCost,
-					TotalCost:      alloc.TotalCost,
+					TotalCost:      alloc.componentCost(),
 				}
 			}
 		}
@@ -1091,7 +1128,8 @@ func parseSummaryResponse(resp SummaryAllocationResponse) *models.EfficiencyMetr
 			agg.RAMByteRequestAverage += alloc.RAMByteRequestAverage
 			agg.RAMByteUsageAverage += alloc.RAMByteUsageAverage
 			agg.RAMByteLimitAverage += alloc.RAMByteLimitAverage
-			agg.Efficiency += alloc.Efficiency
+			agg.CPUCost += alloc.CPUCost
+			agg.RAMCost += alloc.RAMCost
 			count++
 		}
 	}
@@ -1100,18 +1138,7 @@ func parseSummaryResponse(resp SummaryAllocationResponse) *models.EfficiencyMetr
 		return nil
 	}
 
-	var cpuEff, ramEff float64
-	if agg.CPUCoreRequestAverage > 0 {
-		cpuEff = agg.CPUCoreUsageAverage / agg.CPUCoreRequestAverage
-	}
-	if agg.RAMByteRequestAverage > 0 {
-		ramEff = agg.RAMByteUsageAverage / agg.RAMByteRequestAverage
-	}
-
-	return &models.EfficiencyMetrics{
-		CPUEfficiency:     cpuEff,
-		RAMEfficiency:     ramEff,
-		TotalEfficiency:   agg.Efficiency / float64(count),
+	e := &models.EfficiencyMetrics{
 		CPUCoresRequested: agg.CPUCoreRequestAverage,
 		CPUCoresUsed:      agg.CPUCoreUsageAverage,
 		RAMBytesRequested: agg.RAMByteRequestAverage,
@@ -1119,6 +1146,8 @@ func parseSummaryResponse(resp SummaryAllocationResponse) *models.EfficiencyMetr
 		CPUCoresLimit:     agg.CPUCoreLimitAverage,
 		RAMBytesLimit:     agg.RAMByteLimitAverage,
 	}
+	setRequestEfficiency(e, agg.CPUCost, agg.RAMCost)
+	return e
 }
 
 func parseOpenCostResponse(resp AllocationResponse, startTime, endTime time.Time) *models.OpenCostMetrics {

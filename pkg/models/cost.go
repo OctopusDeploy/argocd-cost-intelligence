@@ -264,7 +264,12 @@ type ChargebackEntry struct {
 	NetworkCost float64 `json:"networkCost"`
 	LBCost      float64 `json:"lbCost"`
 	TotalCost   float64 `json:"totalCost"`
-	Efficiency  float64 `json:"efficiency"`
+	// Efficiency is how much of their CPU and memory requests the label value's pods use, weighted
+	// by cost; 0 when not measured or when NoRequests.
+	Efficiency float64 `json:"efficiency"`
+	// NoRequests is set when the label value was measured and its pods request no CPU or memory, so
+	// it has no efficiency rather than an unmeasured one.
+	NoRequests bool `json:"noRequests,omitempty"`
 }
 
 type SyncNotification struct {

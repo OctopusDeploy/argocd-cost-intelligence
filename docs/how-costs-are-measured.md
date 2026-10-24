@@ -44,7 +44,7 @@ A **CPU request suggestion** appears when pods use less than half of their CPU r
 
 ![Resources: cost per controller and Vertical Pod Autoscaler rightsizing suggestions](images/resources.webp)
 
-The monthly cost per workload, with its CPU, memory, total and share of the total. Each workload expands to its pods.
+The monthly cost per workload, with its CPU, memory, total and share of the total. The total also counts the costs that have no column of their own, such as storage and network. Each workload expands to its pods.
 
 **Rightsizing** shows when a workload has a Vertical Pod Autoscaler ([setup](installation.md#optional-rightsizing)). Only a VPA in `Off` mode gives advice; one in any other mode sets requests itself and is shown as managed. A recommendation counts once the VPA has about a day of history; before that the workload shows "Not enough data yet". Suggestions are per container and priced with OpenCost's figures. They cover requests only, never limits.
 

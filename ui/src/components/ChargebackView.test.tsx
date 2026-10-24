@@ -216,6 +216,15 @@ describe('ChargebackView results', () => {
     expect(within(rows[2]).getByLabelText('30%, Over-provisioned')).toBeTruthy();
   });
 
+  it('reads a value whose pods request nothing as having no requests, not as efficient', () => {
+    withEntries([{ ...entry('batch', 400, 0), noRequests: true }, entry('jobs', 200, 0)]);
+    render(<ChargebackView namespaces={namespaces} />);
+
+    const rows = screen.getAllByRole('row');
+    expect(within(rows[1]).getByLabelText('No CPU or memory requests set').textContent).toBe('No request set');
+    expect(within(rows[2]).getByLabelText('Efficiency not measured')).toBeTruthy();
+  });
+
   it('sums the attributed cost and names the largest value', () => {
     const { container } = render(<ChargebackView namespaces={namespaces} />);
 

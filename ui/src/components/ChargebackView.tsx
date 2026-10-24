@@ -3,7 +3,7 @@ import { CardHeader } from './CardHeader';
 import { Chip } from './Chip';
 import { Share } from './ControllerCostTable';
 import { LEVEL_LABELS, levelIcon } from './EfficiencyCard';
-import { TagIcon } from './icons';
+import { InfoIcon, TagIcon } from './icons';
 import { ErrorNotice, Notice } from './Notice';
 import { StatStrip } from './StatStrip';
 import { useChargeback } from '../hooks/useChargeback';
@@ -356,7 +356,7 @@ const ChargebackTable: React.FC<TableProps> = ({ entries, totalCost, labelKey, l
                   <Share fraction={totalCost > 0 ? entry.totalCost / totalCost : 0} t={t} />
                 </span>
                 <span role="cell" style={numeric}>
-                  <Efficiency ratio={entry.efficiency} t={t} />
+                  <Efficiency ratio={entry.efficiency} noRequests={entry.noRequests} t={t} />
                 </span>
               </div>
             ))}
@@ -368,7 +368,20 @@ const ChargebackTable: React.FC<TableProps> = ({ entries, totalCost, labelKey, l
 };
 
 // Efficiency reads the same way here as it does on the namespace and application views.
-const Efficiency: React.FC<{ ratio: number; t: Tokens }> = ({ ratio, t }) => {
+const Efficiency: React.FC<{ ratio: number; noRequests?: boolean; t: Tokens }> = ({ ratio, noRequests, t }) => {
+  if (noRequests) {
+    return (
+      <span
+        aria-label="No CPU or memory requests set"
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px', color: t.textMuted }}
+      >
+        <span aria-hidden="true" style={{ display: 'flex' }}>
+          <InfoIcon color={t.textMuted} />
+        </span>
+        <span aria-hidden="true">No request set</span>
+      </span>
+    );
+  }
   if (!ratio || !Number.isFinite(ratio)) {
     return (
       <span aria-label="Efficiency not measured" style={{ color: t.textMuted }}>

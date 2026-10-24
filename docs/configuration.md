@@ -168,6 +168,8 @@ Every profile still needs the same `postgres.auth.*` and `namespace.create=false
 Set `postgres.enabled=false` to skip the bundled StatefulSet, PVC, Service and NetworkPolicy. Then provide `postgres.host`, `postgres.port` if it isn't 5432, `postgres.auth.existingSecret` (with `username` and `password`), `postgres.auth.database`, and `postgres.sslMode=require` or `verify-full`.
 
 ```yaml
+namespace:
+  create: false
 postgres:
   enabled: false
   host: cost-db.example.internal
@@ -178,9 +180,11 @@ postgres:
     database: cost_intelligence
 ```
 
-The Secret has to exist in the release namespace before you install. The host can be a Service in another namespace (`<service>.<namespace>.svc.cluster.local`), a managed database's endpoint or an IP. With `verify-full`, the server certificate has to match it. The service creates its tables when it starts, so the database user needs to be allowed to create tables in that database.
+The Secret has to exist in the chart's namespace (`namespace.name`) before you install. Create that namespace yourself and set `namespace.create=false`, or the install fails because the namespace already exists. [PostgreSQL credentials](#postgresql-credentials) has the commands.
 
-Without `postgres.host`, the chart connects to `postgres.<namespace.name>.svc.cluster.local`, so an ExternalName Service called `postgres` in the release namespace keeps working.
+The host can be a Service in another namespace (`<service>.<namespace>.svc.cluster.local`), a managed database's endpoint or an IP. With `verify-full`, the server certificate has to match it. The service creates its tables when it starts, so the database user needs to be allowed to create tables in that database.
+
+Without `postgres.host`, the chart connects to `postgres.<namespace.name>.svc.cluster.local`, so an ExternalName Service called `postgres` in the chart's namespace keeps working.
 
 ## Running without Helm
 

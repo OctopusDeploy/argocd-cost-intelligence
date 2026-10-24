@@ -58,7 +58,14 @@ export const CostActual: React.FC<CostActualProps> = ({
 
   if (loading && !data) return <Notice>Loading cost data…</Notice>;
   if (error) return <ErrorNotice message={error} />;
-  if (!data) return <Notice>No cost data yet. Sync the application in Argo CD to measure its costs.</Notice>;
+  if (!data) {
+    return (
+      <Notice>
+        No cost data yet. Cost Intelligence measures this application once OpenCost has a few minutes of data for
+        its namespace, and again after each sync. If nothing shows up, sync the application.
+      </Notice>
+    );
+  }
 
   // The backend measures the application's own pods. Records stored before it did measure the whole
   // deployment namespace: when the application shares it, the cost figures count only the pods its

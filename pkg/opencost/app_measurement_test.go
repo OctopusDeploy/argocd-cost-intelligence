@@ -67,6 +67,33 @@ func TestNamespace_MeasuresEveryPodAndWhatBelongsToNoPod(t *testing.T) {
 	assert.Less(t, app.TotalMonthlyCost, got.AllocationTotals.TotalCost)
 }
 
+func TestNamespace_UnmountedVolumesLeaveTheMeasuredPeriodToThePods(t *testing.T) {
+	t.Parallel()
+
+	// A namespace created ten minutes before the end of the window, as OpenCost answers for it: the
+	// pods from when they started, the claimed volume no pod mounts from the start of the window.
+	end := day.Add(24 * time.Hour)
+	pods := sharedNamespace()
+	for key, alloc := range pods.resp.Data[0] {
+		if !isVirtualAllocation(key) {
+			alloc.Start, alloc.Minutes = end.Add(-10*time.Minute), 10
+			pods.resp.Data[0][key] = alloc
+		}
+	}
+	pods.resp.Data[0]["argocd-unmounted-pvcs"] = AllocationData{
+		Start: day, End: end, PVCost: 0.001, TotalCost: 0.001,
+		Properties: AllocationProperties{Namespace: "argocd", Pod: "argocd-unmounted-pvcs", Container: "__unmounted__"},
+	}
+
+	got := pods.Namespace()
+
+	require.NotNil(t, got)
+	assert.InDelta(t, 10.0/60, got.MeasuredHours, 1e-9)
+	assert.InDelta(t, 0.001*4320, got.AllocationTotals.StorageCost, 1e-9, "the volume's cost still counts")
+	app := pods.ForApplication(redisResources)
+	assert.Less(t, app.TotalMonthlyCost, got.AllocationTotals.TotalCost)
+}
+
 func TestNamespace_NoMeasuredPeriod(t *testing.T) {
 	t.Parallel()
 

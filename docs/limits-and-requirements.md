@@ -6,14 +6,14 @@ What ArgoCD Cost Intelligence runs on and what it doesn't do, to check before yo
 
 | Component | Supported | Last tested with |
 |---|---|---|
-| Argo CD | 3.4 and 3.5 | 3.5.0 |
+| Argo CD | 3.4, 3.5 and 3.6 | 3.6.0-rc4 |
 | OpenCost | 1.121.1+ (the label picker on Chargeback needs 1.120.3+) | 1.121.3 |
-| Kubernetes | Any version Argo CD supports (Argo CD tests 3.4 on 1.32 to 1.35, and 3.5 on 1.33 to 1.36) | 1.31 (k3s) |
+| Kubernetes | Any version Argo CD supports (Argo CD tests 3.4 on 1.32 to 1.35, 3.5 on 1.33 to 1.36, and 3.6 on 1.34 to 1.37) | 1.31 (k3s) |
 | Helm | 3.8+ | 4.2.0 |
 | PostgreSQL | The bundled `postgres:15-alpine`, or an external instance | 15 |
 | Vertical Pod Autoscaler (optional) | A recommender serving `autoscaling.k8s.io/v1` | VPA 1.7.1, Goldilocks 4.16.2 |
 
-"Supported" means the versions the plugin is built for. "Last tested with" is the version we last ran it against. The UI runs on the React that Argo CD provides (16.14 on Argo CD 3.4, 19 on 3.5), so it only uses APIs that both have. Other versions may work too. If you try one, please tell us how it went.
+"Supported" means the versions the plugin is built for. "Last tested with" is the version we last ran it against. The UI runs on the React that Argo CD provides (16.14 on Argo CD 3.4, 19 on 3.5 and 3.6), so it only uses APIs that React 16.14 and 19 both have. Other versions may work too. If you try one, please tell us how it went.
 
 What the cluster needs besides these (permissions, a StorageClass, metrics-server, network access) is in [Prerequisites](installation.md#prerequisites).
 

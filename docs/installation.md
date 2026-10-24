@@ -37,7 +37,7 @@ The hook doesn't change Kubernetes RBAC for Argo CD. The webhook is sent only fo
 | You need | Notes |
 |---|---|
 | A Kubernetes cluster | Any cluster Argo CD supports. OpenCost measures only the cluster it runs in, so Cost Intelligence measures only the applications Argo CD deploys to this cluster. If Argo CD also manages other clusters, applications deployed there aren't measured, and their tab says so; see [Limits and requirements](limits-and-requirements.md#only-this-cluster-is-measured). |
-| Argo CD 3.4 or 3.5 | The plugin uses the proxy extension feature, which the hook turns on. `argocd-notifications-controller` must be running in `argoCd.namespace`. |
+| Argo CD 3.4, 3.5 or 3.6 | The plugin uses the proxy extension feature, which the hook turns on. `argocd-notifications-controller` must be running in `argoCd.namespace`. |
 | OpenCost 1.121.1 or later | The backend and exporter call it on port 9003. The default URL is `http://opencost.opencost:9003`. See [opencost.io/docs/install](https://www.opencost.io/docs/install). |
 | Helm 3.8 or later | The chart is published as an OCI artifact. |
 | Cluster-admin | The chart creates ClusterRoles, and the hook patches resources in the Argo CD namespace. |
@@ -124,7 +124,7 @@ Before you run it, know what the hook does to your existing configuration:
 
 ### Grant access in Argo CD
 
-Viewers need permission to invoke the extension, and `get` on an Application to see its tab (they usually have that already). On Argo CD 3.5 the extension is denied to everyone until a policy allows it, `admin` included. Without a rule the tab shows "401: Unauthorized extension request".
+Viewers need permission to invoke the extension, and `get` on an Application to see its tab (they usually have that already). On Argo CD 3.5 and later the extension is denied to everyone until a policy allows it, `admin` included. Without a rule the tab shows "401: Unauthorized extension request".
 
 The hook allows the built-in `admin` role. It writes this line to `policy.cost-intel.csv`, a key of its own in `argocd-rbac-cm`:
 

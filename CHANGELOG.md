@@ -7,6 +7,7 @@ All notable changes to this project are listed here. The format follows [Keep a 
 ### Added
 
 - `postgres.host` and `postgres.port` point the chart at a PostgreSQL you already run, with `postgres.enabled=false`, without an ExternalName Service. An ExternalName Service called `postgres` still works when `postgres.host` is empty.
+- Argo CD 3.6 in the list of supported versions. It was tested on 3.6.0-rc4 with a plain Helm install, with the chart as an Argo CD Application and with the GitOps guide on argo-helm.
 
 ## [0.1.0]
 

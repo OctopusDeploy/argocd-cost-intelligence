@@ -2,7 +2,7 @@
 
 This guide is for you if Argo CD itself is installed and configured from Git, for example with Argo CD managing its own Helm release or a Kustomize overlay. In that case the chart's install hook is the wrong tool. It changes Argo CD's ConfigMaps and the `argocd-server` Deployment with `kubectl patch`, and those changes live only in the cluster. They are lost when your Git sets the same key, and they don't come back when you rebuild Argo CD from Git. So you turn the hook off and put the same settings in your own Argo CD configuration.
 
-You need the [prerequisites in Installation](installation.md#prerequisites) first: Argo CD 3.4 or 3.5 with Argo CD Notifications, and OpenCost.
+You need the [prerequisites in Installation](installation.md#prerequisites) first: Argo CD 3.4, 3.5 or 3.6 with Argo CD Notifications, and OpenCost.
 
 Steps 1 and 2 are the same for every setup. Step 3 has one section for [Argo CD's Helm chart](#argo-cds-helm-chart) and one for [plain manifests or Kustomize](#plain-manifests-or-kustomize); follow only yours.
 
@@ -15,7 +15,7 @@ These are all the changes the hook makes to Argo CD. You'll add each of them to 
 | `argocd-server` Deployment | an init container and a volume at `/tmp/extensions` | Puts the plugin's JavaScript where `argocd-server` loads UI extensions from |
 | `argocd-cm` ConfigMap | `extension.config` | Tells Argo CD where to send the plugin's API calls |
 | `argocd-cmd-params-cm` ConfigMap | `server.enable.proxy.extension` | Turns on proxy extensions, which are off by default |
-| `argocd-rbac-cm` ConfigMap | `policy.cost-intel.csv` | Lets users open the plugin. On Argo CD 3.5 it is denied to everyone until a policy allows it |
+| `argocd-rbac-cm` ConfigMap | `policy.cost-intel.csv` | Lets users open the plugin. On Argo CD 3.5 and later it is denied to everyone until a policy allows it |
 | `argocd-notifications-cm` ConfigMap | `service.webhook.cost-intel`, `trigger.cost-intel-on-sync-succeeded`, `template.cost-intel-sync-succeeded`, `subscriptions` | Calls Cost Intelligence after each successful sync, which is when costs are recorded |
 | `argocd-notifications-secret` Secret | `cost-intel-webhook-token` | The token the webhook sends, so Cost Intelligence accepts the call |
 
@@ -121,7 +121,7 @@ Pick the section that matches how you install Argo CD:
 - [Argo CD's Helm chart](#argo-cds-helm-chart), the `argo-cd` chart from argo-helm
 - [Plain manifests or Kustomize](#plain-manifests-or-kustomize), Argo CD's `install.yaml` with your own patches
 
-Both were checked against Argo CD v3.5.5 and version 10.10.5 of the `argo-cd` Helm chart.
+Both were checked against Argo CD v3.5.5 and version 10.10.5 of the `argo-cd` Helm chart. The Helm chart section was also checked against Argo CD v3.6.0-rc4, using version 10.11.1 of the chart with `global.image.tag` set to `v3.6.0-rc4`.
 
 ### Argo CD's Helm chart
 

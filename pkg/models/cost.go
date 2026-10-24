@@ -260,6 +260,7 @@ type ChargebackEntry struct {
 	LabelValue  string  `json:"labelValue"`
 	CPUCost     float64 `json:"cpuCost"`
 	RAMCost     float64 `json:"ramCost"`
+	GPUCost     float64 `json:"gpuCost"`
 	StorageCost float64 `json:"storageCost"`
 	NetworkCost float64 `json:"networkCost"`
 	LBCost      float64 `json:"lbCost"`

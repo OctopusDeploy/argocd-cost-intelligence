@@ -21,10 +21,12 @@ const DEFAULT_LABEL = 'team';
 // Typing a label key queries as you go; this is how long the field waits for you to stop.
 const DEBOUNCE_MS = 400;
 
-// Label value, CPU, memory, storage, network, total, share, efficiency, then a spacer. The value
-// grows to 480px and the spacer takes any width beyond that (see NAME_COLUMN).
-const COLUMNS = `${NAME_COLUMN} 96px 96px 96px 96px 112px 124px 152px ${SPACER_COLUMN}`;
-const MIN_TABLE_WIDTH = '932px';
+// Label value, CPU, memory, storage, network, GPU when any value has GPU cost, total, share,
+// efficiency, then a spacer. The value grows to 480px and the spacer takes any width beyond that
+// (see NAME_COLUMN). The minimum width is the value's minimum plus the fixed columns.
+const columns = (gpu: boolean) =>
+  `${NAME_COLUMN} 96px 96px 96px 96px ${gpu ? '96px ' : ''}112px 124px 152px ${SPACER_COLUMN}`;
+const minTableWidth = (gpu: boolean) => (gpu ? '1028px' : '932px');
 
 const LABEL_INPUT_ID = 'cost-intel-chargeback-label';
 const LABEL_LIST_ID = 'cost-intel-chargeback-label-keys';
@@ -264,10 +266,13 @@ interface TableProps {
 
 const ChargebackTable: React.FC<TableProps> = ({ entries, totalCost, labelKey, loading }) => {
   const t = useTokens();
+  // GPU gets a column only when a value has GPU cost, as on the cost breakdown, so the columns
+  // beside each total still add up to it.
+  const gpu = entries.some(entry => (entry.gpuCost ?? 0) > 0);
 
   const row: React.CSSProperties = {
     display: 'grid',
-    gridTemplateColumns: COLUMNS,
+    gridTemplateColumns: columns(gpu),
     alignItems: 'center',
     color: t.text,
     fontSize: '13px',
@@ -286,7 +291,7 @@ const ChargebackTable: React.FC<TableProps> = ({ entries, totalCost, labelKey, l
       />
 
       <div style={{ overflowX: 'auto' }}>
-        <div role="table" aria-labelledby={TITLE_ID} style={{ minWidth: MIN_TABLE_WIDTH }}>
+        <div role="table" aria-labelledby={TITLE_ID} style={{ minWidth: minTableWidth(gpu) }}>
           <div role="rowgroup">
             <div
               role="row"
@@ -315,6 +320,11 @@ const ChargebackTable: React.FC<TableProps> = ({ entries, totalCost, labelKey, l
               <span role="columnheader" style={numeric}>
                 Network
               </span>
+              {gpu && (
+                <span role="columnheader" style={numeric}>
+                  GPU
+                </span>
+              )}
               <span role="columnheader" style={numeric}>
                 Total
               </span>
@@ -349,6 +359,11 @@ const ChargebackTable: React.FC<TableProps> = ({ entries, totalCost, labelKey, l
                 <span role="cell" style={numeric}>
                   {formatMoney(entry.networkCost + entry.lbCost)}
                 </span>
+                {gpu && (
+                  <span role="cell" style={numeric}>
+                    {formatMoney(entry.gpuCost ?? 0)}
+                  </span>
+                )}
                 <span role="cell" style={{ ...numeric, color: t.textStrong, fontWeight: 500 }}>
                   {formatMoney(entry.totalCost)}
                 </span>

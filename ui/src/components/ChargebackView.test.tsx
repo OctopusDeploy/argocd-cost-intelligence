@@ -216,6 +216,26 @@ describe('ChargebackView results', () => {
     expect(within(rows[2]).getByLabelText('30%, Over-provisioned')).toBeTruthy();
   });
 
+  it('shows no GPU column when no value has GPU cost', () => {
+    render(<ChargebackView namespaces={namespaces} />);
+
+    expect(screen.queryByRole('columnheader', { name: 'GPU' })).toBeNull();
+  });
+
+  it('adds a GPU column when a value has GPU cost, so the columns still add up to the total', () => {
+    withEntries([{ ...entry('ml', 1000, 0.5), cpuCost: 300, gpuCost: 300 }, entry('web', 200, 0.5)]);
+    render(<ChargebackView namespaces={namespaces} />);
+
+    expect(screen.getByRole('columnheader', { name: 'GPU' })).toBeTruthy();
+    const rows = screen.getAllByRole('row');
+    const ml = within(rows[1]).getAllByRole('cell').map(cell => cell.textContent);
+    // CPU, memory, storage, network (plus load balancers), GPU, total.
+    expect(ml.slice(0, 6)).toEqual(['$300.00', '$300.00', '$50.00', '$50.00', '$300.00', '$1,000.00']);
+    const amount = (text: string | null) => Number((text ?? '').replace(/[$,]/g, ''));
+    expect(ml.slice(0, 5).reduce((sum, text) => sum + amount(text), 0)).toBe(amount(ml[5]));
+    expect(within(rows[2]).getAllByRole('cell')[4].textContent).toBe('$0.00');
+  });
+
   it('reads a value whose pods request nothing as having no requests, not as efficient', () => {
     withEntries([{ ...entry('batch', 400, 0), noRequests: true }, entry('jobs', 200, 0)]);
     render(<ChargebackView namespaces={namespaces} />);

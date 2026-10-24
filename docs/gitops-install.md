@@ -458,3 +458,10 @@ Then open any Application in the Argo CD UI. It has a **Cost Intelligence** tab.
 To upgrade, change `targetRevision` in the Cost Intelligence Application. With the installer, change the version in its two URLs as well. Your Argo CD configuration doesn't change otherwise.
 
 To uninstall, remove every key and block you added in step 3, then delete the Cost Intelligence Application. Its finalizer makes Argo CD delete everything the chart installed. Then delete the `argocd-cost-intel` namespace, which also removes the Secrets from step 1 and the database, so back the database up first if you need its history.
+
+Argo CD doesn't delete the webhook token from `argocd-notifications-secret` for you. The Argo CD chart writes it as `stringData`, which only adds and updates keys, so removing it from your values leaves it in the Secret. With plain manifests you added it with `kubectl`, so nothing in Git owns it. Once the notifications entries are gone from your Argo CD configuration and synced, and the token is out of your secret tool if you use one, delete the key. The command fails if the key is already gone, so skip it then:
+
+```bash
+kubectl patch secret argocd-notifications-secret -n argocd \
+  --type json -p '[{"op":"remove","path":"/data/cost-intel-webhook-token"}]'
+```

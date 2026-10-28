@@ -13,6 +13,7 @@ keywords:
   - opencost
 
 home: https://argocd-cost-intelligence.readthedocs.io/
+icon: https://raw.githubusercontent.com/OctopusDeploy/argocd-cost-intelligence/main/docs/assets/octoicon.svg
 sources:
   - https://github.com/OctopusDeploy/argocd-cost-intelligence
 

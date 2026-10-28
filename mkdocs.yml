@@ -3,7 +3,7 @@ site_description: The actual cost of each Argo CD application, measured with Ope
 site_url: !ENV [READTHEDOCS_CANONICAL_URL, https://argocd-cost-intelligence.readthedocs.io/en/latest/]
 repo_url: https://github.com/OctopusDeploy/argocd-cost-intelligence
 edit_uri: edit/main/docs/
-copyright: Maintained by <a href="https://octopus.com">Octopus Deploy</a> · Licensed under <a href="https://github.com/OctopusDeploy/argocd-cost-intelligence/blob/main/LICENSE">Apache-2.0</a>
+copyright: Maintained by <a href="https://octopus.com">Octopus Deploy</a> · Licensed under <a href="https://github.com/OctopusDeploy/argocd-cost-intelligence/blob/main/LICENSE">Apache-2.0</a><br>Argo, OpenCost and Kubernetes are trademarks of The Linux Foundation. Octopus Deploy is a trademark of Octopus Deploy.
 
 # The home page is the README, the Roadmap and Security pages are ROADMAP.md and SECURITY.md,
 # and links to other files outside docs/ point at GitHub; see scripts/mkdocs_hooks.py.

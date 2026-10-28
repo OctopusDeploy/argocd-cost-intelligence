@@ -95,3 +95,5 @@ Issues and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) fi
 ## License
 
 Licensed under the [Apache License, Version 2.0](LICENSE).
+
+Argo, OpenCost and Kubernetes are registered trademarks of The Linux Foundation in the United States and/or other countries. Octopus Deploy and its logo are trademarks of Octopus Deploy. See [GOVERNANCE.md](GOVERNANCE.md#trademarks).

@@ -2,7 +2,7 @@
 
 ## Sponsor
 
-ArgoCD Cost Intelligence is sponsored by [Octopus Deploy](https://octopus.com). Octopus Deploy owns the GitHub repository, the project's name and the infrastructure that builds and publishes releases, and it pays for the time of the maintainers it employs. The project is not part of the Argo project, the CNCF or OpenCost.
+ArgoCD Cost Intelligence is sponsored by [Octopus Deploy](https://octopus.com). Octopus Deploy owns the GitHub repository and the infrastructure that builds and publishes releases, and it pays for the time of the maintainers it employs. The project is not part of the Argo project, the CNCF or OpenCost.
 
 ## Roles
 
@@ -25,3 +25,9 @@ A maintainer nominates the contributor in an issue, and the contributor becomes 
 ## Stepping down
 
 A maintainer can step down at any time by opening a pull request that removes them from [MAINTAINERS.md](MAINTAINERS.md).
+
+## Trademarks
+
+Argo, OpenCost and Kubernetes are registered trademarks of The Linux Foundation in the United States and/or other countries. The project uses them only to name the software it works with.
+
+Octopus Deploy and its logo are trademarks of Octopus Deploy. The Apache License doesn't grant any right to use them, so a fork must take them out of its plugin and docs, other than to name where the code came from.

@@ -30,4 +30,4 @@ A maintainer can step down at any time by opening a pull request that removes th
 
 Argo, OpenCost and Kubernetes are registered trademarks of The Linux Foundation in the United States and/or other countries. The project uses them only to name the software it works with.
 
-Octopus Deploy and its logo are trademarks of Octopus Deploy. The Apache License doesn't grant any right to use them, so a fork must take them out of its plugin and docs, other than to name where the code came from.
+Octopus Deploy and its logo are trademarks of Octopus Deploy. The Apache License doesn't grant permission to use them beyond naming where the code came from, so a fork should use its own name and logo.

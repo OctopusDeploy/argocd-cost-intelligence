@@ -53,6 +53,7 @@ nav:
   - Development: development.md
   - Roadmap: roadmap.md
   - Security: security.md
+  - Contributors: contributors/index.html
 
 theme:
   name: material

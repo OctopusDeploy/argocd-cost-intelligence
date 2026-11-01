@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - uses: ppapapetrou76/oss-chronicle@01e30bd99d105a4d02ba5b96c2dab1d42055796a  # main, two commits after v0.1.0
+      - uses: ppapapetrou76/oss-chronicle@137b333ec4085f0282a31b83ac4dd581862ca92f  # v0.1.1
 
   propose:
     name: Contributors page — pull request

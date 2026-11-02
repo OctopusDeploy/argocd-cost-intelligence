@@ -191,9 +191,9 @@ kubectl port-forward svc/argocd-cost-intelligence 18080:8080 -n argocd-cost-inte
 curl -s http://localhost:18080/health      # {"status":"ok"}
 ```
 
-Then open any Application in Argo CD. It has a **Cost Intelligence** tab. When the backend starts, it measures every application that has no cost yet, so most tabs show a cost within a few minutes, marked "Measured at install". If OpenCost has no data yet for an application's namespace, or doesn't answer, the backend tries again for about a quarter of an hour; after that the tab stays empty until the application's next successful sync.
+Then open any Application in Argo CD. It has a **Cost Intelligence** tab. When the backend starts, it measures every application that has no cost yet, so most tabs show a cost within a few minutes. It's marked "Measured at install", or just "Measured" if Argo CD Notifications reported the application's last sync first. If OpenCost has no data yet for an application's namespace, or doesn't answer, the backend tries again for about a quarter of an hour; after that the tab stays empty until the application's next successful sync.
 
-Each sync measures the application again: Argo CD Notifications calls the webhook, the backend waits 5 seconds, asks OpenCost and stores the result, and the tab shows it within the UI's 30-second refresh. A new application takes a few minutes longer: its first sync creates its namespace, which OpenCost has no data for yet, so the backend measures it again after 1, 2, 4 and 8 minutes.
+Each sync measures the application again: Argo CD Notifications calls the webhook, the backend waits 5 seconds, asks OpenCost and stores the result, and the tab shows it within the UI's 30-second refresh. A new application can take up to about a quarter of an hour: its first sync creates its namespace, which OpenCost has no data for yet, so the backend measures it again after 1, 2, 4 and 8 minutes.
 
 ## Optional: rightsizing
 

@@ -26,7 +26,7 @@ helm install argocd-cost-intelligence \
 
 A post-install hook registers the extension and the notification webhook in Argo CD. If Git manages Argo CD itself, the hook's changes would be reverted: turn it off and follow [Install when Git manages Argo CD](docs/gitops-install.md) instead. At first only the built-in `admin` role can see the tab; see [Grant access in Argo CD](docs/installation.md#grant-access-in-argo-cd) for other roles.
 
-Sync an application, wait a few seconds, and open its **Cost Intelligence** tab.
+Sync an application and open its **Cost Intelligence** tab. The cost shows within about half a minute. A new application can take up to about a quarter of an hour, as OpenCost needs a few minutes of data for the namespace its first sync creates.
 
 Next: the [installation guide](docs/installation.md) for the OpenCost URL, cluster-wide costs and upgrades, and [configuration](docs/configuration.md) for every setting.
 

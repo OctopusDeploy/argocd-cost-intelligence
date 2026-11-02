@@ -398,14 +398,17 @@ The changes depend on how you install Argo CD. The versions they were checked ag
 
 The [Argo CD extension installer](https://github.com/argoproj-labs/argocd-extension-installer) can download the plugin in place of the init container above, and checks its checksum.
 
-??? note "Set up the installer"
+<details class="note" markdown="1">
+<summary>Set up the installer</summary>
 
-    The installer needs access to GitHub, or to wherever you host the files. With the Argo CD chart it runs from `server.extensions`; with plain manifests it replaces the init container in `cost-intel-argocd-server.yaml`, with `EXTENSIONS_DIR` set to `/tmp/extensions` (see its README) and Argo CD's `tmp` volume mounted at `/tmp`, where it downloads. Set `EXTENSION_URL` and `EXTENSION_CHECKSUM_URL` to the archive and the checksum file each release attaches:
+The installer needs access to GitHub, or to wherever you host the files. With the Argo CD chart it runs from `server.extensions`; with plain manifests it replaces the init container in `cost-intel-argocd-server.yaml`, with `EXTENSIONS_DIR` set to `/tmp/extensions` (see its README) and Argo CD's `tmp` volume mounted at `/tmp`, where it downloads. Set `EXTENSION_URL` and `EXTENSION_CHECKSUM_URL` to the archive and the checksum file each release attaches:
 
-    - `https://github.com/OctopusDeploy/argocd-cost-intelligence/releases/download/v<chart-version>/extension.tar.gz`
-    - `https://github.com/OctopusDeploy/argocd-cost-intelligence/releases/download/v<chart-version>/extension_checksums.txt`
+- `https://github.com/OctopusDeploy/argocd-cost-intelligence/releases/download/v<chart-version>/extension.tar.gz`
+- `https://github.com/OctopusDeploy/argocd-cost-intelligence/releases/download/v<chart-version>/extension_checksums.txt`
 
-    Set `IGNORE_FAILURE` to `"true"`. Without it, a failed download keeps `argocd-server`, and so the whole Argo CD UI, from starting. If the hook has run on this Argo CD before, its init container has the same name as the installer's, so remove what it added to `argocd-server` first. Run only step 5 of [Uninstall](installation.md#uninstall), and only before you sync the installer in: afterwards it would also remove the `/tmp/extensions` mount the installer needs.
+Set `IGNORE_FAILURE` to `"true"`. Without it, a failed download keeps `argocd-server`, and so the whole Argo CD UI, from starting. If the hook has run on this Argo CD before, its init container has the same name as the installer's, so remove what it added to `argocd-server` first. Run only step 5 of [Uninstall](installation.md#uninstall), and only before you sync the installer in: afterwards it would also remove the `/tmp/extensions` mount the installer needs.
+
+</details>
 
 ## Check that it works
 

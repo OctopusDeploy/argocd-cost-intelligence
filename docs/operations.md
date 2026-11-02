@@ -43,6 +43,14 @@ Then run the command from [Upgrade](installation.md#upgrade) with the version yo
 
 With `--atomic` (`--rollback-on-failure` in Helm 4), Helm uninstalls the release instead, so install it again once the pods can start.
 
+### Helm 4 upgrade of Argo CD fails with a `kubectl-patch` conflict
+
+This applies when [Git manages Argo CD](gitops-install.md) through Argo CD's Helm chart. If the hook has run on this Argo CD before and you upgrade Argo CD's release yourself with Helm 4, after installing it with Helm 4, the upgrade can fail with `conflict with "kubectl-patch"` on `extension.config`, `subscriptions` or another key from [What you'll add](gitops-install.md#what-youll-add).
+
+Helm 4 upgrades a release it installed with server-side apply, which won't overwrite a value another tool set, and the hook set these with `kubectl patch`. Run the upgrade again with `--force-conflicts`, so Helm takes those values over.
+
+Argo CD syncing its own release doesn't stop on this: its server-side apply always forces conflicts, and client-side apply doesn't check them.
+
 ### "Cluster-wide costs are turned off"
 
 No Application gates them. The service logs why when it starts, in a line beginning `Cluster-wide cost data`. Either `costIntelligence.clusterScopeApp` is `off`, or the service found neither the Argo CD Application that installed it nor the chart's `cost-intelligence-access` Application. The second happens when:

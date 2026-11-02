@@ -15,6 +15,8 @@ What ArgoCD Cost Intelligence runs on and what it doesn't do, to check before yo
 
 "Supported" means the versions the plugin is built for. "Last tested with" is the version we last ran it against. The UI runs on the React that Argo CD provides (16.14 on Argo CD 3.4, 19 on 3.5 and 3.6), so it only uses APIs that React 16.14 and 19 both have. Other versions may work too. If you try one, please tell us how it went.
 
+Both setups in [Step 3 of Install when Git manages Argo CD](gitops-install.md#step-3-change-argo-cd) were checked against Argo CD v3.5.5 and version 10.10.5 of the `argo-cd` Helm chart. The Helm chart setup was also checked against Argo CD v3.6.0-rc4, using version 10.11.1 of the chart with `global.image.tag` set to `v3.6.0-rc4`.
+
 What the cluster needs besides these (permissions, a StorageClass, metrics-server, network access) is in [Prerequisites](installation.md#prerequisites).
 
 ## Limitations

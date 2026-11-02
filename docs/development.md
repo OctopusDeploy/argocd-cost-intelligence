@@ -88,7 +88,7 @@ Follow the backend log while you reproduce the problem: `docker compose logs -f 
 | `Sync failed or unknown state ... skipping` | The webhook's `syncResult` wasn't `Succeeded`. |
 | `failed to query OpenCost` | OpenCost, or the mock, can't be reached. |
 | `failed to save actual costs` | The database can't be reached. |
-| The namespace has a cost but the application shows zero | The webhook's `resources` don't own any pod OpenCost reports. Outside a cluster the mock only knows a fixed set of pods, such as those of the `nginx` Deployment in `default`. |
+| The namespace has a cost but the application shows zero | The webhook's `resources` don't own any pod OpenCost reports. Outside a cluster the mock only knows a fixed set of pods, such as those of the `nginx` Deployment in `default`. With a real OpenCost, check that Prometheus scrapes it; see [Costs show $0 or "no data"](operations.md#costs-show-0-or-no-data). |
 | `OpenCost has no data for namespace ... yet` | OpenCost has less than five minutes of data for the namespace, or no cost for it yet, so nothing is recorded. The service measures it again after 1, 2, 4 and 8 minutes. |
 | A sync in Argo CD records nothing | Check that the chart's hook set up Notifications: `kubectl get cm argocd-notifications-cm -n argocd -o yaml` should list a `cost-intel` trigger and template. |
 

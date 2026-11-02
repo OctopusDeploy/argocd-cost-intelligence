@@ -38,7 +38,7 @@ The hook doesn't change Kubernetes RBAC for Argo CD. The webhook is sent only fo
 |---|---|
 | A Kubernetes cluster | Any cluster Argo CD supports. OpenCost measures only the cluster it runs in, so Cost Intelligence measures only the applications Argo CD deploys to this cluster. If Argo CD also manages other clusters, applications deployed there aren't measured, and their tab says so; see [Limits and requirements](limits-and-requirements.md#only-this-cluster-is-measured). |
 | Argo CD 3.4, 3.5 or 3.6 | The plugin uses the proxy extension feature, which the hook turns on. `argocd-notifications-controller` must be running in `argoCd.namespace`. |
-| OpenCost 1.121.1 or later | The backend and exporter call it on port 9003. The default URL is `http://opencost.opencost:9003`. See [opencost.io/docs/install](https://www.opencost.io/docs/install). |
+| OpenCost 1.121.1 or later | The backend and exporter call it on port 9003. The default URL is `http://opencost.opencost:9003`. See [OpenCost's install guide](https://www.opencost.io/docs/installation/install). The Prometheus OpenCost reads must scrape OpenCost itself, as [OpenCost's Prometheus guide](https://www.opencost.io/docs/installation/prometheus) sets up, or applications can show $0 next to their namespace's cost. |
 | Helm 3.8 or later | The chart is published as an OCI artifact. |
 | Cluster-admin | The chart creates ClusterRoles, and the hook patches resources in the Argo CD namespace. |
 | A default StorageClass | The bundled PostgreSQL claims a 20 GiB PVC. Without a default class, set `postgres.persistence.storageClassName`. |

@@ -29,15 +29,12 @@ markdown_extensions:
 - footnotes
 - md_in_html
 - tables
-- pymdownx.details
 - pymdownx.highlight
 - pymdownx.superfences:
     custom_fences:
     - name: mermaid
       class: mermaid
       format: !!python/name:pymdownx.superfences.fence_code_format
-- pymdownx.tabbed:
-    alternate_style: true
 - toc:
     permalink: true
 

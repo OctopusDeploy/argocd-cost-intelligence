@@ -114,30 +114,247 @@ You should see the backend, the exporter, the UI and `postgres-0`, all `Running`
 
 ## Step 3: Change Argo CD
 
-The changes depend on how you install Argo CD. The versions they were checked against are in [Compatibility](limits-and-requirements.md#compatibility).
+The changes depend on how you install Argo CD, so open the setup that matches yours. The versions they were checked against are in [Compatibility](limits-and-requirements.md#compatibility).
 
-=== "Argo CD's Helm chart"
+<details class="note" markdown="1">
+<summary>Argo CD's Helm chart</summary>
 
-    For the `argo-cd` chart from argo-helm. Add these values to the values file of your Argo CD release. Each block below is one part of the table at the top. If your values already set one of these keys, merge the two, as explained after the YAML.
+For the `argo-cd` chart from argo-helm. Add these values to the values file of your Argo CD release. Each block below is one part of the table at the top. If your values already set one of these keys, merge the two, as explained after the YAML.
 
-    ```yaml
-    configs:
-      cm:
-        extension.config: |
-          extensions:
-          - name: cost-intel
-            backend:
-              services:
-              - url: http://argocd-cost-intelligence.argocd-cost-intel.svc.cluster.local:8080
+```yaml
+configs:
+  cm:
+    extension.config: |
+      extensions:
+      - name: cost-intel
+        backend:
+          services:
+          - url: http://argocd-cost-intelligence.argocd-cost-intel.svc.cluster.local:8080
 
-      params:
-        server.enable.proxy.extension: true
+  params:
+    server.enable.proxy.extension: true
 
-      rbac:
-        policy.cost-intel.csv: |
-          p, role:admin, extensions, invoke, cost-intel, allow
+  rbac:
+    policy.cost-intel.csv: |
+      p, role:admin, extensions, invoke, cost-intel, allow
 
-    server:
+server:
+  initContainers:
+  - name: cost-intel-extension
+    image: busybox:1.37.0
+    command:
+    - sh
+    - -c
+    - >-
+      for i in 1 2 3 4 5; do
+      wget -q -T 10 -O /ext/extension-cost-intel.js
+      http://argocd-cost-intelligence-ui.argocd-cost-intel.svc.cluster.local:3000/index.js
+      && echo OK && exit 0; sleep 10; done;
+      echo "Warning: extension download failed"; exit 0
+    securityContext:
+      runAsUser: 1000
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop: [ALL]
+    volumeMounts:
+    - name: cost-intel-ext-js
+      mountPath: /ext
+  volumes:
+  - name: cost-intel-ext-js
+    emptyDir: {}
+  volumeMounts:
+  - name: cost-intel-ext-js
+    mountPath: /tmp/extensions
+
+notifications:
+  notifiers:
+    service.webhook.cost-intel: |
+      url: http://argocd-cost-intelligence.argocd-cost-intel.svc.cluster.local:8080/api/cost-analysis/on-sync
+      headers:
+      - name: Content-Type
+        value: application/json
+      - name: Authorization
+        value: Bearer $cost-intel-webhook-token
+
+  triggers:
+    trigger.cost-intel-on-sync-succeeded: |
+      - when: app.status.operationState.phase in ["Succeeded"] and app.status.operationState.finishedAt != ""
+        oncePer: app.status.operationState.finishedAt
+        send: [cost-intel-sync-succeeded]
+
+  templates:
+    template.cost-intel-sync-succeeded: |
+      webhook:
+        cost-intel:
+          method: POST
+          headers:
+          - name: Content-Type
+            value: application/json
+          body: |
+            {
+              "applicationName": "{{.app.metadata.name}}",
+              "applicationNamespace": "{{.app.metadata.namespace}}",
+              "namespace": "{{.app.spec.destination.namespace}}",
+              "destinationServer": "{{with .app.spec.destination.server}}{{.}}{{end}}",
+              "destinationName": "{{with .app.spec.destination.name}}{{.}}{{end}}",
+              "resources": [{{range $i, $r := .app.status.resources}}{{if $i}}, {{end}}{"kind": "{{$r.kind}}", "name": "{{$r.name}}", "namespace": "{{with index $r "namespace"}}{{.}}{{end}}"}{{end}}],
+              "syncTimestamp": "{{.app.status.operationState.finishedAt}}",
+              "syncResult": "Succeeded"
+            }
+
+  subscriptions:
+    - recipients:
+      - cost-intel
+      triggers:
+      - cost-intel-on-sync-succeeded
+```
+
+A few things to check in your existing values:
+
+- `configs.cm.extension.config` holds every proxy extension. If you already have one, add the `cost-intel` entry to its `extensions:` list instead of replacing the key.
+- `notifications.subscriptions` is one list for all of Argo CD Notifications. Add the entry above to the list you have.
+- Give other roles access with more lines in `policy.cost-intel.csv`, for example `p, role:cost-viewer, extensions, invoke, cost-intel, allow`. They also need `get` on an Application to see its tab, which they usually have already.
+- The template above uses `{{ }}` on purpose. Argo CD Notifications fills them in when it sends the webhook, and the Argo CD chart passes these values through unchanged. If your own tooling runs the values file through a template engine first, escape them for that tool.
+- `server.extensions` in the same chart runs the [Argo CD extension installer](#use-the-argo-cd-extension-installer-instead) instead of the init container above. Use one or the other.
+
+The token goes into `argocd-notifications-secret`. The chart creates that Secret and fills it from `notifications.secret.items`. If you install the Argo CD chart with Helm, you can put the token there in a values file you don't commit:
+
+```yaml
+notifications:
+  secret:
+    items:
+      cost-intel-webhook-token: <the token from step 1>
+```
+
+If Argo CD renders its own chart from Git, every values file is in Git, so set `notifications.secret.create: false` and create the Secret with your secret tool instead.
+
+You don't need to add the notifications ClusterRole. The chart already gives the notifications controller access to Applications in every namespace, unless you set `createClusterRoles: false`; then add Argo CD's, as the plain manifests setup shows. It only watches the namespaces in `configs.params."application.namespaces"`, though, as the [apps in any namespace](https://argo-cd.readthedocs.io/en/stable/operator-manual/app-any-namespace/) guide describes.
+
+Sync your Argo CD release. Changing the init container restarts `argocd-server`. If it restarts before Cost Intelligence's UI is running, it starts without the plugin; see [If the tab doesn't appear](#if-the-tab-doesnt-appear).
+
+If a Helm 4 upgrade of your Argo CD release fails with `conflict with "kubectl-patch"`, see [Helm 4 upgrade of Argo CD fails with a `kubectl-patch` conflict](operations.md#helm-4-upgrade-of-argo-cd-fails-with-a-kubectl-patch-conflict).
+
+</details>
+
+<details class="note" markdown="1">
+<summary>Plain manifests or Kustomize</summary>
+
+For Argo CD's `install.yaml` with your own patches. These files go in the Kustomize overlay you use to install Argo CD. The ConfigMap patches add keys and leave the ones you have alone.
+
+`kustomization.yaml`:
+
+```yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: argocd
+resources:
+- https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.5/manifests/install.yaml   # the install you already use
+# Only if Applications live outside the argocd namespace, Argo CD's notifications RBAC for them:
+# - https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.5/examples/k8s-rbac/argocd-server-applications/argocd-notifications-controller-rbac-clusterrole.yaml
+# - https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.5/examples/k8s-rbac/argocd-server-applications/argocd-notifications-controller-rbac-clusterrolebinding.yaml
+patches:
+- path: cost-intel-argocd-cm.yaml
+- path: cost-intel-argocd-cmd-params-cm.yaml
+- path: cost-intel-argocd-rbac-cm.yaml
+- path: cost-intel-argocd-notifications-cm.yaml
+- path: cost-intel-argocd-server.yaml
+```
+
+`cost-intel-argocd-cm.yaml`. If `extension.config` is already set in your overlay, add the `cost-intel` entry to its list instead:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cm
+data:
+  extension.config: |
+    extensions:
+    - name: cost-intel
+      backend:
+        services:
+        - url: http://argocd-cost-intelligence.argocd-cost-intel.svc.cluster.local:8080
+```
+
+`cost-intel-argocd-cmd-params-cm.yaml`:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cmd-params-cm
+data:
+  server.enable.proxy.extension: "true"
+```
+
+`cost-intel-argocd-rbac-cm.yaml`. Add a line for each other role that should see the plugin:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-rbac-cm
+data:
+  policy.cost-intel.csv: |
+    p, role:admin, extensions, invoke, cost-intel, allow
+```
+
+`cost-intel-argocd-notifications-cm.yaml`. `subscriptions` is one list for all of Argo CD Notifications, so if your overlay already sets it, add the entry there instead:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-notifications-cm
+data:
+  service.webhook.cost-intel: |
+    url: http://argocd-cost-intelligence.argocd-cost-intel.svc.cluster.local:8080/api/cost-analysis/on-sync
+    headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: Bearer $cost-intel-webhook-token
+  trigger.cost-intel-on-sync-succeeded: |
+    - when: app.status.operationState.phase in ["Succeeded"] and app.status.operationState.finishedAt != ""
+      oncePer: app.status.operationState.finishedAt
+      send: [cost-intel-sync-succeeded]
+  template.cost-intel-sync-succeeded: |
+    webhook:
+      cost-intel:
+        method: POST
+        headers:
+        - name: Content-Type
+          value: application/json
+        body: |
+          {
+            "applicationName": "{{.app.metadata.name}}",
+            "applicationNamespace": "{{.app.metadata.namespace}}",
+            "namespace": "{{.app.spec.destination.namespace}}",
+            "destinationServer": "{{with .app.spec.destination.server}}{{.}}{{end}}",
+            "destinationName": "{{with .app.spec.destination.name}}{{.}}{{end}}",
+            "resources": [{{range $i, $r := .app.status.resources}}{{if $i}}, {{end}}{"kind": "{{$r.kind}}", "name": "{{$r.name}}", "namespace": "{{with index $r "namespace"}}{{.}}{{end}}"}{{end}}],
+            "syncTimestamp": "{{.app.status.operationState.finishedAt}}",
+            "syncResult": "Succeeded"
+          }
+  subscriptions: |
+    - recipients:
+      - cost-intel
+      triggers:
+      - cost-intel-on-sync-succeeded
+```
+
+`cost-intel-argocd-server.yaml`. If the download fails, the init container still exits cleanly, so `argocd-server` starts without the plugin:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argocd-server
+spec:
+  template:
+    spec:
       initContainers:
       - name: cost-intel-extension
         image: busybox:1.37.0
@@ -160,252 +377,44 @@ The changes depend on how you install Argo CD. The versions they were checked ag
         volumeMounts:
         - name: cost-intel-ext-js
           mountPath: /ext
+      containers:
+      - name: argocd-server
+        volumeMounts:
+        - name: cost-intel-ext-js
+          mountPath: /tmp/extensions
       volumes:
       - name: cost-intel-ext-js
         emptyDir: {}
-      volumeMounts:
-      - name: cost-intel-ext-js
-        mountPath: /tmp/extensions
+```
 
-    notifications:
-      notifiers:
-        service.webhook.cost-intel: |
-          url: http://argocd-cost-intelligence.argocd-cost-intel.svc.cluster.local:8080/api/cost-analysis/on-sync
-          headers:
-          - name: Content-Type
-            value: application/json
-          - name: Authorization
-            value: Bearer $cost-intel-webhook-token
+The token goes into `argocd-notifications-secret`, which Argo CD's `install.yaml` creates empty. Add the key with your secret tool, or with `kubectl` if the Secret isn't in Git, in the shell where you set `TOKEN` in step 1:
 
-      triggers:
-        trigger.cost-intel-on-sync-succeeded: |
-          - when: app.status.operationState.phase in ["Succeeded"] and app.status.operationState.finishedAt != ""
-            oncePer: app.status.operationState.finishedAt
-            send: [cost-intel-sync-succeeded]
+```bash
+kubectl patch secret argocd-notifications-secret -n argocd --type merge \
+  -p "{\"stringData\":{\"cost-intel-webhook-token\":\"$TOKEN\"}}"
+```
 
-      templates:
-        template.cost-intel-sync-succeeded: |
-          webhook:
-            cost-intel:
-              method: POST
-              headers:
-              - name: Content-Type
-                value: application/json
-              body: |
-                {
-                  "applicationName": "{{.app.metadata.name}}",
-                  "applicationNamespace": "{{.app.metadata.namespace}}",
-                  "namespace": "{{.app.spec.destination.namespace}}",
-                  "destinationServer": "{{with .app.spec.destination.server}}{{.}}{{end}}",
-                  "destinationName": "{{with .app.spec.destination.name}}{{.}}{{end}}",
-                  "resources": [{{range $i, $r := .app.status.resources}}{{if $i}}, {{end}}{"kind": "{{$r.kind}}", "name": "{{$r.name}}", "namespace": "{{with index $r "namespace"}}{{.}}{{end}}"}{{end}}],
-                  "syncTimestamp": "{{.app.status.operationState.finishedAt}}",
-                  "syncResult": "Succeeded"
-                }
+If your Applications live in other namespaces as well as `argocd` ([apps in any namespace](https://argo-cd.readthedocs.io/en/stable/operator-manual/app-any-namespace/)), uncomment the two lines in `resources` above and use the same Argo CD version as your install. `install.yaml` only lets the notifications controller read Applications in `argocd`. Those two lines add Argo CD's `argocd-notifications-controller-cluster-apps` ClusterRole, which lets it read Applications, Secrets and ConfigMaps in every namespace. The controller also has to watch those namespaces, which `application.namespaces` in `argocd-cmd-params-cm` sets.
 
-      subscriptions:
-        - recipients:
-          - cost-intel
-          triggers:
-          - cost-intel-on-sync-succeeded
-    ```
+Sync or apply your overlay. The `argocd-server` patch restarts it. If it restarts before Cost Intelligence's UI is running, it starts without the plugin; see [If the tab doesn't appear](#if-the-tab-doesnt-appear).
 
-    A few things to check in your existing values:
-
-    - `configs.cm.extension.config` holds every proxy extension. If you already have one, add the `cost-intel` entry to its `extensions:` list instead of replacing the key.
-    - `notifications.subscriptions` is one list for all of Argo CD Notifications. Add the entry above to the list you have.
-    - Give other roles access with more lines in `policy.cost-intel.csv`, for example `p, role:cost-viewer, extensions, invoke, cost-intel, allow`. They also need `get` on an Application to see its tab, which they usually have already.
-    - The template above uses `{{ }}` on purpose. Argo CD Notifications fills them in when it sends the webhook, and the Argo CD chart passes these values through unchanged. If your own tooling runs the values file through a template engine first, escape them for that tool.
-    - `server.extensions` in the same chart runs the [Argo CD extension installer](#use-the-argo-cd-extension-installer-instead) instead of the init container above. Use one or the other.
-
-    The token goes into `argocd-notifications-secret`. The chart creates that Secret and fills it from `notifications.secret.items`. If you install the Argo CD chart with Helm, you can put the token there in a values file you don't commit:
-
-    ```yaml
-    notifications:
-      secret:
-        items:
-          cost-intel-webhook-token: <the token from step 1>
-    ```
-
-    If Argo CD renders its own chart from Git, every values file is in Git, so set `notifications.secret.create: false` and create the Secret with your secret tool instead.
-
-    You don't need to add the notifications ClusterRole. The chart already gives the notifications controller access to Applications in every namespace, unless you set `createClusterRoles: false`; then add Argo CD's, as the plain manifests tab shows. It only watches the namespaces in `configs.params."application.namespaces"`, though, as the [apps in any namespace](https://argo-cd.readthedocs.io/en/stable/operator-manual/app-any-namespace/) guide describes.
-
-    Sync your Argo CD release. Changing the init container restarts `argocd-server`. If it restarts before Cost Intelligence's UI is running, it starts without the plugin; see [If the tab doesn't appear](#if-the-tab-doesnt-appear).
-
-    If a Helm 4 upgrade of your Argo CD release fails with `conflict with "kubectl-patch"`, see [Helm 4 upgrade of Argo CD fails with a `kubectl-patch` conflict](operations.md#helm-4-upgrade-of-argo-cd-fails-with-a-kubectl-patch-conflict).
-
-=== "Plain manifests or Kustomize"
-
-    For Argo CD's `install.yaml` with your own patches. These files go in the Kustomize overlay you use to install Argo CD. The ConfigMap patches add keys and leave the ones you have alone.
-
-    `kustomization.yaml`:
-
-    ```yaml
-    apiVersion: kustomize.config.k8s.io/v1beta1
-    kind: Kustomization
-    namespace: argocd
-    resources:
-    - https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.5/manifests/install.yaml   # the install you already use
-    # Only if Applications live outside the argocd namespace, Argo CD's notifications RBAC for them:
-    # - https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.5/examples/k8s-rbac/argocd-server-applications/argocd-notifications-controller-rbac-clusterrole.yaml
-    # - https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.5/examples/k8s-rbac/argocd-server-applications/argocd-notifications-controller-rbac-clusterrolebinding.yaml
-    patches:
-    - path: cost-intel-argocd-cm.yaml
-    - path: cost-intel-argocd-cmd-params-cm.yaml
-    - path: cost-intel-argocd-rbac-cm.yaml
-    - path: cost-intel-argocd-notifications-cm.yaml
-    - path: cost-intel-argocd-server.yaml
-    ```
-
-    `cost-intel-argocd-cm.yaml`. If `extension.config` is already set in your overlay, add the `cost-intel` entry to its list instead:
-
-    ```yaml
-    apiVersion: v1
-    kind: ConfigMap
-    metadata:
-      name: argocd-cm
-    data:
-      extension.config: |
-        extensions:
-        - name: cost-intel
-          backend:
-            services:
-            - url: http://argocd-cost-intelligence.argocd-cost-intel.svc.cluster.local:8080
-    ```
-
-    `cost-intel-argocd-cmd-params-cm.yaml`:
-
-    ```yaml
-    apiVersion: v1
-    kind: ConfigMap
-    metadata:
-      name: argocd-cmd-params-cm
-    data:
-      server.enable.proxy.extension: "true"
-    ```
-
-    `cost-intel-argocd-rbac-cm.yaml`. Add a line for each other role that should see the plugin:
-
-    ```yaml
-    apiVersion: v1
-    kind: ConfigMap
-    metadata:
-      name: argocd-rbac-cm
-    data:
-      policy.cost-intel.csv: |
-        p, role:admin, extensions, invoke, cost-intel, allow
-    ```
-
-    `cost-intel-argocd-notifications-cm.yaml`. `subscriptions` is one list for all of Argo CD Notifications, so if your overlay already sets it, add the entry there instead:
-
-    ```yaml
-    apiVersion: v1
-    kind: ConfigMap
-    metadata:
-      name: argocd-notifications-cm
-    data:
-      service.webhook.cost-intel: |
-        url: http://argocd-cost-intelligence.argocd-cost-intel.svc.cluster.local:8080/api/cost-analysis/on-sync
-        headers:
-        - name: Content-Type
-          value: application/json
-        - name: Authorization
-          value: Bearer $cost-intel-webhook-token
-      trigger.cost-intel-on-sync-succeeded: |
-        - when: app.status.operationState.phase in ["Succeeded"] and app.status.operationState.finishedAt != ""
-          oncePer: app.status.operationState.finishedAt
-          send: [cost-intel-sync-succeeded]
-      template.cost-intel-sync-succeeded: |
-        webhook:
-          cost-intel:
-            method: POST
-            headers:
-            - name: Content-Type
-              value: application/json
-            body: |
-              {
-                "applicationName": "{{.app.metadata.name}}",
-                "applicationNamespace": "{{.app.metadata.namespace}}",
-                "namespace": "{{.app.spec.destination.namespace}}",
-                "destinationServer": "{{with .app.spec.destination.server}}{{.}}{{end}}",
-                "destinationName": "{{with .app.spec.destination.name}}{{.}}{{end}}",
-                "resources": [{{range $i, $r := .app.status.resources}}{{if $i}}, {{end}}{"kind": "{{$r.kind}}", "name": "{{$r.name}}", "namespace": "{{with index $r "namespace"}}{{.}}{{end}}"}{{end}}],
-                "syncTimestamp": "{{.app.status.operationState.finishedAt}}",
-                "syncResult": "Succeeded"
-              }
-      subscriptions: |
-        - recipients:
-          - cost-intel
-          triggers:
-          - cost-intel-on-sync-succeeded
-    ```
-
-    `cost-intel-argocd-server.yaml`. If the download fails, the init container still exits cleanly, so `argocd-server` starts without the plugin:
-
-    ```yaml
-    apiVersion: apps/v1
-    kind: Deployment
-    metadata:
-      name: argocd-server
-    spec:
-      template:
-        spec:
-          initContainers:
-          - name: cost-intel-extension
-            image: busybox:1.37.0
-            command:
-            - sh
-            - -c
-            - >-
-              for i in 1 2 3 4 5; do
-              wget -q -T 10 -O /ext/extension-cost-intel.js
-              http://argocd-cost-intelligence-ui.argocd-cost-intel.svc.cluster.local:3000/index.js
-              && echo OK && exit 0; sleep 10; done;
-              echo "Warning: extension download failed"; exit 0
-            securityContext:
-              runAsUser: 1000
-              runAsNonRoot: true
-              allowPrivilegeEscalation: false
-              readOnlyRootFilesystem: true
-              capabilities:
-                drop: [ALL]
-            volumeMounts:
-            - name: cost-intel-ext-js
-              mountPath: /ext
-          containers:
-          - name: argocd-server
-            volumeMounts:
-            - name: cost-intel-ext-js
-              mountPath: /tmp/extensions
-          volumes:
-          - name: cost-intel-ext-js
-            emptyDir: {}
-    ```
-
-    The token goes into `argocd-notifications-secret`, which Argo CD's `install.yaml` creates empty. Add the key with your secret tool, or with `kubectl` if the Secret isn't in Git, in the shell where you set `TOKEN` in step 1:
-
-    ```bash
-    kubectl patch secret argocd-notifications-secret -n argocd --type merge \
-      -p "{\"stringData\":{\"cost-intel-webhook-token\":\"$TOKEN\"}}"
-    ```
-
-    If your Applications live in other namespaces as well as `argocd` ([apps in any namespace](https://argo-cd.readthedocs.io/en/stable/operator-manual/app-any-namespace/)), uncomment the two lines in `resources` above and use the same Argo CD version as your install. `install.yaml` only lets the notifications controller read Applications in `argocd`. Those two lines add Argo CD's `argocd-notifications-controller-cluster-apps` ClusterRole, which lets it read Applications, Secrets and ConfigMaps in every namespace. The controller also has to watch those namespaces, which `application.namespaces` in `argocd-cmd-params-cm` sets.
-
-    Sync or apply your overlay. The `argocd-server` patch restarts it. If it restarts before Cost Intelligence's UI is running, it starts without the plugin; see [If the tab doesn't appear](#if-the-tab-doesnt-appear).
+</details>
 
 ### Use the Argo CD extension installer instead
 
 The [Argo CD extension installer](https://github.com/argoproj-labs/argocd-extension-installer) can download the plugin in place of the init container above, and checks its checksum.
 
-??? note "Set up the installer"
+<details class="note" markdown="1">
+<summary>Set up the installer</summary>
 
-    The installer needs access to GitHub, or to wherever you host the files. With the Argo CD chart it runs from `server.extensions`; with plain manifests it replaces the init container in `cost-intel-argocd-server.yaml`, with `EXTENSIONS_DIR` set to `/tmp/extensions` (see its README) and Argo CD's `tmp` volume mounted at `/tmp`, where it downloads. Set `EXTENSION_URL` and `EXTENSION_CHECKSUM_URL` to the archive and the checksum file each release attaches:
+The installer needs access to GitHub, or to wherever you host the files. With the Argo CD chart it runs from `server.extensions`; with plain manifests it replaces the init container in `cost-intel-argocd-server.yaml`, with `EXTENSIONS_DIR` set to `/tmp/extensions` (see its README) and Argo CD's `tmp` volume mounted at `/tmp`, where it downloads. Set `EXTENSION_URL` and `EXTENSION_CHECKSUM_URL` to the archive and the checksum file each release attaches:
 
-    - `https://github.com/OctopusDeploy/argocd-cost-intelligence/releases/download/v<chart-version>/extension.tar.gz`
-    - `https://github.com/OctopusDeploy/argocd-cost-intelligence/releases/download/v<chart-version>/extension_checksums.txt`
+- `https://github.com/OctopusDeploy/argocd-cost-intelligence/releases/download/v<chart-version>/extension.tar.gz`
+- `https://github.com/OctopusDeploy/argocd-cost-intelligence/releases/download/v<chart-version>/extension_checksums.txt`
 
-    Set `IGNORE_FAILURE` to `"true"`. Without it, a failed download keeps `argocd-server`, and so the whole Argo CD UI, from starting. If the hook has run on this Argo CD before, its init container has the same name as the installer's, so remove what it added to `argocd-server` first. Run only step 5 of [Uninstall](installation.md#uninstall), and only before you sync the installer in: afterwards it would also remove the `/tmp/extensions` mount the installer needs.
+Set `IGNORE_FAILURE` to `"true"`. Without it, a failed download keeps `argocd-server`, and so the whole Argo CD UI, from starting. If the hook has run on this Argo CD before, its init container has the same name as the installer's, so remove what it added to `argocd-server` first. Run only step 5 of [Uninstall](installation.md#uninstall), and only before you sync the installer in: afterwards it would also remove the `/tmp/extensions` mount the installer needs.
+
+</details>
 
 ## Check that it works
 

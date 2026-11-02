@@ -187,6 +187,24 @@ helm-deploy: docker-build docker-build-ui
 	@echo "Port-forward ArgoCD: kubectl port-forward svc/argocd-server 18443:443 -n $(ARGOCD_NS)"
 	@echo "Port-forward API:    kubectl port-forward svc/$(HELM_RELEASE) 18080:8080 -n $(APP_NS)"
 
+# OpenCost's documented scrape config. Without it OpenCost can't link a Deployment's pods to it, and
+# applications show $0 next to their namespace's cost.
+define PROMETHEUS_OPENCOST_SCRAPE
+extraScrapeConfigs: |
+  - job_name: opencost
+    honor_labels: true
+    scrape_interval: 1m
+    scrape_timeout: 10s
+    metrics_path: /metrics
+    scheme: http
+    dns_sd_configs:
+      - names:
+          - opencost.$(OPENCOST_NS)
+        type: A
+        port: 9003
+endef
+export PROMETHEUS_OPENCOST_SCRAPE
+
 helm-deploy-real: docker-build docker-build-ui
 	@echo "==> Importing images into k3d cluster '$(K3D_CLUSTER)'..."
 	k3d image import $(IMAGE_NAME):$(IMAGE_TAG) $(UI_IMAGE_NAME):$(IMAGE_TAG) -c $(K3D_CLUSTER)
@@ -206,13 +224,16 @@ helm-deploy-real: docker-build docker-build-ui
 	@PROM_NS=$$(helm list -A 2>/dev/null | awk '/^prometheus[[:space:]]/{print $$2}' | head -1); \
 	if [ -n "$$PROM_NS" ]; then \
 		echo "  Found existing Prometheus release in namespace '$$PROM_NS', reusing it."; \
+		helm get values prometheus -n "$$PROM_NS" | grep -q 'job_name: opencost' || \
+			echo "  WARNING: it doesn't scrape OpenCost, so applications can show \$$0. Add the scrape config from https://www.opencost.io/docs/installation/prometheus"; \
 	else \
 		echo "  No existing Prometheus found, installing into $(OPENCOST_NS)..."; \
-		helm upgrade --install prometheus prometheus-community/prometheus \
+		printf '%s\n' "$$PROMETHEUS_OPENCOST_SCRAPE" | helm upgrade --install prometheus prometheus-community/prometheus \
 			--namespace $(OPENCOST_NS) --create-namespace \
 			--set alertmanager.enabled=false \
 			--set prometheus-pushgateway.enabled=false \
 			--set server.persistentVolume.enabled=false \
+			-f - \
 			--wait --timeout 120s; \
 		PROM_NS=$(OPENCOST_NS); \
 	fi; \

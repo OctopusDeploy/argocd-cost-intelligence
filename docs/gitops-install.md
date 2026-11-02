@@ -453,7 +453,7 @@ kubectl exec -n argocd "$POD" -c "$CONTAINER" -- ls /tmp/extensions
 
 The log says `OK`, or `UI extension installed successfully` with the installer, and the listing shows `extension-cost-intel.js`.
 
-Then open any Application in the Argo CD UI. It has a **Cost Intelligence** tab. Cost Intelligence measures each application when it starts, so most tabs show a cost within a few minutes, marked "Measured at install". Sync an application and its tab shows the new cost within about half a minute. A new application takes a few minutes longer, since OpenCost has no data yet for the namespace its first sync creates; Cost Intelligence measures it again until it does. If an application that already ran doesn't show its cost, see [Costs show $0 or "no data"](operations.md#costs-show-0-or-no-data).
+Then open any Application in the Argo CD UI. It has a **Cost Intelligence** tab. Cost Intelligence measures each application when it starts, so most tabs show a cost within a few minutes. It's marked "Measured at install", or just "Measured" if Argo CD Notifications reported the application's last sync first. Sync an application and its tab shows the new cost within about half a minute. A new application can take up to about a quarter of an hour, since OpenCost has no data yet for the namespace its first sync creates, and Cost Intelligence measures it again during that time. If an application that already ran doesn't show its cost, see [Costs show $0 or "no data"](operations.md#costs-show-0-or-no-data).
 
 ## If the tab doesn't appear
 

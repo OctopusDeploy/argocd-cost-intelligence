@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/models"
 )
 
 // ErrNotFound is wrapped by the errors of lookups that found nothing, which is an answer, not a

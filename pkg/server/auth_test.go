@@ -15,9 +15,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/hook"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/opencost"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/hook"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/models"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/opencost"
 )
 
 var testGateApp = models.AppRef{Namespace: "argocd", Name: "cost-intel"}

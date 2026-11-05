@@ -26,11 +26,11 @@ The examples below use these names. Change them everywhere if yours are differen
 | Name in the examples | What it is |
 |---|---|
 | `argocd` | The namespace Argo CD runs in |
-| `argocd-cost-intel` | The namespace Cost Intelligence runs in |
-| `argocd-cost-intelligence` | The name of the Cost Intelligence Application. The chart names its Services after it, so it appears in the URLs below |
+| `cost-intelligence` | The namespace Cost Intelligence runs in |
+| `cost-intelligence-argocd` | The name of the Cost Intelligence Application. The chart names its Services after it, so it appears in the URLs below |
 | `<chart-version>` | The Cost Intelligence chart version you install |
 
-If you rename the Application to a name that doesn't contain `argocd-cost-intelligence`, the backend Service becomes `<name>-argocd-cost-intelligence` and the UI Service `<name>-argocd-cost-intelligence-ui`. A name that contains it is used as it is. Run `kubectl get svc -n argocd-cost-intel` after the first sync to see the real names.
+If you rename the Application to a name that doesn't contain `cost-intelligence-argocd`, the backend Service becomes `<name>-cost-intelligence-argocd` and the UI Service `<name>-cost-intelligence-argocd-ui`. A name that contains it is used as it is. Run `kubectl get svc -n cost-intelligence` after the first sync to see the real names.
 
 ## Step 1: Create the namespace and the secrets
 
@@ -39,17 +39,17 @@ Cost Intelligence needs a webhook token and a database password that stay the sa
 Create the namespace and a token:
 
 ```bash
-kubectl create namespace argocd-cost-intel
+kubectl create namespace cost-intelligence
 TOKEN=$(openssl rand -hex 24)
 ```
 
 Store the token in two places. Cost Intelligence reads it from its own namespace, and Argo CD Notifications sends it from `argocd-notifications-secret` in the `argocd` namespace. Both must hold the same value.
 
 ```bash
-kubectl create secret generic cost-intel-webhook -n argocd-cost-intel \
+kubectl create secret generic cost-intel-webhook -n cost-intelligence \
   --from-literal=token="$TOKEN"
 
-kubectl create secret generic cost-intel-postgres -n argocd-cost-intel \
+kubectl create secret generic cost-intel-postgres -n cost-intelligence \
   --from-literal=username=cost_user \
   --from-literal=password="$(openssl rand -hex 24)"
 ```
@@ -66,7 +66,7 @@ Add this Application to the Git repository Argo CD watches, next to your other A
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: argocd-cost-intelligence
+  name: cost-intelligence-argocd
   namespace: argocd
   finalizers:
   - resources-finalizer.argocd.argoproj.io   # deleting the Application deletes what it installed
@@ -74,7 +74,7 @@ spec:
   project: default
   source:
     repoURL: ghcr.io/octopusdeploy/charts   # no oci:// prefix
-    chart: argocd-cost-intelligence
+    chart: cost-intelligence-argocd
     targetRevision: <chart-version>
     helm:
       valuesObject:
@@ -89,7 +89,7 @@ spec:
             existingSecret: cost-intel-postgres
   destination:
     server: https://kubernetes.default.svc
-    namespace: argocd-cost-intel
+    namespace: cost-intelligence
   syncPolicy:
     automated: {}
 ```
@@ -107,7 +107,7 @@ Who sees the cluster-wide Namespaces, Idle spend and Chargeback pages is decided
 Check that it runs before you change Argo CD:
 
 ```bash
-kubectl get pods -n argocd-cost-intel
+kubectl get pods -n cost-intelligence
 ```
 
 You should see the backend, the exporter, the UI and `postgres-0`, all `Running`.
@@ -129,7 +129,7 @@ configs:
       - name: cost-intel
         backend:
           services:
-          - url: http://argocd-cost-intelligence.argocd-cost-intel.svc.cluster.local:8080
+          - url: http://cost-intelligence-argocd.cost-intelligence.svc.cluster.local:8080
 
   params:
     server.enable.proxy.extension: true
@@ -148,7 +148,7 @@ server:
     - >-
       for i in 1 2 3 4 5; do
       wget -q -T 10 -O /ext/extension-cost-intel.js
-      http://argocd-cost-intelligence-ui.argocd-cost-intel.svc.cluster.local:3000/index.js
+      http://cost-intelligence-argocd-ui.cost-intelligence.svc.cluster.local:3000/index.js
       && echo OK && exit 0; sleep 10; done;
       echo "Warning: extension download failed"; exit 0
     securityContext:
@@ -171,7 +171,7 @@ server:
 notifications:
   notifiers:
     service.webhook.cost-intel: |
-      url: http://argocd-cost-intelligence.argocd-cost-intel.svc.cluster.local:8080/api/cost-analysis/on-sync
+      url: http://cost-intelligence-argocd.cost-intelligence.svc.cluster.local:8080/api/cost-analysis/on-sync
       headers:
       - name: Content-Type
         value: application/json
@@ -279,7 +279,7 @@ data:
     - name: cost-intel
       backend:
         services:
-        - url: http://argocd-cost-intelligence.argocd-cost-intel.svc.cluster.local:8080
+        - url: http://cost-intelligence-argocd.cost-intelligence.svc.cluster.local:8080
 ```
 
 `cost-intel-argocd-cmd-params-cm.yaml`:
@@ -314,7 +314,7 @@ metadata:
   name: argocd-notifications-cm
 data:
   service.webhook.cost-intel: |
-    url: http://argocd-cost-intelligence.argocd-cost-intel.svc.cluster.local:8080/api/cost-analysis/on-sync
+    url: http://cost-intelligence-argocd.cost-intelligence.svc.cluster.local:8080/api/cost-analysis/on-sync
     headers:
     - name: Content-Type
       value: application/json
@@ -368,7 +368,7 @@ spec:
         - >-
           for i in 1 2 3 4 5; do
           wget -q -T 10 -O /ext/extension-cost-intel.js
-          http://argocd-cost-intelligence-ui.argocd-cost-intel.svc.cluster.local:3000/index.js
+          http://cost-intelligence-argocd-ui.cost-intelligence.svc.cluster.local:3000/index.js
           && echo OK && exit 0; sleep 10; done;
           echo "Warning: extension download failed"; exit 0
         securityContext:
@@ -413,8 +413,8 @@ The [Argo CD extension installer](https://github.com/argoproj-labs/argocd-extens
 
 The installer needs access to GitHub, or to wherever you host the files. With the Argo CD chart it runs from `server.extensions`; with plain manifests it replaces the init container in `cost-intel-argocd-server.yaml`, with `EXTENSIONS_DIR` set to `/tmp/extensions` (see its README) and Argo CD's `tmp` volume mounted at `/tmp`, where it downloads. Set `EXTENSION_URL` and `EXTENSION_CHECKSUM_URL` to the archive and the checksum file each release attaches:
 
-- `https://github.com/OctopusDeploy/argocd-cost-intelligence/releases/download/v<chart-version>/extension.tar.gz`
-- `https://github.com/OctopusDeploy/argocd-cost-intelligence/releases/download/v<chart-version>/extension_checksums.txt`
+- `https://github.com/OctopusDeploy/cost-intelligence-argocd/releases/download/v<chart-version>/extension.tar.gz`
+- `https://github.com/OctopusDeploy/cost-intelligence-argocd/releases/download/v<chart-version>/extension_checksums.txt`
 
 Set `IGNORE_FAILURE` to `"true"`. Without it, a failed download keeps `argocd-server`, and so the whole Argo CD UI, from starting. If the hook has run on this Argo CD before, its init container has the same name as the installer's, so remove what it added to `argocd-server` first. Run only step 5 of [Uninstall](installation.md#uninstall), and only before you sync the installer in: afterwards it would also remove the `/tmp/extensions` mount the installer needs.
 
@@ -438,7 +438,7 @@ The first prints the `cost-intel` entry, the second `true`, the third the admin 
 The token is the same in both Secrets. These two commands print the same value:
 
 ```bash
-kubectl get secret cost-intel-webhook -n argocd-cost-intel -o jsonpath='{.data.token}' | base64 -d; echo
+kubectl get secret cost-intel-webhook -n cost-intelligence -o jsonpath='{.data.token}' | base64 -d; echo
 kubectl get secret argocd-notifications-secret -n argocd -o jsonpath='{.data.cost-intel-webhook-token}' | base64 -d; echo
 ```
 
@@ -460,16 +460,27 @@ Then open any Application in the Argo CD UI. It has a **Cost Intelligence** tab.
 [The Cost Intelligence tab doesn't appear](operations.md#the-cost-intelligence-tab-doesnt-appear) in the operations guide lists the usual causes; skip the ones about the hook. Also check what you added in step 3:
 
 - `argocd-server` restarted before Cost Intelligence's UI was running, or hasn't restarted since you added the init container or changed `server.enable.proxy.extension`. The hook would restart it; here you do: `kubectl rollout restart deployment -n argocd -l app.kubernetes.io/name=argocd-server`. The Argo CD chart names the Deployment after your release, so this finds it by its label.
-- The init container's URL has the wrong Service name, namespace or port. Check them with `kubectl get svc -n argocd-cost-intel`, then restart `argocd-server`.
+- The init container's URL has the wrong Service name, namespace or port. Check them with `kubectl get svc -n cost-intelligence`, then restart `argocd-server`.
 - The file name doesn't start with `extension` and end in `.js`. Argo CD ignores other files in `/tmp/extensions`.
 
 ## Upgrade and uninstall
 
 To upgrade, change `targetRevision` in the Cost Intelligence Application. With the installer, change the version in its two URLs as well. Your Argo CD configuration doesn't change otherwise.
 
+Cost Intelligence 0.1.0 used the name `argocd-cost-intelligence` and the namespace `argocd-cost-intel`. To upgrade from it, keep the Application's name and destination namespace, change `chart` to `cost-intelligence-argocd`, and add these values. A new name or namespace would start with an empty database, and without `nameOverride` the sync fails, because Kubernetes doesn't allow the labels that select the existing pods to change.
+
+```yaml
+nameOverride: argocd-cost-intelligence
+namespace:
+  create: false
+  name: argocd-cost-intel
+```
+
+Your Secrets and Argo CD configuration stay as they are, since the Service names and the webhook token don't change. Metrics and alerts have new names, as [Upgrade from 0.1.0](installation.md#upgrade-from-010) describes.
+
 > **Warning:** Deleting the Cost Intelligence Application deletes the bundled PostgreSQL's PVC, and with it all stored cost history. Back it up first if you want to keep it; see [Backup, restore and pruning](operations.md#backup-restore-and-pruning).
 
-To uninstall, remove every key and block you added in step 3, then delete the Cost Intelligence Application. Its finalizer makes Argo CD delete everything the chart installed. Then delete the `argocd-cost-intel` namespace, which also removes the Secrets from step 1.
+To uninstall, remove every key and block you added in step 3, then delete the Cost Intelligence Application. Its finalizer makes Argo CD delete everything the chart installed. Then delete the `cost-intelligence` namespace, which also removes the Secrets from step 1.
 
 Last, delete the webhook token from `argocd-notifications-secret`, once the notifications entries are gone from your Argo CD configuration and synced, and the token is out of your secret tool if you use one. Nothing else removes it: the Argo CD chart only adds and updates keys in that Secret, and with plain manifests nothing in Git sets that key. The command fails if the key is already gone:
 

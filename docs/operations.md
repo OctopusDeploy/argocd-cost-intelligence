@@ -8,7 +8,7 @@ Running the service day to day: fixing problems, how the NetworkPolicies work, a
 
 Run the checks in [Check that it works](installation.md#check-that-it-works). These are the usual causes:
 
-- The `cost-intel-extension` init container is missing from `argocd-server`. Either the hook failed or [never ran](#helm-install-times-out-before-the-hook-runs), or something that manages the Deployment reverted it. A failed hook Job is kept, so you can read its log: `kubectl logs -n argocd-cost-intel job/argocd-cost-intelligence-post-install`.
+- The `cost-intel-extension` init container is missing from `argocd-server`. Either the hook failed or [never ran](#helm-install-times-out-before-the-hook-runs), or something that manages the Deployment reverted it. A failed hook Job is kept, so you can read its log: `kubectl logs -n cost-intelligence job/cost-intelligence-argocd-post-install`.
 - The init container couldn't download the bundle, so `/tmp/extensions` is empty. It retries 5 times and then gives up quietly. Its log has the reason: `kubectl logs -n argocd <argocd-server-pod> -c cost-intel-extension`. Usually the UI pod wasn't running yet, or the chart's NetworkPolicy blocks the download because `argoCd.namespace` doesn't match the namespace Argo CD runs in. Check egress rules between the two namespaces too. Restart `argocd-server` once it's fixed.
 - The tab shows "401: Unauthorized extension request". Argo CD refused the call before it reached the backend. The `argocd-server` log has `permission denied: extensions, invoke, cost-intel`. The hook allows `role:admin` through `policy.cost-intel.csv` in `argocd-rbac-cm`, unless `argoCd.rbac.grantAdmin` is off. Every other role needs the rule from [Grant access in Argo CD](installation.md#grant-access-in-argo-cd).
 - The tab shows an error instead of costs. Check that `server.enable.proxy.extension` is `"true"` in `argocd-cmd-params-cm` and that `argocd-server` restarted after it changed, because it reads that setting only when it starts. Then check that `extension.config` in `argocd-cm` points at the backend Service on port 8080, not the UI Service.
@@ -19,7 +19,7 @@ If you turned the hook off and configured Argo CD from Git, also go through [If 
 ### The post-install hook fails
 
 ```bash
-kubectl logs -n argocd-cost-intel job/argocd-cost-intelligence-post-install --tail=50
+kubectl logs -n cost-intelligence job/cost-intelligence-argocd-post-install --tail=50
 ```
 
 Common causes:
@@ -36,7 +36,7 @@ Helm runs the post-install hook only once everything the chart deploys is ready.
 Find the pod that wasn't ready, for example the UI pod failing its probes on a cluster short of CPU, and fix it (see [Pods don't start or stay unready](#pods-dont-start-or-stay-unready)):
 
 ```bash
-kubectl get pods -n argocd-cost-intel
+kubectl get pods -n cost-intelligence
 ```
 
 Then run the command from [Upgrade](installation.md#upgrade) with the version you installed. Helm accepts an upgrade of a release whose install failed, and the hook runs again after it. Uninstalling and installing again also works.
@@ -67,18 +67,18 @@ Set the gate yourself in any of these cases: see [Choose your settings](installa
 - **Not measured yet.** When the service starts, it measures every application that has no cost, and tries again for about 15 minutes while OpenCost has no data for it or doesn't answer. After that, an application is measured at its next successful sync, so sync it. With `costIntelligence.backfillConcurrency` at `0`, only syncs measure.
 - **OpenCost.** Try it from the backend pod:
   ```bash
-  kubectl exec -n argocd-cost-intel deploy/argocd-cost-intelligence -- \
+  kubectl exec -n cost-intelligence deploy/cost-intelligence-argocd -- \
     curl -s 'http://opencost.opencost:9003/allocation?window=24h' | head -c 200
   ```
   Use your `openCost.baseURL` if it differs. A new OpenCost needs time to collect metrics and reports $0 until it has a full window.
 - **The application shows $0, but its namespace has a cost.** One cause is that Prometheus doesn't scrape OpenCost: OpenCost then can't link a Deployment's pods to it, so no pod can be matched to the application. List the controllers OpenCost knows in the namespace the application deploys to (`jq` runs on your machine):
   ```bash
-  kubectl exec -n argocd-cost-intel deploy/argocd-cost-intelligence -- \
+  kubectl exec -n cost-intelligence deploy/cost-intelligence-argocd -- \
     curl -s 'http://opencost.opencost:9003/allocation?window=1h&aggregate=controller&step=1h&filter=namespace:%22<namespace>%22' | jq -r '.data[]? | select(.) | keys[]'
   ```
   If this prints `__unallocated__` and none of your Deployments, add the scrape config from [OpenCost's Prometheus guide](https://www.opencost.io/docs/installation/prometheus). Give it a minute or two, and once OpenCost lists them (for example `deployment:web`), sync the application to measure it again. If this prints nothing, OpenCost has no data for the namespace yet or can't be reached; check it as in the point above. If your Deployments are listed already, the webhook's `resources` don't own any pod OpenCost reports, so check that the notifications template still sends the application's `resources`.
 - **The webhook is refused.** The backend logs `Refused POST /on-sync` and answers 401. Argo CD Notifications sent no token or the wrong one. It sends the `cost-intel-webhook-token` key of `argocd-notifications-secret`, which has to equal the backend's token. `helm upgrade` copies it again. If something else manages that Secret (Argo CD's own Helm chart, say) and replaces it, add the key there.
-- **The webhook is accepted but nothing is stored.** `/on-sync` answers 202 as soon as it queues the work, and the OpenCost query and database write happen afterwards. Follow the backend log while you sync: `kubectl logs -f -n argocd-cost-intel deploy/argocd-cost-intelligence`.
+- **The webhook is accepted but nothing is stored.** `/on-sync` answers 202 as soon as it queues the work, and the OpenCost query and database write happen afterwards. Follow the backend log while you sync: `kubectl logs -f -n cost-intelligence deploy/cost-intelligence-argocd`.
 - **The webhook never arrives.** Run `kubectl logs -n argocd -l app.kubernetes.io/name=argocd-notifications-controller --tail=-1 | grep cost-intel`, and check that `subscriptions` in the notifications ConfigMap still has the entry that sends `cost-intel-on-sync-succeeded` to `cost-intel`. Restart the controller after you change the ConfigMap: `kubectl rollout restart deployment -n argocd -l app.kubernetes.io/name=argocd-notifications-controller`.
 
 ### Rightsizing doesn't show
@@ -87,7 +87,7 @@ Check these in order:
 
 - The VPA is installed: `kubectl get crd verticalpodautoscalers.autoscaling.k8s.io`.
 - The workload has a VPA in `Off` mode with a recommendation. Run `kubectl get vpa -n <namespace>`, then `kubectl describe vpa -n <namespace> <name>` to see the update mode and, under `Status`, the recommendation.
-- The backend may read VPAs. `kubectl auth can-i list verticalpodautoscalers.autoscaling.k8s.io -n <namespace> --as=system:serviceaccount:argocd-cost-intel:argocd-cost-intelligence` should say `yes`. If it doesn't, check that `costIntelligence.vpa.enabled` is `true`.
+- The backend may read VPAs. `kubectl auth can-i list verticalpodautoscalers.autoscaling.k8s.io -n <namespace> --as=system:serviceaccount:cost-intelligence:cost-intelligence-argocd` should say `yes`. If it doesn't, check that `costIntelligence.vpa.enabled` is `true`.
 - The application has synced since the install or upgrade.
 - The change is worth at least $1 a month. Smaller ones only show on the Resources tab.
 
@@ -101,7 +101,7 @@ Check these in order:
 The backend image has no `psql`, so its log is where connection errors show:
 
 ```bash
-kubectl logs -n argocd-cost-intel deploy/argocd-cost-intelligence
+kubectl logs -n cost-intelligence deploy/cost-intelligence-argocd
 ```
 
 - **`password authentication failed`**: the Secret no longer matches the database user's password, usually because the Secret was changed after the first install. See [PostgreSQL credentials](configuration.md#postgresql-credentials).
@@ -137,7 +137,7 @@ To check, call the service from a pod that should be refused:
 
 ```bash
 kubectl run np-check --rm -it --restart=Never --image=busybox -n default -- \
-  wget -qO- -T 5 http://argocd-cost-intelligence.argocd-cost-intel:8080/health
+  wget -qO- -T 5 http://cost-intelligence-argocd.cost-intelligence:8080/health
 # expected: "download timed out"
 ```
 
@@ -152,7 +152,7 @@ Nothing in the chart backs up PostgreSQL, and `helm uninstall` deletes its PVC, 
 `cost_actuals` gets a row per sync and is never pruned automatically. To keep, say, the last 90 days:
 
 ```bash
-kubectl exec postgres-0 -n argocd-cost-intel -- \
+kubectl exec postgres-0 -n cost-intelligence -- \
   psql -U cost_user -d cost_intelligence \
   -c "DELETE FROM cost_actuals WHERE measured_at < NOW() - INTERVAL '90 days';"
 ```

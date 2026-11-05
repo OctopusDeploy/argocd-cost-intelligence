@@ -16,22 +16,22 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/backfill"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/clusterscope"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/config"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/exporter"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/history"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/hook"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/opencost"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/rightsizing"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/server"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/storage"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/telemetry"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/backfill"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/clusterscope"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/config"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/exporter"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/history"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/hook"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/models"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/opencost"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/rightsizing"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/server"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/storage"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/telemetry"
 )
 
 func main() {
-	logger := log.New(os.Stdout, "[argocd-cost-intel] ", log.LstdFlags|log.Lshortfile)
+	logger := log.New(os.Stdout, "[cost-intelligence] ", log.LstdFlags|log.Lshortfile)
 
 	// Load configuration
 	cfg, err := config.LoadConfig()
@@ -75,7 +75,7 @@ func runAPI(cfg *config.Config, logger *log.Logger) {
 		serverOpts = append(serverOpts, server.WithUnmeasuredApp(access))
 	}
 
-	logger.Print("Starting ArgoCD Cost Intelligence Service")
+	logger.Print("Starting Cost Intelligence for Argo CD Service")
 	logger.Printf("Server listening on port %d\n", cfg.Server.Port)
 	logger.Printf("OpenCost endpoint: %s\n", cfg.OpenCost.BaseURL)
 	logger.Printf("Database: %s@%s:%d/%s\n", cfg.Database.User, cfg.Database.Host, cfg.Database.Port, cfg.Database.Database)
@@ -263,7 +263,7 @@ func runBackfill(ctx context.Context, b *backfill.Backfill, recorder *history.Re
 // runExporter exports every Argo CD Application's cost to Prometheus. It runs as a single replica:
 // see pkg/exporter.
 func runExporter(cfg *config.Config, logger *log.Logger) {
-	logger.Printf("Starting ArgoCD Cost Intelligence exporter, refreshing every %s\n", cfg.ExporterInterval)
+	logger.Printf("Starting Cost Intelligence for Argo CD exporter, refreshing every %s\n", cfg.ExporterInterval)
 	registry := prometheus.NewRegistry()
 	metrics := telemetry.NewExporterMetrics(registry)
 

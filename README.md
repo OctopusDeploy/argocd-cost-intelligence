@@ -1,11 +1,11 @@
-# ArgoCD Cost Intelligence
+# Cost Intelligence for Argo CD
 
-[![CI](https://github.com/OctopusDeploy/argocd-cost-intelligence/actions/workflows/ci.yml/badge.svg)](https://github.com/OctopusDeploy/argocd-cost-intelligence/actions/workflows/ci.yml)
-[![Docs](https://img.shields.io/readthedocs/argocd-cost-intelligence)](https://argocd-cost-intelligence.readthedocs.io/)
+[![CI](https://github.com/OctopusDeploy/cost-intelligence-argocd/actions/workflows/ci.yml/badge.svg)](https://github.com/OctopusDeploy/cost-intelligence-argocd/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/readthedocs/cost-intelligence-argocd)](https://cost-intelligence-argocd.readthedocs.io/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/OctopusDeploy/argocd-cost-intelligence?include_prereleases)](https://github.com/OctopusDeploy/argocd-cost-intelligence/releases)
+[![Release](https://img.shields.io/github/v/release/OctopusDeploy/cost-intelligence-argocd?include_prereleases)](https://github.com/OctopusDeploy/cost-intelligence-argocd/releases)
 
-ArgoCD Cost Intelligence shows what each Argo CD application actually costs, in a **Cost Intelligence** tab inside the Argo CD UI. After every successful sync it asks [OpenCost](https://www.opencost.io) what the application's pods cost and keeps the result, so application owners see their cost where they already work. You need Argo CD and OpenCost running in the same cluster, and only the applications Argo CD deploys to that cluster are measured. If Argo CD also manages other clusters, the tab of an application deployed there says it isn't measured ([Limits and requirements](docs/limits-and-requirements.md#only-this-cluster-is-measured)).
+Cost Intelligence for Argo CD shows what each Argo CD application actually costs, in a **Cost Intelligence** tab inside the Argo CD UI. After every successful sync it asks [OpenCost](https://www.opencost.io) what the application's pods cost and keeps the result, so application owners see their cost where they already work. You need Argo CD and OpenCost running in the same cluster, and only the applications Argo CD deploys to that cluster are measured. If Argo CD also manages other clusters, the tab of an application deployed there says it isn't measured ([Limits and requirements](docs/limits-and-requirements.md#only-this-cluster-is-measured)).
 
 ![Actual costs: monthly cost, change since the last sync, rightsizing advice, cost breakdown and resource efficiency](docs/images/actual-costs.webp)
 
@@ -15,10 +15,10 @@ Requires Argo CD 3.4, 3.5 or 3.6 on a Kubernetes version it supports, OpenCost 1
 
 <!-- The release workflow fails a release tag that doesn't match the --version below. -->
 ```bash
-helm install argocd-cost-intelligence \
-  oci://ghcr.io/octopusdeploy/charts/argocd-cost-intelligence \
+helm install cost-intelligence-argocd \
+  oci://ghcr.io/octopusdeploy/charts/cost-intelligence-argocd \
   --version 0.1.0 \
-  --namespace argocd-cost-intel --create-namespace \
+  --namespace cost-intelligence --create-namespace \
   --set namespace.create=false \
   --set postgres.auth.password=<your-secure-password> \
   --wait --timeout 10m
@@ -62,17 +62,17 @@ These come from a test cluster with sample OpenCost data, in the Argo CD dark th
 
 ## Compared with the OpenCost UI
 
-ArgoCD Cost Intelligence gets its costs from OpenCost, and you can keep using the OpenCost UI alongside it.
+Cost Intelligence for Argo CD gets its costs from OpenCost, and you can keep using the OpenCost UI alongside it.
 
 The OpenCost UI covers the whole cluster. It breaks cost down by Kubernetes objects, such as node, namespace, controller or pod, and you can build your own reports and dashboards there. Where OpenCost is set up for them, it also shows cloud bills, assets, external services and AI inference cost. For cloud services this project shows only the Infracost estimates your CI pushes, not the bills.
 
-ArgoCD Cost Intelligence works per Argo CD application. It counts only the controllers Argo CD manages for the application and measures it again at every sync, so the tab shows how much the last sync changed the cost. It also stores the cost of each day in PostgreSQL, for 400 days by default, so the history outlives OpenCost's own retention.
+Cost Intelligence for Argo CD works per Argo CD application. It counts only the controllers Argo CD manages for the application and measures it again at every sync, so the tab shows how much the last sync changed the cost. It also stores the cost of each day in PostgreSQL, for 400 days by default, so the history outlives OpenCost's own retention.
 
 Your Argo CD RBAC configuration controls who can see an application's cost and the cluster-wide page, and people sign in with the Argo CD login they already have. The optional Prometheus metrics are the exception, as anyone who can query that Prometheus sees every application's cost. The OpenCost UI doesn't come with a login of its own, so who can open it depends on how you expose it, for example with a port-forward or an ingress.
 
 ## Documentation
 
-The guides are also published at [argocd-cost-intelligence.readthedocs.io](https://argocd-cost-intelligence.readthedocs.io/).
+The guides are also published at [cost-intelligence-argocd.readthedocs.io](https://cost-intelligence-argocd.readthedocs.io/).
 
 | I want to... | Read |
 |---|---|

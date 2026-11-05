@@ -5,7 +5,7 @@ kind: ClusterRole
 metadata:
   name: {{ .Values.rbac.roleName }}
   labels:
-    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+    {{- include "cost-intelligence-argocd.labels" . | nindent 4 }}
 rules:
 - apiGroups:
   - ""
@@ -41,14 +41,14 @@ kind: ClusterRoleBinding
 metadata:
   name: {{ .Values.rbac.roleBindingName }}
   labels:
-    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+    {{- include "cost-intelligence-argocd.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: {{ .Values.rbac.roleName }}
 subjects:
 - kind: ServiceAccount
-  name: {{ include "argocd-cost-intelligence.serviceAccountName" . }}
+  name: {{ include "cost-intelligence-argocd.serviceAccountName" . }}
   namespace: {{ .Values.namespace.name }}
 
 ---
@@ -57,17 +57,17 @@ subjects:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: {{ include "argocd-cost-intelligence.fullname" . }}-self
+  name: {{ include "cost-intelligence-argocd.fullname" . }}-self
   namespace: {{ .Values.namespace.name }}
   labels:
-    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+    {{- include "cost-intelligence-argocd.labels" . | nindent 4 }}
 rules:
 - apiGroups:
   - apps
   resources:
   - deployments
   resourceNames:
-  - {{ include "argocd-cost-intelligence.fullname" . }}
+  - {{ include "cost-intelligence-argocd.fullname" . }}
   verbs:
   - get
 
@@ -75,16 +75,16 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: {{ include "argocd-cost-intelligence.fullname" . }}-self
+  name: {{ include "cost-intelligence-argocd.fullname" . }}-self
   namespace: {{ .Values.namespace.name }}
   labels:
-    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+    {{- include "cost-intelligence-argocd.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: {{ include "argocd-cost-intelligence.fullname" . }}-self
+  name: {{ include "cost-intelligence-argocd.fullname" . }}-self
 subjects:
 - kind: ServiceAccount
-  name: {{ include "argocd-cost-intelligence.serviceAccountName" . }}
+  name: {{ include "cost-intelligence-argocd.serviceAccountName" . }}
   namespace: {{ .Values.namespace.name }}
 {{- end }}

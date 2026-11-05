@@ -1,19 +1,19 @@
 # Installation
 
-This page covers installing ArgoCD Cost Intelligence with Helm, checking that it works, upgrading and removing it. Chart settings are in [Configuration](configuration.md). If something goes wrong, see [Troubleshooting](operations.md#troubleshooting).
+This page covers installing Cost Intelligence for Argo CD with Helm, checking that it works, upgrading and removing it. Chart settings are in [Configuration](configuration.md). If something goes wrong, see [Troubleshooting](operations.md#troubleshooting).
 
 ## What the chart installs
 
-Everything goes into the `argocd-cost-intel` namespace, which the chart creates:
+Everything goes into the `cost-intelligence` namespace, which the chart creates:
 
 | Component | Kind | What it does |
 |---|---|---|
-| `argocd-cost-intelligence` | Deployment (HPA, 2 to 5 replicas), Service on 8080 | REST API and sync webhook |
-| `argocd-cost-intelligence-exporter` | Deployment, 1 replica | Publishes application cost as Prometheus metrics |
-| `argocd-cost-intelligence-ui` | Deployment, Service on 3000 | Serves the React bundle that `argocd-server` loads as an extension |
+| `cost-intelligence-argocd` | Deployment (HPA, 2 to 5 replicas), Service on 8080 | REST API and sync webhook |
+| `cost-intelligence-argocd-exporter` | Deployment, 1 replica | Publishes application cost as Prometheus metrics |
+| `cost-intelligence-argocd-ui` | Deployment, Service on 3000 | Serves the React bundle that `argocd-server` loads as an extension |
 | `postgres` | StatefulSet, headless Service, PVC `postgres-pvc` | Cost history. You can use an external database instead, see [External PostgreSQL](configuration.md#external-postgresql) |
 
-These names assume the release is called `argocd-cost-intelligence`. With another release name, the Deployments and Services are named after it.
+These names assume the release is called `cost-intelligence-argocd`. With another release name, the Deployments and Services are named after it.
 
 The chart also runs a post-install/post-upgrade hook Job that changes Argo CD itself. It runs on every `helm install` and `helm upgrade`:
 
@@ -52,8 +52,8 @@ The backend and exporter must reach OpenCost on port 9003. The exporter and the 
 
 The chart's NetworkPolicies only limit incoming traffic. The backend accepts `argocd-server` and `argocd-notifications-controller`, the UI pod accepts `argocd-server`, PostgreSQL accepts the backend and exporter, and Prometheus can reach the metrics port (9102). Outgoing traffic is not restricted by the chart, but it may be restricted in your cluster:
 
-- If the OpenCost namespace limits incoming traffic, let pods from `argocd-cost-intel` reach port 9003.
-- If the Argo CD namespace limits outgoing traffic, let `argocd-server` reach `argocd-cost-intel` on ports 8080 and 3000, and `argocd-notifications-controller` reach it on 8080.
+- If the OpenCost namespace limits incoming traffic, let pods from `cost-intelligence` reach port 9003.
+- If the Argo CD namespace limits outgoing traffic, let `argocd-server` reach `cost-intelligence` on ports 8080 and 3000, and `argocd-notifications-controller` reach it on 8080.
 
 [Operations](operations.md#networkpolicy) explains how the policies work and what to do if your CNI blocks kubelet probes.
 
@@ -61,7 +61,7 @@ The chart's NetworkPolicies only limit incoming traffic. The backend accepts `ar
 
 ### Images
 
-The images are public on GHCR, so you don't need a pull secret: `ghcr.io/octopusdeploy/argocd-cost-intelligence:v0.1.0` and `ghcr.io/octopusdeploy/argocd-cost-intelligence-ui:v0.1.0`. The hook Job (`postInstallHook.image`, `alpine/k8s`) and the `argocd-server` init container (`postInstallHook.extensionInitImage`, `busybox:1.37.0`) pull images too. Mirror those if your cluster can't reach public registries. A replacement for the hook image needs `kubectl`, `jq` and `yq` (mikefarah/yq v4); one for the init container needs `sh` and `wget`.
+The images are public on GHCR, so you don't need a pull secret: `ghcr.io/octopusdeploy/cost-intelligence-argocd:v0.1.0` and `ghcr.io/octopusdeploy/cost-intelligence-argocd-ui:v0.1.0`. The hook Job (`postInstallHook.image`, `alpine/k8s`) and the `argocd-server` init container (`postInstallHook.extensionInitImage`, `busybox:1.37.0`) pull images too. Mirror those if your cluster can't reach public registries. A replacement for the hook image needs `kubectl`, `jq` and `yq` (mikefarah/yq v4); one for the init container needs `sh` and `wget`.
 
 ## Install
 
@@ -70,7 +70,7 @@ The images are public on GHCR, so you don't need a pull secret: `ghcr.io/octopus
 To look at the plugin before you have an OpenCost, the repository has a mock. It prices the pods that run in each namespace with made-up but stable prices, scaled up so small pods show larger amounts. Use it to try things out; the amounts mean nothing.
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/OctopusDeploy/argocd-cost-intelligence/main/deploy/mock-opencost.yaml
+kubectl apply -f https://raw.githubusercontent.com/OctopusDeploy/cost-intelligence-argocd/main/deploy/mock-opencost.yaml
 ```
 
 It runs as `opencost` in the `opencost` namespace, so the default OpenCost URL works. Remove it with `kubectl delete -f` on the same file, and install a real OpenCost before you rely on the numbers.
@@ -104,13 +104,13 @@ Per-application costs work either way. You can change it later with `helm upgrad
 
 ### Run the install
 
-The chart creates its own namespace (`namespace.create=true`), so tell Helm not to create it, or the two collide. Replace `<chart-version>` with the newest version on the [Releases page](https://github.com/OctopusDeploy/argocd-cost-intelligence/releases):
+The chart creates its own namespace (`namespace.create=true`), so tell Helm not to create it, or the two collide. Replace `<chart-version>` with the newest version on the [Releases page](https://github.com/OctopusDeploy/cost-intelligence-argocd/releases):
 
 ```bash
-helm install argocd-cost-intelligence \
-  oci://ghcr.io/octopusdeploy/charts/argocd-cost-intelligence \
+helm install cost-intelligence-argocd \
+  oci://ghcr.io/octopusdeploy/charts/cost-intelligence-argocd \
   --version <chart-version> \
-  --namespace argocd-cost-intel --create-namespace \
+  --namespace cost-intelligence --create-namespace \
   --set namespace.create=false \
   --set postgres.auth.password=<your-secure-password> \
   --wait --timeout 10m
@@ -159,7 +159,7 @@ For an example Application, see [Step 2 of that guide](gitops-install.md#step-2-
 The chart generates the sync webhook's token and reads it back on `helm upgrade`, so it stays the same. Argo CD and `helm template` render without cluster access, so they'd generate a new token on every render. That restarts the backend each time and leaves the Application permanently out of sync. Create the Secret yourself instead:
 
 ```bash
-kubectl create secret generic cost-intel-webhook -n argocd-cost-intel \
+kubectl create secret generic cost-intel-webhook -n cost-intelligence \
   --from-literal=token=$(openssl rand -hex 24)
 ```
 
@@ -168,7 +168,7 @@ Then set `webhook.existingSecret=cost-intel-webhook`. Give the database password
 To rotate the webhook token, update the Secret and run the hook again (`helm upgrade`, or sync the chart). Then restart the backend, which reads the token only at startup:
 
 ```bash
-kubectl rollout restart deployment/argocd-cost-intelligence -n argocd-cost-intel
+kubectl rollout restart deployment/cost-intelligence-argocd -n cost-intelligence
 ```
 
 ## Check that it works
@@ -176,7 +176,7 @@ kubectl rollout restart deployment/argocd-cost-intelligence -n argocd-cost-intel
 The hook Job is deleted when it succeeds, and most of its patch steps tolerate failure. So check the result rather than the Job:
 
 ```bash
-kubectl get pods -n argocd-cost-intel      # backend, exporter, ui, postgres-0: all Running
+kubectl get pods -n cost-intelligence      # backend, exporter, ui, postgres-0: all Running
 
 # Argo CD was wired up
 kubectl get cm argocd-cm -n argocd -o jsonpath='{.data.extension\.config}'
@@ -187,7 +187,7 @@ kubectl get deploy -n argocd -l app.kubernetes.io/name=argocd-server \
   -o jsonpath='{.items[*].spec.template.spec.initContainers[*].name}'      # includes cost-intel-extension
 
 # Backend health
-kubectl port-forward svc/argocd-cost-intelligence 18080:8080 -n argocd-cost-intel &
+kubectl port-forward svc/cost-intelligence-argocd 18080:8080 -n cost-intelligence &
 curl -s http://localhost:18080/health      # {"status":"ok"}
 ```
 
@@ -294,10 +294,10 @@ Anyone who can query that Prometheus sees every Application's cost, whatever Arg
 Database migrations are built into the backend and run when it starts, so an upgrade needs no manual database work. The PostgreSQL password is read back from the existing Secret, so you don't pass it again.
 
 ```bash
-helm upgrade argocd-cost-intelligence \
-  oci://ghcr.io/octopusdeploy/charts/argocd-cost-intelligence \
+helm upgrade cost-intelligence-argocd \
+  oci://ghcr.io/octopusdeploy/charts/cost-intelligence-argocd \
   --version <new-version> \
-  --namespace argocd-cost-intel \
+  --namespace cost-intelligence \
   --set namespace.create=false \
   <the same --set and -f flags as at install, minus postgres.auth.password> \
   --wait --timeout 10m
@@ -307,10 +307,34 @@ Keep your settings in a values file and pass it with `-f` every time. `--reuse-v
 
 The hook runs again on every upgrade. That keeps Argo CD's configuration in step with the chart (including the webhook token) and restarts `argocd-server`.
 
+### Upgrade from 0.1.0
+
+Version 0.1.0 used the name `argocd-cost-intelligence`, and its namespace was `argocd-cost-intel`. Keep both when you upgrade an install from that version: the PostgreSQL data stays in the old namespace, and Kubernetes doesn't allow the labels that select the existing pods to change.
+
+```bash
+helm upgrade argocd-cost-intelligence \
+  oci://ghcr.io/octopusdeploy/charts/cost-intelligence-argocd \
+  --version <new-version> \
+  --namespace argocd-cost-intel \
+  --set namespace.create=false \
+  --set namespace.name=argocd-cost-intel \
+  --set nameOverride=argocd-cost-intelligence \
+  <the same --set and -f flags as at install, minus postgres.auth.password> \
+  --wait --timeout 10m
+```
+
+The webhook Secret has a new name, so the upgrade creates a new token and the hook passes it to Argo CD. A sync that finishes before the hook has run can be refused, and its cost is then recorded at the application's next sync. If you set up Argo CD Notifications yourself, check that it sends the new token. With `webhook.existingSecret`, the token doesn't change.
+
+If your values set pod anti-affinity on `app.kubernetes.io/name`, as `values-production.yaml` does, change the value to `argocd-cost-intelligence`. Otherwise it matches no pods, and replicas can end up on one node.
+
+Metrics and alerts have new names as well. Update any dashboards, custom rules, Alertmanager routes and silences that use the old ones. The new names start with no history, so the cost increase alert has only a short baseline during its first week.
+
+If Git manages the install, see [Upgrade and uninstall](gitops-install.md#upgrade-and-uninstall).
+
 ## Uninstall
 
 ```bash
-helm uninstall argocd-cost-intelligence -n argocd-cost-intel
+helm uninstall cost-intelligence-argocd -n cost-intelligence
 ```
 
 > **Warning:** This deletes the PostgreSQL PVC, and with it all stored cost history. The chart doesn't mark the PVC to be kept. [Back up first](operations.md#backup-restore-and-pruning) if you want the data. If the chart created the namespace, `helm uninstall` removes that too.

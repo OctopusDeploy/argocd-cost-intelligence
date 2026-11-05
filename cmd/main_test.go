@@ -13,8 +13,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/config"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/rightsizing"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/config"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/rightsizing"
 )
 
 func TestOpenCostClientLogsRequestsOnlyAtDebug(t *testing.T) {

@@ -6,8 +6,8 @@ import (
 
 	"github.com/go-chi/render"
 
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/exporter"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/exporter"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/models"
 )
 
 // GET /api/cost-analysis/waste

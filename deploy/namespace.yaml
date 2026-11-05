@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: argocd-cost-intel
+  name: cost-intelligence
   labels:
-    app.kubernetes.io/name: argocd-cost-intel
-    app.kubernetes.io/part-of: argocd-cost-intel
+    app.kubernetes.io/name: cost-intelligence
+    app.kubernetes.io/part-of: cost-intelligence

@@ -1,14 +1,14 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: argocd-cost-intelligence
-  namespace: argocd-cost-intel
+  name: cost-intelligence-argocd
+  namespace: cost-intelligence
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: argocd-cost-intelligence
+  name: cost-intelligence-argocd
 rules:
 - apiGroups:
   - ""
@@ -40,15 +40,15 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: argocd-cost-intelligence
+  name: cost-intelligence-argocd
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: argocd-cost-intelligence
+  name: cost-intelligence-argocd
 subjects:
 - kind: ServiceAccount
-  name: argocd-cost-intelligence
-  namespace: argocd-cost-intel
+  name: cost-intelligence-argocd
+  namespace: cost-intelligence
 
 ---
 # Reads its own Deployment's Argo CD tracking annotation to find the Application that installed it,
@@ -56,15 +56,15 @@ subjects:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: argocd-cost-intelligence-self
-  namespace: argocd-cost-intel
+  name: cost-intelligence-argocd-self
+  namespace: cost-intelligence
 rules:
 - apiGroups:
   - apps
   resources:
   - deployments
   resourceNames:
-  - argocd-cost-intelligence
+  - cost-intelligence-argocd
   verbs:
   - get
 
@@ -72,13 +72,13 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: argocd-cost-intelligence-self
-  namespace: argocd-cost-intel
+  name: cost-intelligence-argocd-self
+  namespace: cost-intelligence
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: argocd-cost-intelligence-self
+  name: cost-intelligence-argocd-self
 subjects:
 - kind: ServiceAccount
-  name: argocd-cost-intelligence
-  namespace: argocd-cost-intel
+  name: cost-intelligence-argocd
+  namespace: cost-intelligence

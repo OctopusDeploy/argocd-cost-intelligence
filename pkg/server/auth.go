@@ -10,8 +10,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
 
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/telemetry"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/models"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/telemetry"
 )
 
 // Argo CD's extension proxy checks these headers against the caller's RBAC before forwarding a

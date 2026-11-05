@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/models"
 )
 
 // infracostJSON mirrors the schema produced by `infracost breakdown --format json`.

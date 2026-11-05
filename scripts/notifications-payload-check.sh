@@ -23,7 +23,7 @@ COPIES=(
   docs/gitops-install.md:policy.cost-intel.csv:2
 )
 
-hook=$(helm template argocd-cost-intelligence ./helm --show-only templates/post-install-hook.yaml \
+hook=$(helm template cost-intelligence-argocd ./helm --show-only templates/post-install-hook.yaml \
   --set postgres.auth.password=check)
 
 # Prints the value of the hook's environment variable $1, decoded.
@@ -100,7 +100,7 @@ done
 
 # Kubernetes RBAC named argocd-* is Argo CD's own: its Helm chart has a ClusterRole and binding
 # named argocd-notifications-controller, and an apply under the same name replaces its rules. So no
-# Role, ClusterRole or binding with such a name, other than this chart's argocd-cost-intelligence*,
+# Role, ClusterRole or binding with such a name, other than this chart's cost-intelligence-argocd*,
 # may come from the rendered chart (including YAML in the hook's script), the hook's kubectl commands,
 # deploy/, the READMEs or the docs.
 rbac_names() {
@@ -123,10 +123,10 @@ rbac_names() {
     END { emit() }
   ' "$@"
 }
-chart=$(helm template argocd-cost-intelligence ./helm --set postgres.auth.password=check)
+chart=$(helm template cost-intelligence-argocd ./helm --set postgres.auth.password=check)
 # Kept apart from the filter below, so that if awk fails the script stops instead of finding nothing.
 names=$(rbac_names <(printf '%s\n' "$chart") deploy/*.yaml docs/*.md README.md helm/README.md)
-if taken=$(grep -E ' argocd-' <<< "$names" | grep -vE ' argocd-cost-intelligence' \
+if taken=$(grep -E ' argocd-' <<< "$names" | grep -vE ' cost-intelligence-argocd' \
   | sed 's|^/dev/fd/[0-9]*:|rendered chart:|'); then
   printf '%s\n' "$taken" >&2
   echo "RBAC named after Argo CD's own objects (above); give it a Cost Intelligence name, or leave it to Argo CD's install." >&2

@@ -4,6 +4,14 @@ All notable changes to this project are listed here. The format follows [Keep a 
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** the project is now called Cost Intelligence for Argo CD, and its technical names follow.
+  - The repository, Go module, chart, images and docs site are now `cost-intelligence-argocd`.
+  - The default namespace is now `cost-intelligence`.
+  - Metrics now start with `cost_intelligence_` and alerts with `CostIntelligence`, so dashboards, custom rules, Alertmanager routes and silences need updating.
+  - To upgrade an existing install without losing its data, see [Upgrade from 0.1.0](docs/installation.md#upgrade-from-010).
+
 ## [0.1.0] - 2026-11-01
 
 The first public release.

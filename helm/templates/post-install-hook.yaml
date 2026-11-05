@@ -1,10 +1,10 @@
 {{- if .Values.features.autoPatchArgoCd }}
-{{- $backend := printf "http://%s.%s.svc.cluster.local:%v" (include "argocd-cost-intelligence.fullname" .) .Values.namespace.name .Values.costIntelligence.port }}
+{{- $backend := printf "http://%s.%s.svc.cluster.local:%v" (include "cost-intelligence-argocd.fullname" .) .Values.namespace.name .Values.costIntelligence.port }}
 {{- $notifications := dict
   "service.webhook.cost-intel" (printf "url: %s/api/cost-analysis/on-sync\nheaders:\n- name: Content-Type\n  value: application/json\n- name: Authorization\n  value: Bearer $cost-intel-webhook-token\n" $backend)
   "trigger.cost-intel-on-sync-succeeded" (.Files.Get "files/argocd/trigger.cost-intel-on-sync-succeeded")
   "template.cost-intel-sync-succeeded" (.Files.Get "files/argocd/template.cost-intel-sync-succeeded") }}
-{{- $extensionURL := printf "http://%s-ui.%s.svc.cluster.local:%v/index.js" (include "argocd-cost-intelligence.fullname" .) .Values.namespace.name .Values.ui.port }}
+{{- $extensionURL := printf "http://%s-ui.%s.svc.cluster.local:%v/index.js" (include "cost-intelligence-argocd.fullname" .) .Values.namespace.name .Values.ui.port }}
 {{- $extensionInit := dict
   "name" "cost-intel-extension"
   "image" (.Values.postInstallHook.extensionInitImage | default "busybox:1.37.0")
@@ -14,10 +14,10 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ include "argocd-cost-intelligence.fullname" . }}-post-install
+  name: {{ include "cost-intelligence-argocd.fullname" . }}-post-install
   namespace: {{ .Values.namespace.name }}
   labels:
-    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+    {{- include "cost-intelligence-argocd.labels" . | nindent 4 }}
   annotations:
     "helm.sh/hook": post-install,post-upgrade
     "helm.sh/hook-weight": "10"
@@ -27,9 +27,9 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "argocd-cost-intelligence.selectorLabels" . | nindent 8 }}
+        {{- include "cost-intelligence-argocd.selectorLabels" . | nindent 8 }}
     spec:
-      serviceAccountName: {{ include "argocd-cost-intelligence.fullname" . }}-post-install
+      serviceAccountName: {{ include "cost-intelligence-argocd.fullname" . }}-post-install
       restartPolicy: Never
       containers:
       - name: patch-argocd
@@ -38,7 +38,7 @@ spec:
         - name: WEBHOOK_TOKEN
           valueFrom:
             secretKeyRef:
-              name: {{ include "argocd-cost-intelligence.webhook.secretName" . }}
+              name: {{ include "cost-intelligence-argocd.webhook.secretName" . }}
               key: token
         # Passed as variables, not inlined in the script, so the values reach kubectl byte for byte.
         - name: ARGOCD_NAMESPACE
@@ -92,7 +92,7 @@ spec:
           done
 
           echo "Configuring Argo CD extension proxy backend..."
-          BACKEND_URL="http://{{ include "argocd-cost-intelligence.fullname" . }}.{{ .Values.namespace.name }}.svc.cluster.local:{{ .Values.costIntelligence.port }}"
+          BACKEND_URL="http://{{ include "cost-intelligence-argocd.fullname" . }}.{{ .Values.namespace.name }}.svc.cluster.local:{{ .Values.costIntelligence.port }}"
           EXTENSION_CONFIG="extensions:\n- name: cost-intel\n  backend:\n    services:\n    - url: ${BACKEND_URL}"
           kubectl patch cm argocd-cm -n {{ .Values.argoCd.namespace }} --type merge \
             -p "{\"data\":{\"extension.config\":\"${EXTENSION_CONFIG}\"}}" || true
@@ -105,8 +105,8 @@ spec:
           # it unregistered.
           {{- if and .Values.features.deployUI .Values.ui.enabled .Values.ui.autoRegister }}
           echo "Restarting Cost Intelligence UI to pick up new image..."
-          kubectl rollout restart deployment/{{ include "argocd-cost-intelligence.fullname" . }}-ui -n {{ .Values.namespace.name }} || true
-          kubectl rollout status deployment/{{ include "argocd-cost-intelligence.fullname" . }}-ui -n {{ .Values.namespace.name }} --timeout=120s || true
+          kubectl rollout restart deployment/{{ include "cost-intelligence-argocd.fullname" . }}-ui -n {{ .Values.namespace.name }} || true
+          kubectl rollout status deployment/{{ include "cost-intelligence-argocd.fullname" . }}-ui -n {{ .Values.namespace.name }} --timeout=120s || true
 
           echo "Injecting Cost Intelligence UI extension into Argo CD server..."
           SERVER_DEPLOYMENTS=$(deployments argocd-server)
@@ -208,13 +208,13 @@ spec:
           done
 
 
-          {{- if include "argocd-cost-intelligence.accessApplication.enabled" . }}
+          {{- if include "cost-intelligence-argocd.accessApplication.enabled" . }}
 
           # Argo CD may have tried the access Application's chart before the service served it; a
           # refresh clears the error now instead of at its next reconcile.
           echo "Refreshing the access Application..."
           kubectl wait --for=condition=available --timeout=300s \
-            deployment/{{ include "argocd-cost-intelligence.fullname" . }} -n {{ .Values.namespace.name }} || true
+            deployment/{{ include "cost-intelligence-argocd.fullname" . }} -n {{ .Values.namespace.name }} || true
           kubectl annotate application {{ .Values.costIntelligence.accessApplication.name }} -n "$ARGOCD_NAMESPACE" \
             argocd.argoproj.io/refresh=hard --overwrite || true
           {{- end }}
@@ -225,10 +225,10 @@ spec:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: {{ include "argocd-cost-intelligence.fullname" . }}-post-install
+  name: {{ include "cost-intelligence-argocd.fullname" . }}-post-install
   namespace: {{ .Values.namespace.name }}
   labels:
-    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+    {{- include "cost-intelligence-argocd.labels" . | nindent 4 }}
   annotations:
     "helm.sh/hook": post-install,post-upgrade
     "helm.sh/hook-weight": "5"
@@ -238,9 +238,9 @@ metadata:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: {{ include "argocd-cost-intelligence.fullname" . }}-post-install
+  name: {{ include "cost-intelligence-argocd.fullname" . }}-post-install
   labels:
-    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+    {{- include "cost-intelligence-argocd.labels" . | nindent 4 }}
   annotations:
     "helm.sh/hook": post-install,post-upgrade
     "helm.sh/hook-weight": "5"
@@ -255,7 +255,7 @@ rules:
 - apiGroups: ["apps"]
   resources: ["deployments"]
   verbs: ["get", "list", "watch", "patch"]
-{{- if include "argocd-cost-intelligence.accessApplication.enabled" . }}
+{{- if include "cost-intelligence-argocd.accessApplication.enabled" . }}
 - apiGroups: ["argoproj.io"]
   resources: ["applications"]
   resourceNames: [{{ .Values.costIntelligence.accessApplication.name | quote }}]
@@ -266,9 +266,9 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: {{ include "argocd-cost-intelligence.fullname" . }}-post-install
+  name: {{ include "cost-intelligence-argocd.fullname" . }}-post-install
   labels:
-    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+    {{- include "cost-intelligence-argocd.labels" . | nindent 4 }}
   annotations:
     "helm.sh/hook": post-install,post-upgrade
     "helm.sh/hook-weight": "5"
@@ -276,9 +276,9 @@ metadata:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: {{ include "argocd-cost-intelligence.fullname" . }}-post-install
+  name: {{ include "cost-intelligence-argocd.fullname" . }}-post-install
 subjects:
 - kind: ServiceAccount
-  name: {{ include "argocd-cost-intelligence.fullname" . }}-post-install
+  name: {{ include "cost-intelligence-argocd.fullname" . }}-post-install
   namespace: {{ .Values.namespace.name }}
 {{- end }}

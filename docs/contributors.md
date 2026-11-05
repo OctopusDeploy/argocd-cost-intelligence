@@ -5,7 +5,7 @@ hide:
 
 # Contributors
 
-Who works on Argo CD Cost Intelligence and how its pull requests get reviewed and merged. The page is generated each week from the repository's pull request activity by [oss-chronicle](https://github.com/ppapapetrou76/oss-chronicle). You can also [open it on its own page](assets/contributors/index.html).
+Who works on Cost Intelligence for Argo CD and how its pull requests get reviewed and merged. The page is generated each week from the repository's pull request activity by [oss-chronicle](https://github.com/ppapapetrou76/oss-chronicle). You can also [open it on its own page](assets/contributors/index.html).
 
 <iframe id="contributors-page" src="../assets/contributors/" title="Contributors" style="width: 100%; min-height: 600px; border: 0;"></iframe>
 

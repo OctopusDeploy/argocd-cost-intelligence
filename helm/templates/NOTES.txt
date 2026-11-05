@@ -1,6 +1,6 @@
-ArgoCD Cost Intelligence is installed in namespace {{ .Values.namespace.name }}.
+Cost Intelligence for Argo CD is installed in namespace {{ .Values.namespace.name }}.
 Open any application in Argo CD to find its Cost Intelligence tab.
-{{- $scope := include "argocd-cost-intelligence.clusterScopeApp" . }}
+{{- $scope := include "cost-intelligence-argocd.clusterScopeApp" . }}
 {{- $access := .Values.costIntelligence.accessApplication }}
 {{- if eq $scope "off" }}
 
@@ -12,7 +12,7 @@ Cost Intelligence or the one the chart creates.
 
 Cluster-wide costs (the Namespaces, Idle spend and Chargeback pages) are shown
 to users Argo CD allows to get the application {{ $scope }}.
-{{- else if include "argocd-cost-intelligence.accessApplication.enabled" . }}
+{{- else if include "cost-intelligence-argocd.accessApplication.enabled" . }}
 
 Cluster-wide costs (the Namespaces, Idle spend and Chargeback pages) are shown
 to users Argo CD allows to get the application {{ .Values.argoCd.namespace }}:{{ $access.name }},

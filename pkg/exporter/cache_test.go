@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/models"
 )
 
 type countingLister struct {

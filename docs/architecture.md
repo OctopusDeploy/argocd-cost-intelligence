@@ -101,7 +101,7 @@ Rightsizing reads the Vertical Pod Autoscalers in the application's namespace. O
 
 ### The exporter runs as a single replica
 
-Cost is the same whichever process reads it. If every API replica exported it, a `sum` in Prometheus would count each application once per replica, and the total would change as the HPA scales. So one exporter replica exports it once, the way kube-state-metrics does, and it uses the `Recreate` strategy so that two never run during an upgrade. While it restarts, the cost series have a gap of a minute or two, which the `ArgoCDCostIntelligenceExporterAbsent` alert allows for. Health metrics are the other way round: each API replica reports its own requests and errors.
+Cost is the same whichever process reads it. If every API replica exported it, a `sum` in Prometheus would count each application once per replica, and the total would change as the HPA scales. So one exporter replica exports it once, the way kube-state-metrics does, and it uses the `Recreate` strategy so that two never run during an upgrade. While it restarts, the cost series have a gap of a minute or two, which the `CostIntelligenceExporterAbsent` alert allows for. Health metrics are the other way round: each API replica reports its own requests and errors.
 
 ## Authorization
 

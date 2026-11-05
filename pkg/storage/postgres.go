@@ -13,7 +13,7 @@ import (
 	"github.com/lib/pq"
 	"github.com/lib/pq/pqerror"
 
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/models"
 )
 
 type PostgresCostStorage struct {

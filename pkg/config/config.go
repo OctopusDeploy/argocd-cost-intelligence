@@ -9,7 +9,7 @@ import (
 
 	"github.com/kelseyhightower/envconfig"
 
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/models"
 )
 
 type Config struct {

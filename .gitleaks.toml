@@ -1,4 +1,4 @@
-title = "argocd-cost-intelligence"
+title = "cost-intelligence-argocd"
 
 [extend]
 useDefault = true

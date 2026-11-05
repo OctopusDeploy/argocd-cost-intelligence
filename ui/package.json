@@ -1,5 +1,5 @@
 {
-  "name": "argocd-cost-intelligence-ui",
+  "name": "cost-intelligence-argocd-ui",
   "version": "1.0.0",
   "description": "Argo CD UI Plugin for Cost Intelligence",
   "main": "dist/index.js",

@@ -19,11 +19,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/exporter"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/hook"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/opencost"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/validation"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/exporter"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/hook"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/models"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/opencost"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/validation"
 )
 
 // lockName is the lock replicas take turns on.

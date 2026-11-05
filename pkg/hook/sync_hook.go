@@ -10,12 +10,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/exporter"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/opencost"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/storage"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/telemetry"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/validation"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/exporter"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/models"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/opencost"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/storage"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/telemetry"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/validation"
 )
 
 // ErrNoData is returned for a sync whose namespace OpenCost has no data for yet, as for one created by

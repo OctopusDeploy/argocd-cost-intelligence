@@ -1,15 +1,15 @@
-# ArgoCD Cost Intelligence - Helm Values
+# Cost Intelligence for Argo CD - Helm Values
 
 # Namespace configuration
 namespace:
   create: true
-  name: argocd-cost-intel
+  name: cost-intelligence
 
 # Cost Intelligence Service Configuration
 costIntelligence:
   # Service image
   image:
-    repository: ghcr.io/octopusdeploy/argocd-cost-intelligence
+    repository: ghcr.io/octopusdeploy/cost-intelligence-argocd
     tag: ""  # defaults to .Chart.AppVersion when empty
     pullPolicy: IfNotPresent
 
@@ -212,13 +212,13 @@ security:
 rbac:
   create: true
   # Role names
-  roleName: argocd-cost-intelligence
-  roleBindingName: argocd-cost-intelligence
+  roleName: cost-intelligence-argocd
+  roleBindingName: cost-intelligence-argocd
 
 # Service Account
 serviceAccount:
   create: true
-  name: argocd-cost-intelligence
+  name: cost-intelligence-argocd
 
 # Health checks
 healthChecks:
@@ -265,7 +265,7 @@ tolerations: []
 
 # Labels to apply to all resources
 commonLabels:
-  app.kubernetes.io/part-of: argocd-cost-intelligence
+  app.kubernetes.io/part-of: cost-intelligence-argocd
 
 # Annotations to apply to all resources
 commonAnnotations: {}
@@ -275,7 +275,7 @@ ui:
   enabled: true
 
   image:
-    repository: ghcr.io/octopusdeploy/argocd-cost-intelligence-ui
+    repository: ghcr.io/octopusdeploy/cost-intelligence-argocd-ui
     tag: ""  # defaults to .Chart.AppVersion when empty
     pullPolicy: IfNotPresent
 

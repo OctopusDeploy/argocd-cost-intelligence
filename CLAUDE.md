@@ -13,7 +13,7 @@ A Kubernetes-native service that records the actual cost of Argo CD applications
 ## Commands
 
 ```bash
-make build            # go build -> bin/argocd-cost-intelligence
+make build            # go build -> bin/cost-intelligence-argocd
 make test             # go test -v ./...
 make test-integration # + -tags=integration: storage (testcontainers, needs Docker) and OpenCost client (skipped unless an OpenCost or the mock is on :9003)
 make lint             # golangci-lint run ./...

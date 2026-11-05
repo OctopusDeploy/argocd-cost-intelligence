@@ -6,7 +6,7 @@ import { Destination, otherCluster } from './utils/destination';
 
 // Argo CD Plugin Interface
 export const plugin = {
-  name: 'argocd-cost-intelligence',
+  name: 'cost-intelligence-argocd',
   version: '1.0.0',
   description: 'Display cost metrics for Argo CD applications',
 };
@@ -32,7 +32,7 @@ export interface ApplicationDetailsTabProps {
   };
 }
 
-export const ArgoCDCostIntelligenceTab: React.FC<ApplicationDetailsTabProps> = ({
+export const CostIntelligenceTab: React.FC<ApplicationDetailsTabProps> = ({
   application,
 }) => {
   const appName = application?.metadata?.name;
@@ -75,7 +75,7 @@ export const ArgoCDCostIntelligenceTab: React.FC<ApplicationDetailsTabProps> = (
 
 // Export default for Argo CD to detect
 export default {
-  component: ArgoCDCostIntelligenceTab,
+  component: CostIntelligenceTab,
   name: 'Cost Intelligence',
   key: 'cost-intelligence',
 };

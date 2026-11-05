@@ -29,5 +29,5 @@ annotations:
     - name: Documentation
       url: https://cost-intelligence-argocd.readthedocs.io/
   artifacthub.io/changes: |
-    - kind: added
-      description: Initial release
+    - kind: changed
+      description: The project is now called Cost Intelligence for Argo CD. The chart, images, default namespace, metrics and alerts are renamed, so read the upgrade notes before upgrading from 0.1.0

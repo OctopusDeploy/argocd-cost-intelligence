@@ -4,6 +4,8 @@ All notable changes to this project are listed here. The format follows [Keep a 
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-05
+
 ### Changed
 
 - **Breaking:** the project is now called Cost Intelligence for Argo CD, and its technical names follow.
@@ -41,5 +43,6 @@ The first public release.
 - `/on-sync` needs `Authorization: Bearer <WEBHOOK_SECRET>`. The backend won't start with a secret shorter than 16 characters.
 - The NetworkPolicies are what make the headers trustworthy, so they need a CNI that enforces NetworkPolicy. k3s and k3d do, unless k3s was started with `--disable-network-policy`.
 
-[Unreleased]: https://github.com/OctopusDeploy/argocd-cost-intelligence/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/OctopusDeploy/argocd-cost-intelligence/releases/tag/v0.1.0
+[Unreleased]: https://github.com/OctopusDeploy/cost-intelligence-argocd/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/OctopusDeploy/cost-intelligence-argocd/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/OctopusDeploy/cost-intelligence-argocd/releases/tag/v0.1.0

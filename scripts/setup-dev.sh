@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "=== ArgoCD Cost Intelligence - Development Setup ==="
+echo "=== Cost Intelligence for Argo CD - Development Setup ==="
 
 # Check if Docker is installed
 if ! command -v docker &> /dev/null; then

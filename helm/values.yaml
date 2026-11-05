@@ -1,4 +1,4 @@
-# ArgoCD Cost Intelligence - Helm Values
+# Cost Intelligence for Argo CD - Helm Values
 
 # Namespace configuration
 namespace:

@@ -1,4 +1,4 @@
-site_name: ArgoCD Cost Intelligence
+site_name: Cost Intelligence for Argo CD
 site_description: The actual cost of each Argo CD application, measured with OpenCost
 site_url: !ENV [READTHEDOCS_CANONICAL_URL, https://argocd-cost-intelligence.readthedocs.io/en/latest/]
 repo_url: https://github.com/OctopusDeploy/argocd-cost-intelligence

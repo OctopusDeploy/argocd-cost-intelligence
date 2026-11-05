@@ -1,6 +1,6 @@
 # Installation
 
-This page covers installing ArgoCD Cost Intelligence with Helm, checking that it works, upgrading and removing it. Chart settings are in [Configuration](configuration.md). If something goes wrong, see [Troubleshooting](operations.md#troubleshooting).
+This page covers installing Cost Intelligence for Argo CD with Helm, checking that it works, upgrading and removing it. Chart settings are in [Configuration](configuration.md). If something goes wrong, see [Troubleshooting](operations.md#troubleshooting).
 
 ## What the chart installs
 

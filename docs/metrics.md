@@ -1,6 +1,6 @@
 # Prometheus metrics
 
-ArgoCD Cost Intelligence exports two kinds of metrics:
+Cost Intelligence for Argo CD exports two kinds of metrics:
 
 - What each Argo CD Application costs, per hour. A single exporter process serves these ([why](architecture.md#the-exporter-runs-as-a-single-replica)). Use them for Grafana dashboards, chargeback queries and cost alerts, next to Argo CD's own `argocd_app_info`.
 - How the service itself is doing. Each API replica serves its own: requests, sync webhooks and measurements, calls to OpenCost and PostgreSQL, and the daily history recorder. Use them to tell whether costs are being measured at all.

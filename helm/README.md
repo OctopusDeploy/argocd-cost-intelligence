@@ -1,4 +1,4 @@
-# ArgoCD Cost Intelligence Helm Chart
+# Cost Intelligence for Argo CD Helm Chart
 
 Measures what each Argo CD application costs: after every sync it queries [OpenCost](https://www.opencost.io), stores the result in PostgreSQL and shows it in a **Cost Intelligence** tab in the Argo CD UI.
 

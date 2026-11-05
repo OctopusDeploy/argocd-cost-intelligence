@@ -40,7 +40,7 @@ tests:
               severity: warning
               job: exporter
             exp_annotations:
-              summary: "The ArgoCD Cost Intelligence exporter has not refreshed Application costs for 25m 0s"
+              summary: "The Cost Intelligence for Argo CD exporter has not refreshed Application costs for 25m 0s"
               description: "Its Application cost series are empty or missing. exporter_refresh_errors_total says which step fails: applications means it cannot list Argo CD Applications."
       - alertname: ArgoCDCostIntelligenceExporterAbsent
         eval_time: 35m
@@ -55,7 +55,7 @@ tests:
           - exp_labels:
               severity: warning
             exp_annotations:
-              summary: "No ArgoCD Cost Intelligence exporter is being scraped"
+              summary: "No Cost Intelligence for Argo CD exporter is being scraped"
               description: "Application cost metrics are missing. Check that the exporter Deployment runs and that Prometheus may reach its metrics port (metrics.allowedFrom)."
 
   # OpenCost fails for some namespace on every refresh; estimates never fail.
@@ -73,7 +73,7 @@ tests:
               severity: warning
               stage: opencost
             exp_annotations:
-              summary: "The ArgoCD Cost Intelligence exporter's opencost step keeps failing"
+              summary: "The Cost Intelligence for Argo CD exporter's opencost step keeps failing"
               description: "Applications it cannot measure are left out of the cost series. The exporter's log names the namespace or error."
 
   # Three measurements in four fail, across two replicas.
@@ -92,7 +92,7 @@ tests:
           - exp_labels:
               severity: warning
             exp_annotations:
-              summary: "75% of ArgoCD Cost Intelligence's measurements after a sync fail"
+              summary: "75% of Cost Intelligence for Argo CD's measurements after a sync fail"
               description: "Syncs are not being measured. Check OpenCost (opencost_request_duration_seconds by code) and PostgreSQL (database_operation_duration_seconds by result)."
 
   # Three measurements in four fail, among many that found no OpenCost data yet.
@@ -111,7 +111,7 @@ tests:
           - exp_labels:
               severity: warning
             exp_annotations:
-              summary: "75% of ArgoCD Cost Intelligence's measurements after a sync fail"
+              summary: "75% of Cost Intelligence for Argo CD's measurements after a sync fail"
               description: "Syncs are not being measured. Check OpenCost (opencost_request_duration_seconds by code) and PostgreSQL (database_operation_duration_seconds by result)."
 
   # One measurement in four fails.
@@ -140,7 +140,7 @@ tests:
           - exp_labels:
               severity: warning
             exp_annotations:
-              summary: "ArgoCD Cost Intelligence refuses every sync webhook"
+              summary: "Cost Intelligence for Argo CD refuses every sync webhook"
               description: "The cost-intel-webhook-token key of argocd-notifications-secret must equal the service's WEBHOOK_SECRET. Running helm upgrade copies it again."
 
   # Some webhooks are refused (a stray client), but Argo CD's get through.
@@ -185,7 +185,7 @@ tests:
           - exp_labels:
               severity: warning
             exp_annotations:
-              summary: "75% of ArgoCD Cost Intelligence's requests to OpenCost fail"
+              summary: "75% of Cost Intelligence for Argo CD's requests to OpenCost fail"
               description: "Costs cannot be measured. code=\"error\" means OpenCost did not answer; check OPENCOST_BASE_URL and OpenCost's health."
 
   # Replica b last recorded at minute 1; replica a has not finished a run and reports 0.
@@ -205,7 +205,7 @@ tests:
           - exp_labels:
               severity: warning
             exp_annotations:
-              summary: "ArgoCD Cost Intelligence has not recorded daily cost history for 3h 19m 0s"
+              summary: "Cost Intelligence for Argo CD has not recorded daily cost history for 3h 19m 0s"
               description: "Long Trends ranges will have gaps. Check the API's log for 'Daily cost history'."
 
   # No replica has finished a run (or history is off): nothing to call stale.
@@ -232,7 +232,7 @@ tests:
           - exp_labels:
               severity: warning
             exp_annotations:
-              summary: "Every ArgoCD Cost Intelligence daily history run in 3 hours failed"
+              summary: "Every Cost Intelligence for Argo CD daily history run in 3 hours failed"
               description: "The API's log names the Applications and errors under 'Daily cost history'."
 
   # One run in three succeeds.

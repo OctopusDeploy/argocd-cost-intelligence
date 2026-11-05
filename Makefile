@@ -242,7 +242,7 @@ helm-deploy-real: docker-build docker-build-ui
 		--namespace $(OPENCOST_NS) --create-namespace \
 		--set opencost.prometheus.internal.namespaceName="$$PROM_NS" \
 		--wait --timeout 120s
-	@echo "==> Deploying ArgoCD Cost Intelligence (release=$(HELM_RELEASE), values=$(HELM_VALUES))..."
+	@echo "==> Deploying Cost Intelligence for Argo CD (release=$(HELM_RELEASE), values=$(HELM_VALUES))..."
 	helm upgrade --install $(HELM_RELEASE) ./helm -f $(HELM_VALUES) \
 		--set postgres.auth.password=localdev \
 		--wait --timeout 600s

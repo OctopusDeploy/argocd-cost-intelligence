@@ -75,7 +75,7 @@ func runAPI(cfg *config.Config, logger *log.Logger) {
 		serverOpts = append(serverOpts, server.WithUnmeasuredApp(access))
 	}
 
-	logger.Print("Starting ArgoCD Cost Intelligence Service")
+	logger.Print("Starting Cost Intelligence for Argo CD Service")
 	logger.Printf("Server listening on port %d\n", cfg.Server.Port)
 	logger.Printf("OpenCost endpoint: %s\n", cfg.OpenCost.BaseURL)
 	logger.Printf("Database: %s@%s:%d/%s\n", cfg.Database.User, cfg.Database.Host, cfg.Database.Port, cfg.Database.Database)
@@ -263,7 +263,7 @@ func runBackfill(ctx context.Context, b *backfill.Backfill, recorder *history.Re
 // runExporter exports every Argo CD Application's cost to Prometheus. It runs as a single replica:
 // see pkg/exporter.
 func runExporter(cfg *config.Config, logger *log.Logger) {
-	logger.Printf("Starting ArgoCD Cost Intelligence exporter, refreshing every %s\n", cfg.ExporterInterval)
+	logger.Printf("Starting Cost Intelligence for Argo CD exporter, refreshing every %s\n", cfg.ExporterInterval)
 	registry := prometheus.NewRegistry()
 	metrics := telemetry.NewExporterMetrics(registry)
 

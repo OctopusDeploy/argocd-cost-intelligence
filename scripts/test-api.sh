@@ -10,7 +10,7 @@ APP=nginx
 APP_HEADER="Argocd-Application-Name: argocd:$APP"
 TIMESTAMP=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
 
-echo "=== Testing ArgoCD Cost Intelligence API ==="
+echo "=== Testing Cost Intelligence for Argo CD API ==="
 echo "Base URL: $BASE_URL"
 echo ""
 

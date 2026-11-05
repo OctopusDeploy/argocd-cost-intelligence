@@ -2,7 +2,7 @@
 
 ## Sponsor
 
-ArgoCD Cost Intelligence is sponsored by [Octopus Deploy](https://octopus.com). Octopus Deploy owns the GitHub repository and the infrastructure that builds and publishes releases, and it pays for the time of the maintainers it employs. The project is not part of the Argo project, the CNCF or OpenCost.
+Cost Intelligence for Argo CD is sponsored by [Octopus Deploy](https://octopus.com). Octopus Deploy owns the GitHub repository and the infrastructure that builds and publishes releases, and it pays for the time of the maintainers it employs. The project is not part of the Argo project, the CNCF or OpenCost.
 
 ## Roles
 

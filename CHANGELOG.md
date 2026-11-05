@@ -4,6 +4,10 @@ All notable changes to this project are listed here. The format follows [Keep a 
 
 ## [Unreleased]
 
+### Changed
+
+- The project is now called Cost Intelligence for Argo CD. Only the name in the docs, log lines and alert summaries changes. The repository, chart, images, metrics and alert names stay the same.
+
 ## [0.1.0] - 2026-11-01
 
 The first public release.

@@ -1,4 +1,4 @@
-ArgoCD Cost Intelligence is installed in namespace {{ .Values.namespace.name }}.
+Cost Intelligence for Argo CD is installed in namespace {{ .Values.namespace.name }}.
 Open any application in Argo CD to find its Cost Intelligence tab.
 {{- $scope := include "argocd-cost-intelligence.clusterScopeApp" . }}
 {{- $access := .Values.costIntelligence.accessApplication }}

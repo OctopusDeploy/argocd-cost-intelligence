@@ -114,10 +114,10 @@ jobs:
       matrix:
         include:
           - image: backend
-            tag: argocd-cost-intelligence:ci
+            tag: cost-intelligence-argocd:ci
             context: .
           - image: UI
-            tag: argocd-cost-intelligence-ui:ci
+            tag: cost-intelligence-argocd-ui:ci
             context: ui
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -138,23 +138,23 @@ jobs:
 
       - name: Template (default values)
         run: |
-          helm template argocd-cost-intelligence ./helm \
+          helm template cost-intelligence-argocd ./helm \
             --set postgres.auth.password=ci-test
 
       - name: Template (local values)
         run: |
-          helm template argocd-cost-intelligence ./helm \
+          helm template cost-intelligence-argocd ./helm \
             -f helm/values-local.yaml \
             --set postgres.auth.password=ci-test
 
       - name: Template (metrics off)
         run: |
-          helm template argocd-cost-intelligence ./helm \
+          helm template cost-intelligence-argocd ./helm \
             --set postgres.auth.password=ci-test --set metrics.enabled=false
 
       - name: Template (Prometheus Operator)
         run: |
-          helm template argocd-cost-intelligence ./helm \
+          helm template cost-intelligence-argocd ./helm \
             --set postgres.auth.password=ci-test \
             --set metrics.serviceMonitor.enabled=true --set metrics.prometheusRule.enabled=true
 

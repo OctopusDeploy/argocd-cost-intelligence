@@ -4,25 +4,25 @@ Measures what each Argo CD application costs: after every sync it queries [OpenC
 
 The chart deploys the backend API, the UI plugin, a bundled PostgreSQL StatefulSet and, optionally, a Prometheus exporter. A post-install hook registers the extension proxy, the UI bundle and the notification webhook in Argo CD.
 
-> Early release (v0.x): chart values may change between minor versions. See the [CHANGELOG](https://github.com/OctopusDeploy/argocd-cost-intelligence/blob/main/CHANGELOG.md).
+> Early release (v0.x): chart values may change between minor versions. See the [CHANGELOG](https://github.com/OctopusDeploy/cost-intelligence-argocd/blob/main/CHANGELOG.md).
 
 ## Requirements
 
-Argo CD 3.4, 3.5 or 3.6 on a Kubernetes version it supports, OpenCost 1.121.1+ reachable from the release namespace, Helm 3.8+. Argo CD and OpenCost run in the same cluster, and only the applications Argo CD deploys to that cluster are measured ([limits and requirements](https://github.com/OctopusDeploy/argocd-cost-intelligence/blob/main/docs/limits-and-requirements.md)). Details: [installation guide](https://github.com/OctopusDeploy/argocd-cost-intelligence/blob/main/docs/installation.md).
+Argo CD 3.4, 3.5 or 3.6 on a Kubernetes version it supports, OpenCost 1.121.1+ reachable from the release namespace, Helm 3.8+. Argo CD and OpenCost run in the same cluster, and only the applications Argo CD deploys to that cluster are measured ([limits and requirements](https://github.com/OctopusDeploy/cost-intelligence-argocd/blob/main/docs/limits-and-requirements.md)). Details: [installation guide](https://github.com/OctopusDeploy/cost-intelligence-argocd/blob/main/docs/installation.md).
 
 ## Install
 
 ```bash
-helm install argocd-cost-intelligence \
-  oci://ghcr.io/octopusdeploy/charts/argocd-cost-intelligence \
+helm install cost-intelligence-argocd \
+  oci://ghcr.io/octopusdeploy/charts/cost-intelligence-argocd \
   --version <chart-version> \
-  --namespace argocd-cost-intel --create-namespace \
+  --namespace cost-intelligence --create-namespace \
   --set namespace.create=false \
   --set postgres.auth.password=<your-secure-password> \
   --wait --timeout 10m
 ```
 
-Replace `<chart-version>` with the newest version on the [Releases page](https://github.com/OctopusDeploy/argocd-cost-intelligence/releases). From a checkout, replace the OCI reference with `./helm`. Ready-made overlays: `values-minimal.yaml` (one replica, small storage) and `values-production.yaml` (autoscaling, resource limits, anti-affinity).
+Replace `<chart-version>` with the newest version on the [Releases page](https://github.com/OctopusDeploy/cost-intelligence-argocd/releases). From a checkout, replace the OCI reference with `./helm`. Ready-made overlays: `values-minimal.yaml` (one replica, small storage) and `values-production.yaml` (autoscaling, resource limits, anti-affinity).
 
 ## Values you will probably set
 
@@ -36,16 +36,16 @@ Replace `<chart-version>` with the newest version on the [Releases page](https:/
 | `networkPolicy.enabled` | `true` | Set `false` on CNIs that do not enforce NetworkPolicy, such as Flannel on its own (k3s and k3d do enforce it, unless k3s was started with `--disable-network-policy`) |
 | `metrics.enabled` | `true` | Prometheus metrics and exporter |
 
-Every value, with defaults, is in [`values.yaml`](https://github.com/OctopusDeploy/argocd-cost-intelligence/blob/main/helm/values.yaml) and the [configuration reference](https://github.com/OctopusDeploy/argocd-cost-intelligence/blob/main/docs/configuration.md#helm-values).
+Every value, with defaults, is in [`values.yaml`](https://github.com/OctopusDeploy/cost-intelligence-argocd/blob/main/helm/values.yaml) and the [configuration reference](https://github.com/OctopusDeploy/cost-intelligence-argocd/blob/main/docs/configuration.md#helm-values).
 
 ## Documentation
 
-Every guide is on the [docs site](https://argocd-cost-intelligence.readthedocs.io/). The ones for running the chart:
+Every guide is on the [docs site](https://cost-intelligence-argocd.readthedocs.io/). The ones for running the chart:
 
-- [Installation](https://github.com/OctopusDeploy/argocd-cost-intelligence/blob/main/docs/installation.md): prerequisites, install, upgrade, uninstall
-- [Configuration](https://github.com/OctopusDeploy/argocd-cost-intelligence/blob/main/docs/configuration.md): every value, secrets, profiles
-- [Operations](https://github.com/OctopusDeploy/argocd-cost-intelligence/blob/main/docs/operations.md): troubleshooting, NetworkPolicy, database backups
-- [Metrics](https://github.com/OctopusDeploy/argocd-cost-intelligence/blob/main/docs/metrics.md): Prometheus metrics, rules and alerts
+- [Installation](https://github.com/OctopusDeploy/cost-intelligence-argocd/blob/main/docs/installation.md): prerequisites, install, upgrade, uninstall
+- [Configuration](https://github.com/OctopusDeploy/cost-intelligence-argocd/blob/main/docs/configuration.md): every value, secrets, profiles
+- [Operations](https://github.com/OctopusDeploy/cost-intelligence-argocd/blob/main/docs/operations.md): troubleshooting, NetworkPolicy, database backups
+- [Metrics](https://github.com/OctopusDeploy/cost-intelligence-argocd/blob/main/docs/metrics.md): Prometheus metrics, rules and alerts
 
 ## License
 

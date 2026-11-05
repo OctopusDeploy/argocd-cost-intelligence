@@ -6,7 +6,7 @@ metadata:
   name: postgres-pvc
   namespace: {{ .Values.namespace.name }}
   labels:
-    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+    {{- include "cost-intelligence-argocd.labels" . | nindent 4 }}
     app: postgres
 spec:
   accessModes:
@@ -25,19 +25,19 @@ metadata:
   name: postgres
   namespace: {{ .Values.namespace.name }}
   labels:
-    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+    {{- include "cost-intelligence-argocd.labels" . | nindent 4 }}
     app: postgres
 spec:
   serviceName: postgres
   replicas: {{ .Values.postgres.replicaCount }}
   selector:
     matchLabels:
-      {{- include "argocd-cost-intelligence.selectorLabels" . | nindent 6 }}
+      {{- include "cost-intelligence-argocd.selectorLabels" . | nindent 6 }}
       app: postgres
   template:
     metadata:
       labels:
-        {{- include "argocd-cost-intelligence.selectorLabels" . | nindent 8 }}
+        {{- include "cost-intelligence-argocd.selectorLabels" . | nindent 8 }}
         app: postgres
     spec:
       {{- if .Values.postgres.podSecurityContext }}
@@ -56,12 +56,12 @@ spec:
         - name: POSTGRES_USER
           valueFrom:
             secretKeyRef:
-              name: {{ include "argocd-cost-intelligence.postgres.secretName" . }}
+              name: {{ include "cost-intelligence-argocd.postgres.secretName" . }}
               key: username
         - name: POSTGRES_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: {{ include "argocd-cost-intelligence.postgres.secretName" . }}
+              name: {{ include "cost-intelligence-argocd.postgres.secretName" . }}
               key: password
         - name: POSTGRES_DB
           value: {{ .Values.postgres.auth.database | quote }}
@@ -125,12 +125,12 @@ metadata:
   name: postgres
   namespace: {{ .Values.namespace.name }}
   labels:
-    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+    {{- include "cost-intelligence-argocd.labels" . | nindent 4 }}
     app: postgres
 spec:
   clusterIP: None
   selector:
-    {{- include "argocd-cost-intelligence.selectorLabels" . | nindent 4 }}
+    {{- include "cost-intelligence-argocd.selectorLabels" . | nindent 4 }}
     app: postgres
   ports:
   - name: postgres

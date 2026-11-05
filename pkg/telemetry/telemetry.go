@@ -21,7 +21,7 @@ import (
 )
 
 // Namespace prefixes every metric the service exports.
-const Namespace = "argocd_cost_intelligence"
+const Namespace = "cost_intelligence"
 
 // Webhook results, for ObserveWebhook.
 const (

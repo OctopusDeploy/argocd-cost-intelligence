@@ -13,7 +13,7 @@ RUN go mod download
 COPY . .
 
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    go build -trimpath -ldflags="-s -w" -o argocd-cost-intelligence ./cmd
+    go build -trimpath -ldflags="-s -w" -o cost-intelligence-argocd ./cmd
 
 # Runtime stage
 FROM alpine:3.22
@@ -23,7 +23,7 @@ RUN apk add --no-cache ca-certificates curl \
 
 WORKDIR /app
 
-COPY --from=builder /build/argocd-cost-intelligence .
+COPY --from=builder /build/cost-intelligence-argocd .
 
 USER 1000
 
@@ -32,4 +32,4 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD ["curl", "-f", "http://localhost:8080/health"]
 
-ENTRYPOINT ["./argocd-cost-intelligence"]
+ENTRYPOINT ["./cost-intelligence-argocd"]

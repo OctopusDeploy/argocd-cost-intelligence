@@ -5,10 +5,10 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "argocd-cost-intelligence.fullname" . }}-exporter
+  name: {{ include "cost-intelligence-argocd.fullname" . }}-exporter
   namespace: {{ .Values.namespace.name }}
   labels:
-    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+    {{- include "cost-intelligence-argocd.labels" . | nindent 4 }}
     component: exporter
 spec:
   replicas: 1
@@ -16,7 +16,7 @@ spec:
     type: Recreate
   selector:
     matchLabels:
-      {{- include "argocd-cost-intelligence.selectorLabels" . | nindent 6 }}
+      {{- include "cost-intelligence-argocd.selectorLabels" . | nindent 6 }}
       component: exporter
   template:
     metadata:
@@ -25,14 +25,14 @@ spec:
         {{- with .Values.commonAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-        {{- include "argocd-cost-intelligence.metrics.scrapeAnnotations" . | nindent 8 }}
+        {{- include "cost-intelligence-argocd.metrics.scrapeAnnotations" . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "argocd-cost-intelligence.selectorLabels" . | nindent 8 }}
+        {{- include "cost-intelligence-argocd.selectorLabels" . | nindent 8 }}
         component: exporter
     spec:
       # Lists Argo CD Applications, which the ClusterRole allows.
-      serviceAccountName: {{ include "argocd-cost-intelligence.serviceAccountName" . }}
+      serviceAccountName: {{ include "cost-intelligence-argocd.serviceAccountName" . }}
       {{- if .Values.security.podSecurityContext }}
       securityContext:
         {{- toYaml .Values.security.podSecurityContext | nindent 8 }}
@@ -56,18 +56,18 @@ spec:
           value: {{ .Values.costIntelligence.logLevel | quote }}
         # PostgreSQL, for the cloud estimates CI pushes.
         - name: DB_HOST
-          value: {{ include "argocd-cost-intelligence.postgres.host" . | quote }}
+          value: {{ include "cost-intelligence-argocd.postgres.host" . | quote }}
         - name: DB_PORT
-          value: "{{ include "argocd-cost-intelligence.postgres.port" . }}"
+          value: "{{ include "cost-intelligence-argocd.postgres.port" . }}"
         - name: DB_USER
           valueFrom:
             secretKeyRef:
-              name: {{ include "argocd-cost-intelligence.postgres.secretName" . }}
+              name: {{ include "cost-intelligence-argocd.postgres.secretName" . }}
               key: username
         - name: DB_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: {{ include "argocd-cost-intelligence.postgres.secretName" . }}
+              name: {{ include "cost-intelligence-argocd.postgres.secretName" . }}
               key: password
         - name: DB_NAME
           value: {{ .Values.postgres.auth.database | quote }}
@@ -76,7 +76,7 @@ spec:
         - name: OPENCOST_BASE_URL
           valueFrom:
             secretKeyRef:
-              name: {{ include "argocd-cost-intelligence.openCost.secretName" . }}
+              name: {{ include "cost-intelligence-argocd.openCost.secretName" . }}
               key: opencost-base-url
         - name: OPENCOST_TIMEOUT
           value: {{ .Values.openCost.timeout | quote }}
@@ -125,10 +125,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "argocd-cost-intelligence.fullname" . }}-exporter
+  name: {{ include "cost-intelligence-argocd.fullname" . }}-exporter
   namespace: {{ .Values.namespace.name }}
   labels:
-    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+    {{- include "cost-intelligence-argocd.labels" . | nindent 4 }}
     component: exporter
 spec:
   type: ClusterIP
@@ -138,6 +138,6 @@ spec:
     protocol: TCP
     name: metrics
   selector:
-    {{- include "argocd-cost-intelligence.selectorLabels" . | nindent 4 }}
+    {{- include "cost-intelligence-argocd.selectorLabels" . | nindent 4 }}
     component: exporter
 {{- end }}

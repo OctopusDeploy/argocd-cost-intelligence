@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/models"
 )
 
 // Source is where daily costs come from: OpenCost.

@@ -1,14 +1,14 @@
 {{/*
 Expand the name of the chart.
 */}}
-{{- define "argocd-cost-intelligence.name" -}}
+{{- define "cost-intelligence-argocd.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Create a default fully qualified app name.
 */}}
-{{- define "argocd-cost-intelligence.fullname" -}}
+{{- define "cost-intelligence-argocd.fullname" -}}
 {{- if .Values.fullnameOverride }}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
 {{- else }}
@@ -24,7 +24,7 @@ Create a default fully qualified app name.
 {{/*
 Create chart name and version as used by the chart label.
 */}}
-{{- define "argocd-cost-intelligence.chart" -}}
+{{- define "cost-intelligence-argocd.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.AppVersion | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
@@ -32,9 +32,9 @@ Create chart name and version as used by the chart label.
 Common labels. Built as a map so a key in commonLabels that the chart also sets
 cannot be emitted twice; the chart's value wins, so selector labels stay intact.
 */}}
-{{- define "argocd-cost-intelligence.labels" -}}
-{{- $labels := include "argocd-cost-intelligence.selectorLabels" . | fromYaml }}
-{{- $_ := set $labels "helm.sh/chart" (include "argocd-cost-intelligence.chart" .) }}
+{{- define "cost-intelligence-argocd.labels" -}}
+{{- $labels := include "cost-intelligence-argocd.selectorLabels" . | fromYaml }}
+{{- $_ := set $labels "helm.sh/chart" (include "cost-intelligence-argocd.chart" .) }}
 {{- if .Chart.AppVersion }}
 {{- $_ := set $labels "app.kubernetes.io/version" .Chart.AppVersion }}
 {{- end }}
@@ -45,17 +45,17 @@ cannot be emitted twice; the chart's value wins, so selector labels stay intact.
 {{/*
 Selector labels
 */}}
-{{- define "argocd-cost-intelligence.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "argocd-cost-intelligence.name" . }}
+{{- define "cost-intelligence-argocd.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "cost-intelligence-argocd.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
 Create the name of the service account to use
 */}}
-{{- define "argocd-cost-intelligence.serviceAccountName" -}}
+{{- define "cost-intelligence-argocd.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}
-{{- default (include "argocd-cost-intelligence.fullname" .) .Values.serviceAccount.name }}
+{{- default (include "cost-intelligence-argocd.fullname" .) .Values.serviceAccount.name }}
 {{- else }}
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
@@ -64,7 +64,7 @@ Create the name of the service account to use
 {{/*
 Postgres hostname: postgres.host for an external database, otherwise the bundled one's Service.
 */}}
-{{- define "argocd-cost-intelligence.postgres.host" -}}
+{{- define "cost-intelligence-argocd.postgres.host" -}}
 {{- if and .Values.postgres.enabled .Values.postgres.host }}
 {{- fail "postgres.host is for an external database. Set postgres.enabled=false to use it, or leave postgres.host empty for the bundled one." }}
 {{- end }}
@@ -74,7 +74,7 @@ Postgres hostname: postgres.host for an external database, otherwise the bundled
 {{/*
 Postgres port: postgres.port for an external database, otherwise postgres.service.port.
 */}}
-{{- define "argocd-cost-intelligence.postgres.port" -}}
+{{- define "cost-intelligence-argocd.postgres.port" -}}
 {{- if .Values.postgres.enabled }}
 {{- .Values.postgres.service.port }}
 {{- else }}
@@ -86,7 +86,7 @@ Postgres port: postgres.port for an external database, otherwise postgres.servic
 Database secret name — returns the existingSecret name if set, otherwise the
 Helm-managed secret name "postgres-credentials".
 */}}
-{{- define "argocd-cost-intelligence.postgres.secretName" -}}
+{{- define "cost-intelligence-argocd.postgres.secretName" -}}
 {{- if .Values.postgres.auth.existingSecret -}}
 {{- .Values.postgres.auth.existingSecret -}}
 {{- else -}}
@@ -98,8 +98,8 @@ postgres-credentials
 Webhook secret name: webhook.existingSecret if set, otherwise the Helm-managed Secret. Either
 holds the token Argo CD Notifications must send to POST /on-sync under the key "token".
 */}}
-{{- define "argocd-cost-intelligence.webhook.secretName" -}}
-{{- .Values.webhook.existingSecret | default "argocd-cost-intelligence-webhook" -}}
+{{- define "cost-intelligence-argocd.webhook.secretName" -}}
+{{- .Values.webhook.existingSecret | default "cost-intelligence-argocd-webhook" -}}
 {{- end }}
 
 {{/*
@@ -107,9 +107,9 @@ Webhook token for the Helm-managed Secret: the token already stored there when H
 (helm install/upgrade), otherwise a new random one. Computed once per render and cached in
 .Values, so the Secret and the Deployment's checksum annotation always agree.
 */}}
-{{- define "argocd-cost-intelligence.webhook.token" -}}
+{{- define "cost-intelligence-argocd.webhook.token" -}}
 {{- if not (hasKey .Values "__webhookToken") -}}
-{{- $existing := lookup "v1" "Secret" .Values.namespace.name "argocd-cost-intelligence-webhook" -}}
+{{- $existing := lookup "v1" "Secret" .Values.namespace.name "cost-intelligence-argocd-webhook" -}}
 {{- $token := randAlphaNum 32 -}}
 {{- if and $existing $existing.data (index $existing.data "token") -}}
 {{- $token = index $existing.data "token" | b64dec -}}
@@ -122,14 +122,14 @@ Webhook token for the Helm-managed Secret: the token already stored there when H
 {{/*
 OpenCost config secret name
 */}}
-{{- define "argocd-cost-intelligence.openCost.secretName" -}}
-argocd-cost-intel-config
+{{- define "cost-intelligence-argocd.openCost.secretName" -}}
+cost-intelligence-config
 {{- end }}
 
 {{/*
 Prometheus annotations for pods serving metrics, when metrics.podAnnotations is on. Empty otherwise.
 */}}
-{{- define "argocd-cost-intelligence.metrics.scrapeAnnotations" -}}
+{{- define "cost-intelligence-argocd.metrics.scrapeAnnotations" -}}
 {{- if and .Values.metrics.enabled .Values.metrics.podAnnotations -}}
 prometheus.io/scrape: "true"
 prometheus.io/port: {{ .Values.metrics.port | quote }}
@@ -141,7 +141,7 @@ prometheus.io/path: /metrics
 NetworkPolicy ingress rule admitting metrics.allowedFrom to the metrics port. Empty when no peer is
 listed, so the port stays closed.
 */}}
-{{- define "argocd-cost-intelligence.metrics.ingressRule" -}}
+{{- define "cost-intelligence-argocd.metrics.ingressRule" -}}
 {{- with .Values.metrics.allowedFrom -}}
 # Prometheus → /metrics, on its own port: never the API port, whose proxy headers it could forge
 - from:
@@ -156,7 +156,7 @@ listed, so the port stays closed.
 costIntelligence.clusterScopeApp as a string. An unquoted off (or no, or false) in a values file is
 a YAML bool, which would otherwise read as empty and turn the pages on instead of off.
 */}}
-{{- define "argocd-cost-intelligence.clusterScopeApp" -}}
+{{- define "cost-intelligence-argocd.clusterScopeApp" -}}
 {{- $scope := .Values.costIntelligence.clusterScopeApp -}}
 {{- if and (kindIs "bool" $scope) (not $scope) -}}
 off
@@ -169,8 +169,8 @@ off
 "true" when the chart creates the access Application: Helm, not Argo CD, renders the chart (lookup
 answers only when Helm talks to the cluster) and no gate Application is configured.
 */}}
-{{- define "argocd-cost-intelligence.accessApplication.enabled" -}}
-{{- if and .Values.costIntelligence.accessApplication.create (not (include "argocd-cost-intelligence.clusterScopeApp" .)) (lookup "apiextensions.k8s.io/v1" "CustomResourceDefinition" "" "applications.argoproj.io") -}}
+{{- define "cost-intelligence-argocd.accessApplication.enabled" -}}
+{{- if and .Values.costIntelligence.accessApplication.create (not (include "cost-intelligence-argocd.clusterScopeApp" .)) (lookup "apiextensions.k8s.io/v1" "CustomResourceDefinition" "" "applications.argoproj.io") -}}
 true
 {{- end -}}
 {{- end }}
@@ -178,6 +178,6 @@ true
 {{/*
 The Helm repository the service serves the access Application's empty chart from.
 */}}
-{{- define "argocd-cost-intelligence.accessApplication.repoURL" -}}
-{{- printf "http://%s.%s.svc.cluster.local:%v/charts" (include "argocd-cost-intelligence.fullname" .) .Values.namespace.name .Values.costIntelligence.port }}
+{{- define "cost-intelligence-argocd.accessApplication.repoURL" -}}
+{{- printf "http://%s.%s.svc.cluster.local:%v/charts" (include "cost-intelligence-argocd.fullname" .) .Values.namespace.name .Values.costIntelligence.port }}
 {{- end }}

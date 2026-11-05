@@ -1,5 +1,5 @@
 import React from 'react';
-import {ArgoCDCostIntelligenceTab} from './plugin';
+import {CostIntelligenceTab} from './plugin';
 import { NamespaceDashboard } from './components/NamespaceDashboard';
 
 // Types from Argo CD's ui/src/app/shared/services/extensions-service.ts (identical in 3.4 and 3.5).
@@ -37,7 +37,7 @@ declare global {
     // calls services.extensions.getAppViewExtensions() on mount (reads the array),
     // so the extension is picked up even if this fires before the component mounts.
     w.extensionsAPI.registerAppViewExtension(
-        ArgoCDCostIntelligenceTab,
+        CostIntelligenceTab,
         'Cost Intelligence',
         'fa fa-dollar-sign',
         () => true

@@ -1,10 +1,10 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: argocd-cost-intelligence
-  namespace: argocd-cost-intel
+  name: cost-intelligence-argocd
+  namespace: cost-intelligence
   labels:
-    app: argocd-cost-intelligence
+    app: cost-intelligence-argocd
 spec:
   replicas: 2
   strategy:
@@ -14,11 +14,11 @@ spec:
       maxUnavailable: 0
   selector:
     matchLabels:
-      app: argocd-cost-intelligence
+      app: cost-intelligence-argocd
   template:
     metadata:
       labels:
-        app: argocd-cost-intelligence
+        app: cost-intelligence-argocd
       # Each replica's own health metrics, on the metrics port: never the API port (see docs/metrics.md).
       # Scrape with honor_labels: true.
       annotations:
@@ -26,14 +26,14 @@ spec:
         prometheus.io/port: "9102"
         prometheus.io/path: "/metrics"
     spec:
-      serviceAccountName: argocd-cost-intelligence
+      serviceAccountName: cost-intelligence-argocd
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
         fsGroup: 1000
       containers:
-      - name: argocd-cost-intelligence
-        image: argocd-cost-intelligence:latest
+      - name: cost-intelligence-argocd
+        image: cost-intelligence-argocd:latest
         imagePullPolicy: IfNotPresent
         ports:
         - name: http
@@ -49,7 +49,7 @@ spec:
         - name: METRICS_PORT
           value: "9102"
         - name: DB_HOST
-          value: postgres.argocd-cost-intel.svc.cluster.local
+          value: postgres.cost-intelligence.svc.cluster.local
         - name: DB_PORT
           value: "5432"
         - name: DB_USER
@@ -69,14 +69,14 @@ spec:
         - name: OPENCOST_BASE_URL
           valueFrom:
             secretKeyRef:
-              name: argocd-cost-intel-config
+              name: cost-intelligence-config
               key: opencost-base-url
         - name: OPENCOST_TIMEOUT
           value: "10s"
         - name: WEBHOOK_SECRET
           valueFrom:
             secretKeyRef:
-              name: argocd-cost-intelligence-webhook
+              name: cost-intelligence-argocd-webhook
               key: token
         # Days of daily cost history to keep; 0 turns recording off.
         - name: DAILY_HISTORY_DAYS
@@ -101,7 +101,7 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: DEPLOYMENT_NAME
-          value: argocd-cost-intelligence
+          value: cost-intelligence-argocd
         - name: ARGOCD_NAMESPACE
           value: argocd
         livenessProbe:
@@ -138,10 +138,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: argocd-cost-intelligence
-  namespace: argocd-cost-intel
+  name: cost-intelligence-argocd
+  namespace: cost-intelligence
   labels:
-    app: argocd-cost-intelligence
+    app: cost-intelligence-argocd
 spec:
   type: ClusterIP
   ports:
@@ -154,19 +154,19 @@ spec:
     protocol: TCP
     name: metrics
   selector:
-    app: argocd-cost-intelligence
+    app: cost-intelligence-argocd
 
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: argocd-cost-intelligence
-  namespace: argocd-cost-intel
+  name: cost-intelligence-argocd
+  namespace: cost-intelligence
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: argocd-cost-intelligence
+    name: cost-intelligence-argocd
   minReplicas: 2
   maxReplicas: 5
   metrics:

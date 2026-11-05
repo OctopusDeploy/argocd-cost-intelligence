@@ -4,10 +4,10 @@
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
-  name: {{ include "argocd-cost-intelligence.fullname" . }}
+  name: {{ include "cost-intelligence-argocd.fullname" . }}
   namespace: {{ .Values.namespace.name }}
   labels:
-    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+    {{- include "cost-intelligence-argocd.labels" . | nindent 4 }}
     {{- with .Values.metrics.prometheusRule.labels }}
     {{- toYaml . | nindent 4 }}
     {{- end }}

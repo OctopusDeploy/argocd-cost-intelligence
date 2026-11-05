@@ -73,4 +73,4 @@ Opt-in and off by default. The plugin stays fully useful without a model, and a 
 
 ## Ideas and feedback
 
-Share an idea, or upvote one you need too, in the [Ideas](https://github.com/OctopusDeploy/argocd-cost-intelligence/discussions/categories/ideas) category of GitHub Discussions. If you'd like to build something on this list, open an issue first so we can agree on the approach, as [CONTRIBUTING.md](CONTRIBUTING.md) describes.
+Share an idea, or upvote one you need too, in the [Ideas](https://github.com/OctopusDeploy/cost-intelligence-argocd/discussions/categories/ideas) category of GitHub Discussions. If you'd like to build something on this list, open an issue first so we can agree on the approach, as [CONTRIBUTING.md](CONTRIBUTING.md) describes.

@@ -1,21 +1,21 @@
 apiVersion: v2
-name: argocd-cost-intelligence
+name: cost-intelligence-argocd
 description: Post-sync cost measurement for Argo CD applications using OpenCost
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
 
 keywords:
-  - argo-cd
+  - argocd
   - cost-management
   - kubernetes
   - cost-analysis
   - opencost
 
-home: https://argocd-cost-intelligence.readthedocs.io/
-icon: https://raw.githubusercontent.com/OctopusDeploy/argocd-cost-intelligence/main/docs/assets/octoicon.svg
+home: https://cost-intelligence-argocd.readthedocs.io/
+icon: https://raw.githubusercontent.com/OctopusDeploy/cost-intelligence-argocd/main/docs/assets/octoicon.svg
 sources:
-  - https://github.com/OctopusDeploy/argocd-cost-intelligence
+  - https://github.com/OctopusDeploy/cost-intelligence-argocd
 
 maintainers:
   - name: Patroklos Papapetrou
@@ -27,7 +27,7 @@ annotations:
   artifacthub.io/license: Apache-2.0
   artifacthub.io/links: |
     - name: Documentation
-      url: https://argocd-cost-intelligence.readthedocs.io/
+      url: https://cost-intelligence-argocd.readthedocs.io/
   artifacthub.io/changes: |
     - kind: added
       description: Initial release

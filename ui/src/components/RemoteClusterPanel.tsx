@@ -8,7 +8,7 @@ import { cardStyle, useTokens, visuallyHidden } from '../theme/tokens';
 // LIMIT_URL is the user docs for released versions. Bundles already installed keep this URL, so the page
 // and its heading must not move without a redirect.
 const LIMIT_URL =
-  'https://argocd-cost-intelligence.readthedocs.io/en/stable/how-costs-are-measured/#applications-on-another-cluster';
+  'https://cost-intelligence-argocd.readthedocs.io/en/stable/how-costs-are-measured/#applications-on-another-cluster';
 
 interface Props {
   // cluster is the other cluster the application deploys to, by its name or server.

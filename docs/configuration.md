@@ -2,10 +2,10 @@
 
 This page lists the Helm values, how to manage the secrets, the ready-made profiles, and the environment variables for running without Helm. To install, see [Installation](installation.md).
 
-The defaults are in [`helm/values.yaml`](../helm/values.yaml). To print them for a released version, with `<chart-version>` taken from the [Releases page](https://github.com/OctopusDeploy/argocd-cost-intelligence/releases):
+The defaults are in [`helm/values.yaml`](../helm/values.yaml). To print them for a released version, with `<chart-version>` taken from the [Releases page](https://github.com/OctopusDeploy/cost-intelligence-argocd/releases):
 
 ```bash
-helm show values oci://ghcr.io/octopusdeploy/charts/argocd-cost-intelligence --version <chart-version>
+helm show values oci://ghcr.io/octopusdeploy/charts/cost-intelligence-argocd --version <chart-version>
 ```
 
 ## Helm values
@@ -22,7 +22,7 @@ Set values with `--set key=value` or with a values file (`-f`). If the file hold
 | `costIntelligence.accessApplication.create` | `true` | When Helm itself installs the chart and `clusterScopeApp` is empty, create an Argo CD Application to gate cluster-wide costs, in an AppProject that permits no resources. It deploys nothing. It is not created when Argo CD renders the chart, since Argo CD's own Application is the gate then. |
 | `costIntelligence.accessApplication.name` / `.project` | `cost-intelligence-access` | Names of that Application and its AppProject, in `argoCd.namespace`. |
 | `argoCd.namespace` | `argocd` | The namespace Argo CD runs in. The hook patches resources there. |
-| `namespace.name` | `argocd-cost-intel` | The namespace for every chart resource. `helm --namespace` must match it. |
+| `namespace.name` | `cost-intelligence` | The namespace for every chart resource. `helm --namespace` must match it. |
 | `namespace.create` | `true` | Create that namespace. Set it to `false` when Helm (`--create-namespace`) or you create it first. With `true`, an existing namespace makes the install fail. |
 | `networkPolicy.enabled` | `true` | Deploy the NetworkPolicies. Set it to `false` on CNIs that don't enforce them, such as Flannel on its own. k3s and k3d do enforce them, unless k3s was started with `--disable-network-policy`. |
 
@@ -33,7 +33,7 @@ Set values with `--set key=value` or with a values file (`-f`). If the file hold
 | `postgres.auth.existingSecret` | `""` | A Secret in `namespace.name` with `username` and `password` keys. When set, the chart creates no PostgreSQL Secret and ignores `postgres.auth.password` and `username`. |
 | `postgres.auth.username` | `cost_user` | Database user. |
 | `postgres.auth.database` | `cost_intelligence` | Database name. |
-| `webhook.existingSecret` | `""` | A Secret holding the sync webhook token under the key `token`, at least 16 characters. When empty, the chart generates `argocd-cost-intelligence-webhook` and keeps its token across upgrades. Set it when Argo CD or `helm template` renders the chart. |
+| `webhook.existingSecret` | `""` | A Secret holding the sync webhook token under the key `token`, at least 16 characters. When empty, the chart generates `cost-intelligence-argocd-webhook` and keeps its token across upgrades. Set it when Argo CD or `helm template` renders the chart. |
 
 ### PostgreSQL
 
@@ -67,7 +67,7 @@ The chart can't keep the PVC on uninstall, and it has no switch to run without o
 | `costIntelligence.logLevel` | `info` | `debug` also logs each OpenCost request URL and response body, in the API and the exporter (`LOG_LEVEL`). These name every namespace and its cost; turn it on only while troubleshooting. |
 | `costIntelligence.database.maxOpenConns` / `maxIdleConns` | `25` / `5` | Connection pool size per replica. Keep replicas times `maxOpenConns` below PostgreSQL's `max_connections`. |
 | `costIntelligence.server.readTimeout` / `writeTimeout` / `idleTimeout` | `10s` / `10s` / `120s` | HTTP server timeouts. Raise `writeTimeout` if large Trends queries get cut off. |
-| `costIntelligence.image.repository` / `.tag` / `.pullPolicy` | `ghcr.io/octopusdeploy/argocd-cost-intelligence` / chart `appVersion` / `IfNotPresent` | The backend image, which the exporter runs too. Set `tag` to pin a release. |
+| `costIntelligence.image.repository` / `.tag` / `.pullPolicy` | `ghcr.io/octopusdeploy/cost-intelligence-argocd` / chart `appVersion` / `IfNotPresent` | The backend image, which the exporter runs too. Set `tag` to pin a release. |
 | `costIntelligence.resources` | 100m / 128Mi requested, 500m / 512Mi limit | |
 | `openCost.timeout` | `10s` | How long to wait for OpenCost. |
 
@@ -79,7 +79,7 @@ The chart can't keep the PVC on uninstall, and it has no switch to run without o
 | `ui.enabled` and `features.deployUI` | `true` | Deploy the UI plugin. Both must be true. |
 | `ui.autoRegister` | `true` | Have the hook add the init container that loads the bundle into `argocd-server`. Needs `features.autoPatchArgoCd`. |
 | `ui.port` / `ui.replicas` | `3000` / `1` | |
-| `ui.image.repository` / `.tag` / `.pullPolicy` | `ghcr.io/octopusdeploy/argocd-cost-intelligence-ui` / chart `appVersion` / `IfNotPresent` | |
+| `ui.image.repository` / `.tag` / `.pullPolicy` | `ghcr.io/octopusdeploy/cost-intelligence-argocd-ui` / chart `appVersion` / `IfNotPresent` | |
 | `ui.resources` | 50m / 64Mi requested, 200m / 256Mi limit | |
 | `postInstallHook.image` | `alpine/k8s:1.32.3` | An image with `kubectl`, `jq` and `yq` (mikefarah/yq v4), for the hook Job. Pick a tag close to your cluster's Kubernetes minor version. |
 | `postInstallHook.extensionInitImage` | `busybox:1.37.0` | The image of the `argocd-server` init container that downloads the UI bundle. It needs `sh` and `wget`. |
@@ -113,8 +113,8 @@ The metrics themselves, with queries and alerts, are in [Prometheus metrics](met
 | `healthChecks.startupProbe` | enabled, 5s period, 30 failures | For the backend and the exporter. The liveness probe waits for it, so a database that is slow to come up doesn't restart the pod. |
 | `healthChecks.livenessProbe` / `.readinessProbe` | enabled, 10s / 5s period | For the backend and PostgreSQL probes. |
 | `commonLabels`, `commonAnnotations` | a `part-of` label, no annotations | Added to every resource (the annotations go on the pods). |
-| `rbac.create` / `.roleName` / `.roleBindingName` | `true` / `argocd-cost-intelligence` | Create the ClusterRole and ClusterRoleBinding with these names, and a Role to read the service's own Deployment. |
-| `serviceAccount.create` / `.name` | `true` / `argocd-cost-intelligence` | The backend's and the exporter's ServiceAccount. With `create: false`, the chart uses the named account, or `default` when the name is empty. |
+| `rbac.create` / `.roleName` / `.roleBindingName` | `true` / `cost-intelligence-argocd` | Create the ClusterRole and ClusterRoleBinding with these names, and a Role to read the service's own Deployment. |
+| `serviceAccount.create` / `.name` | `true` / `cost-intelligence-argocd` | The backend's and the exporter's ServiceAccount. With `create: false`, the chart uses the named account, or `default` when the name is empty. |
 
 ## Secrets
 
@@ -125,16 +125,16 @@ The simplest way is to let the chart manage them. Pass the password on first ins
 For production and GitOps, create the Secret yourself, outside Helm:
 
 ```bash
-kubectl create namespace argocd-cost-intel
+kubectl create namespace cost-intelligence
 
 kubectl create secret generic postgres-credentials \
-  --namespace argocd-cost-intel \
+  --namespace cost-intelligence \
   --from-literal=username=cost_user \
   --from-literal=password="$(openssl rand -base64 32)"
 
-helm install argocd-cost-intelligence \
-  oci://ghcr.io/octopusdeploy/charts/argocd-cost-intelligence \
-  --version <chart-version> --namespace argocd-cost-intel \
+helm install cost-intelligence-argocd \
+  oci://ghcr.io/octopusdeploy/charts/cost-intelligence-argocd \
+  --version <chart-version> --namespace cost-intelligence \
   --set namespace.create=false \
   --set postgres.auth.existingSecret=postgres-credentials \
   --wait --timeout 10m
@@ -144,15 +144,15 @@ The bundled PostgreSQL only applies the password when it first initialises its v
 
 ### Webhook token
 
-Argo CD Notifications has to send a bearer token to `POST /api/cost-analysis/on-sync`, or the backend answers 401. The chart generates the token and keeps it in the Secret `argocd-cost-intelligence-webhook` (key `token`). The hook copies it into `argocd-notifications-secret` as `cost-intel-webhook-token`. The backend reads it only at startup. If Argo CD or `helm template` renders the chart, use `webhook.existingSecret`; see [Install with Argo CD or helm template](installation.md#install-with-argo-cd-or-helm-template), which also covers rotating the token.
+Argo CD Notifications has to send a bearer token to `POST /api/cost-analysis/on-sync`, or the backend answers 401. The chart generates the token and keeps it in the Secret `cost-intelligence-argocd-webhook` (key `token`). The hook copies it into `argocd-notifications-secret` as `cost-intel-webhook-token`. The backend reads it only at startup. If Argo CD or `helm template` renders the chart, use `webhook.existingSecret`; see [Install with Argo CD or helm template](installation.md#install-with-argo-cd-or-helm-template), which also covers rotating the token.
 
 ## Profiles
 
 The profile files ship in the chart but aren't part of the OCI install path. To get them:
 
 ```bash
-helm pull oci://ghcr.io/octopusdeploy/charts/argocd-cost-intelligence --version <chart-version> --untar
-# then: -f argocd-cost-intelligence/values-minimal.yaml
+helm pull oci://ghcr.io/octopusdeploy/charts/cost-intelligence-argocd --version <chart-version> --untar
+# then: -f cost-intelligence-argocd/values-minimal.yaml
 ```
 
 | Profile | Backend | PostgreSQL | Notes |

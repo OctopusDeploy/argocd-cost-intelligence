@@ -17,9 +17,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/exporter"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/opencost"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/exporter"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/models"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/opencost"
 )
 
 // pod is a pod OpenCost reports in a namespace, with its controller and daily cost.

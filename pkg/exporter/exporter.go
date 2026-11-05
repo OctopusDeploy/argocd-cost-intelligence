@@ -24,10 +24,10 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/opencost"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/storage"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/telemetry"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/models"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/opencost"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/storage"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/telemetry"
 )
 
 // Window is the period each refresh measures, and over which cost per hour is averaged.

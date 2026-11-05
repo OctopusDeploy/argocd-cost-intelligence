@@ -17,9 +17,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/opencost"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/storage"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/models"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/opencost"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/storage"
 )
 
 var refreshedAt = time.Date(2026, 10, 4, 7, 0, 0, 0, time.UTC)
@@ -105,30 +105,30 @@ func newExporter(apps *fakeApps, costs *fakeSource, estimates *fakeEstimates) (*
 }
 
 const shopSeries = `
-argocd_cost_intelligence_application_hourly_cost{name="shop",namespace="argocd",resource="cpu"} 0.06
-argocd_cost_intelligence_application_hourly_cost{name="shop",namespace="argocd",resource="gpu"} 0
-argocd_cost_intelligence_application_hourly_cost{name="shop",namespace="argocd",resource="load_balancer"} 0.001
-argocd_cost_intelligence_application_hourly_cost{name="shop",namespace="argocd",resource="memory"} 0.04
-argocd_cost_intelligence_application_hourly_cost{name="shop",namespace="argocd",resource="network"} 0.002
-argocd_cost_intelligence_application_hourly_cost{name="shop",namespace="argocd",resource="storage"} 0.005
+cost_intelligence_application_hourly_cost{name="shop",namespace="argocd",resource="cpu"} 0.06
+cost_intelligence_application_hourly_cost{name="shop",namespace="argocd",resource="gpu"} 0
+cost_intelligence_application_hourly_cost{name="shop",namespace="argocd",resource="load_balancer"} 0.001
+cost_intelligence_application_hourly_cost{name="shop",namespace="argocd",resource="memory"} 0.04
+cost_intelligence_application_hourly_cost{name="shop",namespace="argocd",resource="network"} 0.002
+cost_intelligence_application_hourly_cost{name="shop",namespace="argocd",resource="storage"} 0.005
 `
 
 const (
 	hourlyHeader = `
-# HELP argocd_cost_intelligence_application_hourly_cost Cost per hour of the pods the Argo CD Application's workloads own, averaged over the last hour, in OpenCost's currency. resource is cpu, memory, gpu, storage, network or load_balancer; together they are the Application's cost.
-# TYPE argocd_cost_intelligence_application_hourly_cost gauge
+# HELP cost_intelligence_application_hourly_cost Cost per hour of the pods the Argo CD Application's workloads own, averaged over the last hour, in OpenCost's currency. resource is cpu, memory, gpu, storage, network or load_balancer; together they are the Application's cost.
+# TYPE cost_intelligence_application_hourly_cost gauge
 `
 	idleHeader = `
-# HELP argocd_cost_intelligence_application_idle_hourly_cost Part of the Application's hourly cost paid for requested CPU or memory its pods did not use, in OpenCost's currency. A subset of application_hourly_cost for the same resource.
-# TYPE argocd_cost_intelligence_application_idle_hourly_cost gauge
+# HELP cost_intelligence_application_idle_hourly_cost Part of the Application's hourly cost paid for requested CPU or memory its pods did not use, in OpenCost's currency. A subset of application_hourly_cost for the same resource.
+# TYPE cost_intelligence_application_idle_hourly_cost gauge
 `
 	estimateHeader = `
-# HELP argocd_cost_intelligence_application_estimated_hourly_cost Cost per hour of the Application's cloud services as estimated by an IaC cost tool and pushed from CI, converted from its monthly figure with 730 hours a month.
-# TYPE argocd_cost_intelligence_application_estimated_hourly_cost gauge
+# HELP cost_intelligence_application_estimated_hourly_cost Cost per hour of the Application's cloud services as estimated by an IaC cost tool and pushed from CI, converted from its monthly figure with 730 hours a month.
+# TYPE cost_intelligence_application_estimated_hourly_cost gauge
 `
 	infoHeader = `
-# HELP argocd_cost_intelligence_application_workload_info A pod-owning workload the Argo CD Application manages, always 1, for joining per-workload metrics to Applications.
-# TYPE argocd_cost_intelligence_application_workload_info gauge
+# HELP cost_intelligence_application_workload_info A pod-owning workload the Argo CD Application manages, always 1, for joining per-workload metrics to Applications.
+# TYPE cost_intelligence_application_workload_info gauge
 `
 )
 
@@ -143,30 +143,30 @@ func TestRefresh_ExportsEachApplicationsCostByResource(t *testing.T) {
 	assert.Equal(t, []string{"argocd", "shop", "shop-data", "team-a"}, costs.asked, "each namespace once")
 	assert.Equal(t, Window, costs.window)
 	require.NoError(t, testutil.CollectAndCompare(e, strings.NewReader(hourlyHeader+`
-argocd_cost_intelligence_application_hourly_cost{name="redis",namespace="argocd",resource="cpu"} 0.001
-argocd_cost_intelligence_application_hourly_cost{name="redis",namespace="argocd",resource="gpu"} 0
-argocd_cost_intelligence_application_hourly_cost{name="redis",namespace="argocd",resource="load_balancer"} 0
-argocd_cost_intelligence_application_hourly_cost{name="redis",namespace="argocd",resource="memory"} 0.002
-argocd_cost_intelligence_application_hourly_cost{name="redis",namespace="argocd",resource="network"} 0
-argocd_cost_intelligence_application_hourly_cost{name="redis",namespace="argocd",resource="storage"} 0
-argocd_cost_intelligence_application_hourly_cost{name="redis",namespace="team-a",resource="cpu"} 0.5
-argocd_cost_intelligence_application_hourly_cost{name="redis",namespace="team-a",resource="gpu"} 0.25
-argocd_cost_intelligence_application_hourly_cost{name="redis",namespace="team-a",resource="load_balancer"} 0
-argocd_cost_intelligence_application_hourly_cost{name="redis",namespace="team-a",resource="memory"} 0
-argocd_cost_intelligence_application_hourly_cost{name="redis",namespace="team-a",resource="network"} 0
-argocd_cost_intelligence_application_hourly_cost{name="redis",namespace="team-a",resource="storage"} 0
+cost_intelligence_application_hourly_cost{name="redis",namespace="argocd",resource="cpu"} 0.001
+cost_intelligence_application_hourly_cost{name="redis",namespace="argocd",resource="gpu"} 0
+cost_intelligence_application_hourly_cost{name="redis",namespace="argocd",resource="load_balancer"} 0
+cost_intelligence_application_hourly_cost{name="redis",namespace="argocd",resource="memory"} 0.002
+cost_intelligence_application_hourly_cost{name="redis",namespace="argocd",resource="network"} 0
+cost_intelligence_application_hourly_cost{name="redis",namespace="argocd",resource="storage"} 0
+cost_intelligence_application_hourly_cost{name="redis",namespace="team-a",resource="cpu"} 0.5
+cost_intelligence_application_hourly_cost{name="redis",namespace="team-a",resource="gpu"} 0.25
+cost_intelligence_application_hourly_cost{name="redis",namespace="team-a",resource="load_balancer"} 0
+cost_intelligence_application_hourly_cost{name="redis",namespace="team-a",resource="memory"} 0
+cost_intelligence_application_hourly_cost{name="redis",namespace="team-a",resource="network"} 0
+cost_intelligence_application_hourly_cost{name="redis",namespace="team-a",resource="storage"} 0
 `+shopSeries+idleHeader+`
-argocd_cost_intelligence_application_idle_hourly_cost{name="redis",namespace="argocd",resource="cpu"} 0
-argocd_cost_intelligence_application_idle_hourly_cost{name="redis",namespace="argocd",resource="memory"} 0
-argocd_cost_intelligence_application_idle_hourly_cost{name="redis",namespace="team-a",resource="cpu"} 0
-argocd_cost_intelligence_application_idle_hourly_cost{name="redis",namespace="team-a",resource="memory"} 0
-argocd_cost_intelligence_application_idle_hourly_cost{name="shop",namespace="argocd",resource="cpu"} 0.03
-argocd_cost_intelligence_application_idle_hourly_cost{name="shop",namespace="argocd",resource="memory"} 0.004
+cost_intelligence_application_idle_hourly_cost{name="redis",namespace="argocd",resource="cpu"} 0
+cost_intelligence_application_idle_hourly_cost{name="redis",namespace="argocd",resource="memory"} 0
+cost_intelligence_application_idle_hourly_cost{name="redis",namespace="team-a",resource="cpu"} 0
+cost_intelligence_application_idle_hourly_cost{name="redis",namespace="team-a",resource="memory"} 0
+cost_intelligence_application_idle_hourly_cost{name="shop",namespace="argocd",resource="cpu"} 0.03
+cost_intelligence_application_idle_hourly_cost{name="shop",namespace="argocd",resource="memory"} 0.004
 `+infoHeader+`
-argocd_cost_intelligence_application_workload_info{name="redis",namespace="argocd",workload_kind="Deployment",workload_name="redis",workload_namespace="argocd"} 1
-argocd_cost_intelligence_application_workload_info{name="redis",namespace="team-a",workload_kind="Deployment",workload_name="redis",workload_namespace="team-a"} 1
-argocd_cost_intelligence_application_workload_info{name="shop",namespace="argocd",workload_kind="Deployment",workload_name="web",workload_namespace="shop"} 1
-argocd_cost_intelligence_application_workload_info{name="shop",namespace="argocd",workload_kind="StatefulSet",workload_name="db",workload_namespace="shop-data"} 1
+cost_intelligence_application_workload_info{name="redis",namespace="argocd",workload_kind="Deployment",workload_name="redis",workload_namespace="argocd"} 1
+cost_intelligence_application_workload_info{name="redis",namespace="team-a",workload_kind="Deployment",workload_name="redis",workload_namespace="team-a"} 1
+cost_intelligence_application_workload_info{name="shop",namespace="argocd",workload_kind="Deployment",workload_name="web",workload_namespace="shop"} 1
+cost_intelligence_application_workload_info{name="shop",namespace="argocd",workload_kind="StatefulSet",workload_name="db",workload_namespace="shop-data"} 1
 `)))
 }
 
@@ -180,11 +180,11 @@ func TestRefresh_LeavesOutAnApplicationWithANamespaceItCouldNotMeasure(t *testin
 	e.Refresh(context.Background())
 
 	got := gatherText(t, e)
-	assert.NotContains(t, got, `argocd_cost_intelligence_application_hourly_cost{name="shop"`,
+	assert.NotContains(t, got, `cost_intelligence_application_hourly_cost{name="shop"`,
 		"shop's cost would be missing its database")
-	assert.NotContains(t, got, `argocd_cost_intelligence_application_idle_hourly_cost{name="shop"`)
-	assert.Contains(t, got, `argocd_cost_intelligence_application_hourly_cost{name="redis",namespace="argocd",resource="cpu"} 0.001`)
-	assert.Contains(t, got, `argocd_cost_intelligence_application_workload_info{name="shop",namespace="argocd",workload_kind="StatefulSet"`,
+	assert.NotContains(t, got, `cost_intelligence_application_idle_hourly_cost{name="shop"`)
+	assert.Contains(t, got, `cost_intelligence_application_hourly_cost{name="redis",namespace="argocd",resource="cpu"} 0.001`)
+	assert.Contains(t, got, `cost_intelligence_application_workload_info{name="shop",namespace="argocd",workload_kind="StatefulSet"`,
 		"what the Application manages is known without OpenCost")
 	assert.InDelta(t, 1, testutil.ToFloat64(e.errors.WithLabelValues(StageOpenCost)), 0)
 	assert.InDelta(t, float64(refreshedAt.Unix()), testutil.ToFloat64(e.last), 0, "the refresh still used the current Applications")
@@ -223,16 +223,16 @@ func TestRefresh_ConvertsEstimatesOfApplicationsThatExist(t *testing.T) {
 	e.Refresh(context.Background())
 
 	require.NoError(t, testutil.CollectAndCompare(e, strings.NewReader(estimateHeader+`
-argocd_cost_intelligence_application_estimated_hourly_cost{name="shop",namespace="argocd",source="infracost"} 1
-argocd_cost_intelligence_application_estimated_hourly_cost{name="shop",namespace="argocd",source="terracost"} 0.2
-`), "argocd_cost_intelligence_application_estimated_hourly_cost"))
+cost_intelligence_application_estimated_hourly_cost{name="shop",namespace="argocd",source="infracost"} 1
+cost_intelligence_application_estimated_hourly_cost{name="shop",namespace="argocd",source="terracost"} 0.2
+`), "cost_intelligence_application_estimated_hourly_cost"))
 
 	estimates.err = errors.New("connection refused")
 	e.Refresh(context.Background())
 
 	got := gatherText(t, e)
 	assert.NotContains(t, got, "estimated_hourly_cost")
-	assert.Contains(t, got, `argocd_cost_intelligence_application_hourly_cost{name="shop"`, "costs do not depend on estimates")
+	assert.Contains(t, got, `cost_intelligence_application_hourly_cost{name="shop"`, "costs do not depend on estimates")
 	assert.InDelta(t, 1, testutil.ToFloat64(e.errors.WithLabelValues(StageEstimates)), 0)
 }
 
@@ -247,7 +247,7 @@ func TestRefresh_NoEstimatesBeforeTheAPICreatesItsTables(t *testing.T) {
 
 	got := gatherText(t, e)
 	assert.NotContains(t, got, "estimated_hourly_cost")
-	assert.Contains(t, got, `argocd_cost_intelligence_application_hourly_cost{name="shop"`, "costs do not depend on estimates")
+	assert.Contains(t, got, `cost_intelligence_application_hourly_cost{name="shop"`, "costs do not depend on estimates")
 	assert.Zero(t, testutil.ToFloat64(e.errors.WithLabelValues(StageEstimates)), "a fresh install is not a failure")
 	assert.True(t, e.Ready())
 }
@@ -275,18 +275,18 @@ func TestRefresh_SkipsApplicationsOnOtherClusters(t *testing.T) {
 	e.Refresh(context.Background())
 
 	got := gatherText(t, e)
-	assert.Contains(t, got, `argocd_cost_intelligence_application_hourly_cost{name="redis"`, "local Applications are still measured")
-	assert.NotContains(t, got, `argocd_cost_intelligence_application_hourly_cost{name="prod-shop"`)
-	assert.NotContains(t, got, `argocd_cost_intelligence_application_workload_info{name="prod-shop"`)
+	assert.Contains(t, got, `cost_intelligence_application_hourly_cost{name="redis"`, "local Applications are still measured")
+	assert.NotContains(t, got, `cost_intelligence_application_hourly_cost{name="prod-shop"`)
+	assert.NotContains(t, got, `cost_intelligence_application_workload_info{name="prod-shop"`)
 	assert.NotContains(t, got, `name="prod-redis"`)
-	assert.Contains(t, got, `argocd_cost_intelligence_application_estimated_hourly_cost{name="prod-shop",namespace="argocd",source="infracost"} 1`,
+	assert.Contains(t, got, `cost_intelligence_application_estimated_hourly_cost{name="prod-shop",namespace="argocd",source="infracost"} 1`,
 		"an estimate from CI holds wherever the Application deploys")
 	assert.Equal(t, []string{"argocd"}, costs.asked, "OpenCost is not asked about namespaces only remote Applications use")
 	require.NoError(t, testutil.GatherAndCompare(reg, strings.NewReader(`
-# HELP argocd_cost_intelligence_exporter_remote_applications Argo CD Applications in the last refresh that deploy to another cluster, which OpenCost here does not measure. They have no cost series.
-# TYPE argocd_cost_intelligence_exporter_remote_applications gauge
-argocd_cost_intelligence_exporter_remote_applications 2
-`), "argocd_cost_intelligence_exporter_remote_applications"))
+# HELP cost_intelligence_exporter_remote_applications Argo CD Applications in the last refresh that deploy to another cluster, which OpenCost here does not measure. They have no cost series.
+# TYPE cost_intelligence_exporter_remote_applications gauge
+cost_intelligence_exporter_remote_applications 2
+`), "cost_intelligence_exporter_remote_applications"))
 	assert.InDelta(t, 0, testutil.ToFloat64(e.errors.WithLabelValues(StageOpenCost)), 0, "skipping is not a failure")
 }
 
@@ -310,12 +310,12 @@ func TestNew_StartsEveryStageAtZeroAndIsNotReady(t *testing.T) {
 	e, reg := newExporter(&fakeApps{}, cluster(), &fakeEstimates{})
 
 	require.NoError(t, testutil.GatherAndCompare(reg, strings.NewReader(`
-# HELP argocd_cost_intelligence_exporter_refresh_errors_total Failed steps of the exporter's refreshes, by stage: applications, opencost (one per namespace) or estimates.
-# TYPE argocd_cost_intelligence_exporter_refresh_errors_total counter
-argocd_cost_intelligence_exporter_refresh_errors_total{stage="applications"} 0
-argocd_cost_intelligence_exporter_refresh_errors_total{stage="estimates"} 0
-argocd_cost_intelligence_exporter_refresh_errors_total{stage="opencost"} 0
-`), "argocd_cost_intelligence_exporter_refresh_errors_total"))
+# HELP cost_intelligence_exporter_refresh_errors_total Failed steps of the exporter's refreshes, by stage: applications, opencost (one per namespace) or estimates.
+# TYPE cost_intelligence_exporter_refresh_errors_total counter
+cost_intelligence_exporter_refresh_errors_total{stage="applications"} 0
+cost_intelligence_exporter_refresh_errors_total{stage="estimates"} 0
+cost_intelligence_exporter_refresh_errors_total{stage="opencost"} 0
+`), "cost_intelligence_exporter_refresh_errors_total"))
 	assert.False(t, e.Ready())
 	assert.Zero(t, testutil.CollectAndCount(e))
 }

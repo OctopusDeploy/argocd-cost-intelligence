@@ -24,25 +24,25 @@ func TestNewMetrics_StartsEveryResultAtZero(t *testing.T) {
 	NewMetrics(reg)
 
 	err := testutil.GatherAndCompare(reg, strings.NewReader(`
-# HELP argocd_cost_intelligence_sync_webhooks_total Sync notifications received from Argo CD, by result: accepted, unauthorized, invalid, overloaded, remote or ignored.
-# TYPE argocd_cost_intelligence_sync_webhooks_total counter
-argocd_cost_intelligence_sync_webhooks_total{result="accepted"} 0
-argocd_cost_intelligence_sync_webhooks_total{result="ignored"} 0
-argocd_cost_intelligence_sync_webhooks_total{result="invalid"} 0
-argocd_cost_intelligence_sync_webhooks_total{result="overloaded"} 0
-argocd_cost_intelligence_sync_webhooks_total{result="remote"} 0
-argocd_cost_intelligence_sync_webhooks_total{result="unauthorized"} 0
-# HELP argocd_cost_intelligence_sync_measurements_total Cost measurements made after accepted sync notifications, and again while OpenCost had no data for the namespace, by result: success, error, or no_data when OpenCost had no data for the namespace yet and nothing was recorded.
-# TYPE argocd_cost_intelligence_sync_measurements_total counter
-argocd_cost_intelligence_sync_measurements_total{result="error"} 0
-argocd_cost_intelligence_sync_measurements_total{result="no_data"} 0
-argocd_cost_intelligence_sync_measurements_total{result="success"} 0
-# HELP argocd_cost_intelligence_history_runs_total Runs of the daily cost history recorder, by result: success, or error when any application failed.
-# TYPE argocd_cost_intelligence_history_runs_total counter
-argocd_cost_intelligence_history_runs_total{result="error"} 0
-argocd_cost_intelligence_history_runs_total{result="success"} 0
-`), "argocd_cost_intelligence_sync_webhooks_total", "argocd_cost_intelligence_sync_measurements_total",
-		"argocd_cost_intelligence_history_runs_total")
+# HELP cost_intelligence_sync_webhooks_total Sync notifications received from Argo CD, by result: accepted, unauthorized, invalid, overloaded, remote or ignored.
+# TYPE cost_intelligence_sync_webhooks_total counter
+cost_intelligence_sync_webhooks_total{result="accepted"} 0
+cost_intelligence_sync_webhooks_total{result="ignored"} 0
+cost_intelligence_sync_webhooks_total{result="invalid"} 0
+cost_intelligence_sync_webhooks_total{result="overloaded"} 0
+cost_intelligence_sync_webhooks_total{result="remote"} 0
+cost_intelligence_sync_webhooks_total{result="unauthorized"} 0
+# HELP cost_intelligence_sync_measurements_total Cost measurements made after accepted sync notifications, and again while OpenCost had no data for the namespace, by result: success, error, or no_data when OpenCost had no data for the namespace yet and nothing was recorded.
+# TYPE cost_intelligence_sync_measurements_total counter
+cost_intelligence_sync_measurements_total{result="error"} 0
+cost_intelligence_sync_measurements_total{result="no_data"} 0
+cost_intelligence_sync_measurements_total{result="success"} 0
+# HELP cost_intelligence_history_runs_total Runs of the daily cost history recorder, by result: success, or error when any application failed.
+# TYPE cost_intelligence_history_runs_total counter
+cost_intelligence_history_runs_total{result="error"} 0
+cost_intelligence_history_runs_total{result="success"} 0
+`), "cost_intelligence_sync_webhooks_total", "cost_intelligence_sync_measurements_total",
+		"cost_intelligence_history_runs_total")
 	require.NoError(t, err)
 
 	names := gatheredNames(t, reg)
@@ -58,11 +58,11 @@ func TestNewExporterMetrics_LeavesOutWhatOnlyTheAPIDoes(t *testing.T) {
 	m.ObserveDatabase("ListCloudEstimates", nil, time.Millisecond)
 
 	names := gatheredNames(t, reg)
-	assert.Contains(t, names, "argocd_cost_intelligence_database_operation_duration_seconds")
+	assert.Contains(t, names, "cost_intelligence_database_operation_duration_seconds")
 	assert.Contains(t, names, "go_goroutines")
-	assert.NotContains(t, names, "argocd_cost_intelligence_sync_webhooks_total")
-	assert.NotContains(t, names, "argocd_cost_intelligence_http_request_duration_seconds")
-	assert.NotContains(t, names, "argocd_cost_intelligence_history_runs_total")
+	assert.NotContains(t, names, "cost_intelligence_sync_webhooks_total")
+	assert.NotContains(t, names, "cost_intelligence_http_request_duration_seconds")
+	assert.NotContains(t, names, "cost_intelligence_history_runs_total")
 }
 
 func TestObserve_CountsByResult(t *testing.T) {
@@ -87,7 +87,7 @@ func TestObserve_CountsByResult(t *testing.T) {
 	assert.InDelta(t, 3, testutil.ToFloat64(m.measurements.WithLabelValues("success")), 0)
 	assert.InDelta(t, 1, testutil.ToFloat64(m.measurements.WithLabelValues("error")), 0)
 	assert.InDelta(t, 2, testutil.ToFloat64(m.measurements.WithLabelValues("no_data")), 0)
-	assert.Equal(t, map[string]uint64{"": 4}, histogramCounts(t, reg, "argocd_cost_intelligence_sync_measurement_duration_seconds"),
+	assert.Equal(t, map[string]uint64{"": 4}, histogramCounts(t, reg, "cost_intelligence_sync_measurement_duration_seconds"),
 		"retries are counted but not timed")
 	assert.Equal(t, 1, testutil.CollectAndCount(m.databaseOperations), "one series: SaveActual, error")
 	assert.InDelta(t, 1_791_000_000, testutil.ToFloat64(m.historyLastRun), 0)
@@ -111,7 +111,7 @@ func TestHTTPMiddleware_LabelsByRoutePatternNotPath(t *testing.T) {
 		r.ServeHTTP(httptest.NewRecorder(), httptest.NewRequestWithContext(context.Background(), http.MethodGet, path, http.NoBody))
 	}
 
-	counts := histogramCounts(t, reg, "argocd_cost_intelligence_http_request_duration_seconds", "route", "method", "code")
+	counts := histogramCounts(t, reg, "cost_intelligence_http_request_duration_seconds", "route", "method", "code")
 	assert.Equal(t, map[string]uint64{
 		"/api/cost-analysis/{appName}/actual GET 404": 2,
 		"/health GET 200":   1,
@@ -154,7 +154,7 @@ func TestInstrumentRoundTripper_LabelsByPathBelowTheBaseURL(t *testing.T) {
 		"/allocation 200":   2,
 		"/assets 500":       1,
 		"/allocation error": 1,
-	}, histogramCounts(t, reg, "argocd_cost_intelligence_opencost_request_duration_seconds", "endpoint", "code"))
+	}, histogramCounts(t, reg, "cost_intelligence_opencost_request_duration_seconds", "endpoint", "code"))
 }
 
 func TestNilMetrics_RecordNothing(t *testing.T) {
@@ -182,7 +182,7 @@ func TestHandler_ServesTheRegistry(t *testing.T) {
 	Handler(reg).ServeHTTP(rec, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/metrics", http.NoBody))
 
 	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.Contains(t, rec.Body.String(), `argocd_cost_intelligence_sync_webhooks_total{result="invalid"} 1`)
+	assert.Contains(t, rec.Body.String(), `cost_intelligence_sync_webhooks_total{result="invalid"} 1`)
 }
 
 func gatheredNames(t *testing.T, g prometheus.Gatherer) []string {

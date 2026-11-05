@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   # Cost Intelligence Service
-  argocd-cost-intelligence:
+  cost-intelligence-argocd:
     build:
       context: .
       dockerfile: Dockerfile

@@ -17,16 +17,16 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/render"
 
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/cloudcost"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/exporter"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/history"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/hook"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/opencost"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/rightsizing"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/storage"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/telemetry"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/validation"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/cloudcost"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/exporter"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/history"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/hook"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/models"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/opencost"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/rightsizing"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/storage"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/telemetry"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/validation"
 )
 
 const (

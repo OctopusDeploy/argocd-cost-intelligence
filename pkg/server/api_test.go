@@ -20,11 +20,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/hook"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/opencost"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/storage"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/telemetry"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/hook"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/models"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/opencost"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/storage"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/telemetry"
 )
 
 // mockStorage implements storage.CostStorage for testing.
@@ -318,7 +318,7 @@ func TestHandleOnSync_OtherCluster_StopsTheRetryOfAnEarlierSync(t *testing.T) {
 	payload, _ := json.Marshal(local)
 	require.Equal(t, http.StatusAccepted, doRequest(t, srv, http.MethodPost, "/api/cost-analysis/on-sync", payload).Code)
 	require.Eventually(t, func() bool {
-		return counterValues(t, reg, "argocd_cost_intelligence_sync_measurements_total", "result")["no_data"] == 1
+		return counterValues(t, reg, "cost_intelligence_sync_measurements_total", "result")["no_data"] == 1
 	}, 5*time.Second, 10*time.Millisecond)
 
 	remote := local

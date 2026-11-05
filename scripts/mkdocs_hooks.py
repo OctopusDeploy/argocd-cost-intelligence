@@ -16,7 +16,7 @@ import re
 
 from mkdocs.structure.files import File
 
-REPO_URL = "https://github.com/OctopusDeploy/argocd-cost-intelligence"
+REPO_URL = "https://github.com/OctopusDeploy/cost-intelligence-argocd"
 
 # An inline Markdown link or image target, with an optional title: ](target) or ](target "title").
 LINK = re.compile(r'\]\(([^)\s]+)(\s+"[^"]*")?\)')

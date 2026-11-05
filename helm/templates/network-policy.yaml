@@ -2,14 +2,14 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ include "argocd-cost-intelligence.fullname" . }}
+  name: {{ include "cost-intelligence-argocd.fullname" . }}
   namespace: {{ .Values.namespace.name }}
   labels:
-    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+    {{- include "cost-intelligence-argocd.labels" . | nindent 4 }}
 spec:
   podSelector:
     matchLabels:
-      {{- include "argocd-cost-intelligence.selectorLabels" . | nindent 6 }}
+      {{- include "cost-intelligence-argocd.selectorLabels" . | nindent 6 }}
       component: backend
   policyTypes:
     - Ingress
@@ -38,7 +38,7 @@ spec:
         - port: {{ .Values.costIntelligence.port }}
           protocol: TCP
 
-    {{- if include "argocd-cost-intelligence.accessApplication.enabled" . }}
+    {{- if include "cost-intelligence-argocd.accessApplication.enabled" . }}
 
     # ArgoCD repo server → the access Application's empty chart (GET /charts/...)
     - from:
@@ -54,7 +54,7 @@ spec:
     {{- end }}
 
     {{- if .Values.metrics.enabled }}
-    {{- include "argocd-cost-intelligence.metrics.ingressRule" . | nindent 4 }}
+    {{- include "cost-intelligence-argocd.metrics.ingressRule" . | nindent 4 }}
     {{- end }}
 
     # No rule for kubelet probes: traffic from the pod's own node is always allowed
@@ -78,14 +78,14 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ include "argocd-cost-intelligence.fullname" . }}-ui
+  name: {{ include "cost-intelligence-argocd.fullname" . }}-ui
   namespace: {{ .Values.namespace.name }}
   labels:
-    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+    {{- include "cost-intelligence-argocd.labels" . | nindent 4 }}
 spec:
   podSelector:
     matchLabels:
-      {{- include "argocd-cost-intelligence.selectorLabels" . | nindent 6 }}
+      {{- include "cost-intelligence-argocd.selectorLabels" . | nindent 6 }}
       component: ui
   policyTypes:
     - Ingress
@@ -123,19 +123,19 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ include "argocd-cost-intelligence.fullname" . }}-exporter
+  name: {{ include "cost-intelligence-argocd.fullname" . }}-exporter
   namespace: {{ .Values.namespace.name }}
   labels:
-    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+    {{- include "cost-intelligence-argocd.labels" . | nindent 4 }}
 spec:
   podSelector:
     matchLabels:
-      {{- include "argocd-cost-intelligence.selectorLabels" . | nindent 6 }}
+      {{- include "cost-intelligence-argocd.selectorLabels" . | nindent 6 }}
       component: exporter
   policyTypes:
     - Ingress
   ingress:
-    {{- include "argocd-cost-intelligence.metrics.ingressRule" . | nindent 4 }}
+    {{- include "cost-intelligence-argocd.metrics.ingressRule" . | nindent 4 }}
     {{- with .Values.networkPolicy.probeCIDRs }}
 
     # Kubelet probes, for CNIs that do not exempt node traffic (see docs/operations.md)
@@ -154,14 +154,14 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ include "argocd-cost-intelligence.fullname" . }}-postgres
+  name: {{ include "cost-intelligence-argocd.fullname" . }}-postgres
   namespace: {{ .Values.namespace.name }}
   labels:
-    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+    {{- include "cost-intelligence-argocd.labels" . | nindent 4 }}
 spec:
   podSelector:
     matchLabels:
-      {{- include "argocd-cost-intelligence.selectorLabels" . | nindent 6 }}
+      {{- include "cost-intelligence-argocd.selectorLabels" . | nindent 6 }}
       app: postgres
   policyTypes:
     - Ingress
@@ -171,12 +171,12 @@ spec:
     - from:
         - podSelector:
             matchLabels:
-              {{- include "argocd-cost-intelligence.selectorLabels" . | nindent 14 }}
+              {{- include "cost-intelligence-argocd.selectorLabels" . | nindent 14 }}
               component: backend
         {{- if and .Values.metrics.enabled .Values.metrics.exporter.enabled }}
         - podSelector:
             matchLabels:
-              {{- include "argocd-cost-intelligence.selectorLabels" . | nindent 14 }}
+              {{- include "cost-intelligence-argocd.selectorLabels" . | nindent 14 }}
               component: exporter
         {{- end }}
       ports:

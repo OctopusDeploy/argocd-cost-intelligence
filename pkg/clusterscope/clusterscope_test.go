@@ -21,11 +21,11 @@ import (
 	dynamicfake "k8s.io/client-go/dynamic/fake"
 	k8stesting "k8s.io/client-go/testing"
 
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/models"
 )
 
 var (
-	self   = Workload{Namespace: "cost-intel", Name: "argocd-cost-intelligence"}
+	self   = Workload{Namespace: "cost-intel", Name: "cost-intelligence-argocd"}
 	access = models.AppRef{Namespace: "argocd", Name: "cost-intelligence"}
 )
 
@@ -86,8 +86,8 @@ func TestResolver_FindsTheApplicationThatInstalledIt(t *testing.T) {
 		trackingID string
 		app        models.AppRef
 	}{
-		{"in Argo CD's namespace", "cost:apps/Deployment:cost-intel/argocd-cost-intelligence", models.AppRef{Namespace: "argocd", Name: "cost"}},
-		{"in any namespace", "platform_cost:apps/Deployment:cost-intel/argocd-cost-intelligence", models.AppRef{Namespace: "platform", Name: "cost"}},
+		{"in Argo CD's namespace", "cost:apps/Deployment:cost-intel/cost-intelligence-argocd", models.AppRef{Namespace: "argocd", Name: "cost"}},
+		{"in any namespace", "platform_cost:apps/Deployment:cost-intel/cost-intelligence-argocd", models.AppRef{Namespace: "platform", Name: "cost"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -108,7 +108,7 @@ func TestResolver_FallsBackToTheAccessApplication(t *testing.T) {
 	t.Parallel()
 
 	installer := models.AppRef{Namespace: "argocd", Name: "cost"}
-	tracked := "cost:apps/Deployment:cost-intel/argocd-cost-intelligence"
+	tracked := "cost:apps/Deployment:cost-intel/cost-intelligence-argocd"
 	for _, tc := range []struct {
 		name    string
 		objects []runtime.Object

@@ -9,7 +9,7 @@ costIntelligence:
   autoscaling:
     enabled: false
   image:
-    repository: argocd-cost-intelligence
+    repository: cost-intelligence-argocd
     tag: latest
   # Cluster-wide pages (Namespaces, Idle spend, Chargeback) need an Application whose viewers may see them.
   # redis exists in the local test cluster; point this at any Application in yours.
@@ -21,7 +21,7 @@ postgres:
 
 ui:
   image:
-    repository: argocd-cost-intelligence-ui
+    repository: cost-intelligence-argocd-ui
     tag: latest
 
 openCost:

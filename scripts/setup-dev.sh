@@ -41,8 +41,8 @@ mkdir -p bin deploy
 
 # Build binary
 echo "Building binary..."
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/argocd-cost-intelligence ./cmd
-echo "✓ Binary built: bin/argocd-cost-intelligence"
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/cost-intelligence-argocd ./cmd
+echo "✓ Binary built: bin/cost-intelligence-argocd"
 
 # Show next steps
 echo ""

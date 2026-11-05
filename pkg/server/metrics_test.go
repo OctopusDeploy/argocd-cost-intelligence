@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/telemetry"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/models"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/telemetry"
 )
 
 // counterValues reads a counter's series from reg, keyed by the value of label.
@@ -59,8 +59,8 @@ func TestMetrics_CountWebhooksByResultAndTheMeasurementsThatFollow(t *testing.T)
 	}
 
 	assert.Equal(t, map[string]float64{"accepted": 1, "unauthorized": 1, "invalid": 1, "overloaded": 1, "remote": 1, "ignored": 1},
-		counterValues(t, reg, "argocd_cost_intelligence_sync_webhooks_total", "result"))
-	measured := counterValues(t, reg, "argocd_cost_intelligence_sync_measurements_total", "result")
+		counterValues(t, reg, "cost_intelligence_sync_webhooks_total", "result"))
+	measured := counterValues(t, reg, "cost_intelligence_sync_measurements_total", "result")
 	assert.InDelta(t, 1, measured["success"]+measured["error"], 0, "one measurement, for the accepted webhook only")
 }
 
@@ -74,9 +74,9 @@ func TestMetrics_CountMeasurementsWithoutOpenCostData(t *testing.T) {
 	payload, _ := json.Marshal(models.SyncNotification{ApplicationName: "redis", ApplicationNamespace: "argocd", Namespace: "ns", SyncResult: "Succeeded"})
 	require.Equal(t, http.StatusAccepted, doRequest(t, srv, http.MethodPost, "/api/cost-analysis/on-sync", payload).Code)
 	require.Eventually(t, func() bool {
-		return counterValues(t, reg, "argocd_cost_intelligence_sync_measurements_total", "result")["no_data"] == 1
+		return counterValues(t, reg, "cost_intelligence_sync_measurements_total", "result")["no_data"] == 1
 	}, 5*time.Second, 10*time.Millisecond)
-	assert.Equal(t, map[string]float64{"success": 0, "error": 0, "no_data": 1}, counterValues(t, reg, "argocd_cost_intelligence_sync_measurements_total", "result"))
+	assert.Equal(t, map[string]float64{"success": 0, "error": 0, "no_data": 1}, counterValues(t, reg, "cost_intelligence_sync_measurements_total", "result"))
 }
 
 func TestMetrics_TimeRequestsByRoute(t *testing.T) {
@@ -92,7 +92,7 @@ func TestMetrics_TimeRequestsByRoute(t *testing.T) {
 	require.NoError(t, err)
 	routes := map[string]uint64{}
 	for _, f := range families {
-		if f.GetName() != "argocd_cost_intelligence_http_request_duration_seconds" {
+		if f.GetName() != "cost_intelligence_http_request_duration_seconds" {
 			continue
 		}
 		for _, m := range f.GetMetric() {

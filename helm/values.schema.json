@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "argocd-cost-intelligence values",
+  "title": "cost-intelligence-argocd values",
   "description": "Checks the type of each value the chart reads. Keys it doesn't know are allowed.",
   "type": "object",
   "properties": {

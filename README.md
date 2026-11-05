@@ -1,9 +1,9 @@
 # Cost Intelligence for Argo CD
 
-[![CI](https://github.com/OctopusDeploy/argocd-cost-intelligence/actions/workflows/ci.yml/badge.svg)](https://github.com/OctopusDeploy/argocd-cost-intelligence/actions/workflows/ci.yml)
-[![Docs](https://img.shields.io/readthedocs/argocd-cost-intelligence)](https://argocd-cost-intelligence.readthedocs.io/)
+[![CI](https://github.com/OctopusDeploy/cost-intelligence-argocd/actions/workflows/ci.yml/badge.svg)](https://github.com/OctopusDeploy/cost-intelligence-argocd/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/readthedocs/cost-intelligence-argocd)](https://cost-intelligence-argocd.readthedocs.io/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/OctopusDeploy/argocd-cost-intelligence?include_prereleases)](https://github.com/OctopusDeploy/argocd-cost-intelligence/releases)
+[![Release](https://img.shields.io/github/v/release/OctopusDeploy/cost-intelligence-argocd?include_prereleases)](https://github.com/OctopusDeploy/cost-intelligence-argocd/releases)
 
 Cost Intelligence for Argo CD shows what each Argo CD application actually costs, in a **Cost Intelligence** tab inside the Argo CD UI. After every successful sync it asks [OpenCost](https://www.opencost.io) what the application's pods cost and keeps the result, so application owners see their cost where they already work. You need Argo CD and OpenCost running in the same cluster, and only the applications Argo CD deploys to that cluster are measured. If Argo CD also manages other clusters, the tab of an application deployed there says it isn't measured ([Limits and requirements](docs/limits-and-requirements.md#only-this-cluster-is-measured)).
 
@@ -15,10 +15,10 @@ Requires Argo CD 3.4, 3.5 or 3.6 on a Kubernetes version it supports, OpenCost 1
 
 <!-- The release workflow fails a release tag that doesn't match the --version below. -->
 ```bash
-helm install argocd-cost-intelligence \
-  oci://ghcr.io/octopusdeploy/charts/argocd-cost-intelligence \
+helm install cost-intelligence-argocd \
+  oci://ghcr.io/octopusdeploy/charts/cost-intelligence-argocd \
   --version 0.1.0 \
-  --namespace argocd-cost-intel --create-namespace \
+  --namespace cost-intelligence --create-namespace \
   --set namespace.create=false \
   --set postgres.auth.password=<your-secure-password> \
   --wait --timeout 10m
@@ -72,7 +72,7 @@ Your Argo CD RBAC configuration controls who can see an application's cost and t
 
 ## Documentation
 
-The guides are also published at [argocd-cost-intelligence.readthedocs.io](https://argocd-cost-intelligence.readthedocs.io/).
+The guides are also published at [cost-intelligence-argocd.readthedocs.io](https://cost-intelligence-argocd.readthedocs.io/).
 
 | I want to... | Read |
 |---|---|

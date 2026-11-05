@@ -17,8 +17,8 @@ How to run the project locally, check a change and try it in a real Argo CD. For
 This runs the backend, PostgreSQL and a mock OpenCost with made-up cost data. No Kubernetes is involved.
 
 ```bash
-git clone https://github.com/OctopusDeploy/argocd-cost-intelligence.git
-cd argocd-cost-intelligence
+git clone https://github.com/OctopusDeploy/cost-intelligence-argocd.git
+cd cost-intelligence-argocd
 docker compose up -d --wait
 scripts/test-api.sh
 ```
@@ -78,11 +78,11 @@ To try a UI change without redeploying, swap the bundle into the running `argocd
 
 ## Troubleshooting
 
-Follow the backend log while you reproduce the problem: `docker compose logs -f argocd-cost-intelligence`, or `make logs` in the cluster.
+Follow the backend log while you reproduce the problem: `docker compose logs -f cost-intelligence-argocd`, or `make logs` in the cluster.
 
 | You see | What it means |
 |---|---|
-| `401` from `/on-sync` | The bearer token is missing or wrong. Locally it is `local-dev-webhook-secret`; in the cluster it is in the `argocd-cost-intelligence-webhook` Secret. |
+| `401` from `/on-sync` | The bearer token is missing or wrong. Locally it is `local-dev-webhook-secret`; in the cluster it is in the `cost-intelligence-argocd-webhook` Secret. |
 | `403` from an application route | The `Argocd-Application-Name` header is missing or names another application. Argo CD's proxy adds it; by hand, send `<namespace>:<name>`. |
 | `403` from a cluster-wide route outside a cluster | The service can't find the Application that installed it. Set `CLUSTER_SCOPE_APP` (for example `argocd:nginx`) in `docker-compose.yml`. |
 | `Sync failed or unknown state ... skipping` | The webhook's `syncResult` wasn't `Succeeded`. |

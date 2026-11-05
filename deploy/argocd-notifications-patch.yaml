@@ -3,7 +3,7 @@
 #
 # The webhook sends the token stored under cost-intel-webhook-token in argocd-notifications-secret
 # ($cost-intel-webhook-token below). Copy it there from the service's Secret first:
-#   TOKEN_B64=$(kubectl get secret argocd-cost-intelligence-webhook -n argocd-cost-intel -o jsonpath='{.data.token}')
+#   TOKEN_B64=$(kubectl get secret cost-intelligence-argocd-webhook -n cost-intelligence -o jsonpath='{.data.token}')
 #   kubectl patch secret argocd-notifications-secret -n argocd --type merge \
 #     -p "{\"data\":{\"cost-intel-webhook-token\":\"${TOKEN_B64}\"}}"
 #
@@ -22,7 +22,7 @@ metadata:
   namespace: argocd
 data:
   service.webhook.cost-intel: |
-    url: http://argocd-cost-intelligence.argocd-cost-intel.svc.cluster.local:8080/api/cost-analysis/on-sync
+    url: http://cost-intelligence-argocd.cost-intelligence.svc.cluster.local:8080/api/cost-analysis/on-sync
     headers:
     - name: Content-Type
       value: application/json

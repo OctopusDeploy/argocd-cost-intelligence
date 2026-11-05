@@ -7,35 +7,35 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: argocd-cost-intelligence-exporter
-  namespace: argocd-cost-intel
+  name: cost-intelligence-argocd-exporter
+  namespace: cost-intelligence
   labels:
-    app: argocd-cost-intelligence-exporter
+    app: cost-intelligence-argocd-exporter
 spec:
   replicas: 1
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      app: argocd-cost-intelligence-exporter
+      app: cost-intelligence-argocd-exporter
   template:
     metadata:
       labels:
-        app: argocd-cost-intelligence-exporter
+        app: cost-intelligence-argocd-exporter
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "9102"
         prometheus.io/path: "/metrics"
     spec:
       # Lists Argo CD Applications, which rbac.yaml allows.
-      serviceAccountName: argocd-cost-intelligence
+      serviceAccountName: cost-intelligence-argocd
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
         fsGroup: 1000
       containers:
       - name: exporter
-        image: argocd-cost-intelligence:latest
+        image: cost-intelligence-argocd:latest
         imagePullPolicy: IfNotPresent
         ports:
         - name: metrics
@@ -51,7 +51,7 @@ spec:
           value: "5m"
         # PostgreSQL, for the cloud estimates CI pushes.
         - name: DB_HOST
-          value: postgres.argocd-cost-intel.svc.cluster.local
+          value: postgres.cost-intelligence.svc.cluster.local
         - name: DB_PORT
           value: "5432"
         - name: DB_USER
@@ -71,7 +71,7 @@ spec:
         - name: OPENCOST_BASE_URL
           valueFrom:
             secretKeyRef:
-              name: argocd-cost-intel-config
+              name: cost-intelligence-config
               key: opencost-base-url
         - name: OPENCOST_TIMEOUT
           value: "10s"
@@ -106,10 +106,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: argocd-cost-intelligence-exporter
-  namespace: argocd-cost-intel
+  name: cost-intelligence-argocd-exporter
+  namespace: cost-intelligence
   labels:
-    app: argocd-cost-intelligence-exporter
+    app: cost-intelligence-argocd-exporter
 spec:
   type: ClusterIP
   ports:
@@ -118,4 +118,4 @@ spec:
     protocol: TCP
     name: metrics
   selector:
-    app: argocd-cost-intelligence-exporter
+    app: cost-intelligence-argocd-exporter

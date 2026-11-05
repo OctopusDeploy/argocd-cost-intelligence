@@ -3,16 +3,16 @@
         lint lint-go lint-ui lint-helm lint-prometheus lint-actions lint-manifests lint-dockerfile \
         lint-shell lint-mock lint-notifications sync-mock ui-extension docs docs-serve
 
-BINARY_NAME    = argocd-cost-intelligence
-IMAGE_NAME     = argocd-cost-intelligence
+BINARY_NAME    = cost-intelligence-argocd
+IMAGE_NAME     = cost-intelligence-argocd
 UI_IMAGE_NAME  = $(IMAGE_NAME)-ui
 IMAGE_TAG     ?= latest
 REGISTRY      ?=
 K3D_CLUSTER   ?= mycluster
-HELM_RELEASE  ?= argocd-cost-intelligence
+HELM_RELEASE  ?= cost-intelligence-argocd
 HELM_VALUES   ?= helm/values-local.yaml
 ARGOCD_NS     ?= argocd
-APP_NS        ?= argocd-cost-intel
+APP_NS        ?= cost-intelligence
 OPENCOST_NS   ?= opencost
 
 # Linters that run in a container, so nothing needs installing. Keep the tags in step with CI, which
@@ -26,7 +26,7 @@ PROMTOOL_IMAGE        ?= prom/prometheus:v3.15.0
 
 DOCKER_RUN = docker run --rm -v "$(CURDIR):/repo" -w /repo
 # What the chart renders with each feature on, so kubeconform sees every optional object.
-HELM_TEMPLATE = helm template argocd-cost-intelligence ./helm --set postgres.auth.password=lint \
+HELM_TEMPLATE = helm template cost-intelligence-argocd ./helm --set postgres.auth.password=lint \
 	--set metrics.serviceMonitor.enabled=true --set metrics.prometheusRule.enabled=true
 
 help:
@@ -153,7 +153,7 @@ deploy-k8s:
 	kubectl apply -f deploy/rbac.yaml
 	kubectl apply -f deploy/deployment.yaml
 	kubectl apply -f deploy/exporter.yaml
-	@echo "Services deployed to argocd-cost-intel namespace"
+	@echo "Services deployed to cost-intelligence namespace"
 	@echo "Before the service can start, replace the webhook token placeholder in deploy/secrets.yaml (see the comment there)."
 	@echo "Patch Argo CD notifications: copy the token into argocd-notifications-secret, then"
 	@echo "  kubectl patch cm argocd-notifications-cm -n argocd --patch-file deploy/argocd-notifications-patch.yaml"
@@ -276,9 +276,9 @@ helm-undeploy:
 logs:
 	@echo "Viewing logs..."
 	@if [ -n "$(POD)" ]; then \
-		kubectl logs -f $(POD) -n argocd-cost-intel; \
+		kubectl logs -f $(POD) -n cost-intelligence; \
 	else \
-		kubectl logs -f deployment/argocd-cost-intelligence -n argocd-cost-intel; \
+		kubectl logs -f deployment/cost-intelligence-argocd -n cost-intelligence; \
 	fi
 
 fmt:

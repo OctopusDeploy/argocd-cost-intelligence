@@ -3,21 +3,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "argocd-cost-intelligence.fullname" . }}-ui
+  name: {{ include "cost-intelligence-argocd.fullname" . }}-ui
   namespace: {{ .Values.namespace.name }}
   labels:
-    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+    {{- include "cost-intelligence-argocd.labels" . | nindent 4 }}
     component: ui
 spec:
   replicas: {{ .Values.ui.replicas }}
   selector:
     matchLabels:
-      {{- include "argocd-cost-intelligence.selectorLabels" . | nindent 6 }}
+      {{- include "cost-intelligence-argocd.selectorLabels" . | nindent 6 }}
       component: ui
   template:
     metadata:
       labels:
-        {{- include "argocd-cost-intelligence.selectorLabels" . | nindent 8 }}
+        {{- include "cost-intelligence-argocd.selectorLabels" . | nindent 8 }}
         component: ui
     spec:
       {{- if .Values.security.podSecurityContext }}
@@ -61,10 +61,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "argocd-cost-intelligence.fullname" . }}-ui
+  name: {{ include "cost-intelligence-argocd.fullname" . }}-ui
   namespace: {{ .Values.namespace.name }}
   labels:
-    {{- include "argocd-cost-intelligence.labels" . | nindent 4 }}
+    {{- include "cost-intelligence-argocd.labels" . | nindent 4 }}
     component: ui
 spec:
   type: ClusterIP
@@ -74,7 +74,7 @@ spec:
     protocol: TCP
     name: http
   selector:
-    {{- include "argocd-cost-intelligence.selectorLabels" . | nindent 4 }}
+    {{- include "cost-intelligence-argocd.selectorLabels" . | nindent 4 }}
     component: ui
 {{- end }}
 {{- end }}

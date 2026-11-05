@@ -11,22 +11,22 @@ evaluation_interval: 10m
 # in a random order, and when the alerts go first the newest recorded sample is 10m old, past the
 # 5m lookback, so the alert sees nothing and its 2h never completes.
 group_eval_order:
-  - argocd-cost-intelligence.rules
-  - argocd-cost-intelligence.alerts
+  - cost-intelligence-argocd.rules
+  - cost-intelligence-argocd.alerts
 
 tests:
   # A week at one cost, then a jump: only the Application above the floor alerts, and only after 2h.
   - interval: 10m
     input_series:
-      - series: 'argocd_cost_intelligence_application_hourly_cost{namespace="team-a",name="web",resource="cpu"}'
+      - series: 'cost_intelligence_application_hourly_cost{namespace="team-a",name="web",resource="cpu"}'
         values: '0.04x1008 0.12x30'
-      - series: 'argocd_cost_intelligence_application_hourly_cost{namespace="team-a",name="web",resource="memory"}'
+      - series: 'cost_intelligence_application_hourly_cost{namespace="team-a",name="web",resource="memory"}'
         values: '0.01x1038'
       # Five times as much, but under 0.01 an hour.
-      - series: 'argocd_cost_intelligence_application_hourly_cost{namespace="team-a",name="tiny",resource="cpu"}'
+      - series: 'cost_intelligence_application_hourly_cost{namespace="team-a",name="tiny",resource="cpu"}'
         values: '0.001x1008 0.005x30'
       # A fifth more: not enough.
-      - series: 'argocd_cost_intelligence_application_hourly_cost{namespace="team-a",name="steady",resource="cpu"}'
+      - series: 'cost_intelligence_application_hourly_cost{namespace="team-a",name="steady",resource="cpu"}'
         values: '1x1008 1.2x30'
     alert_rule_test:
       - alertname: ArgoCDApplicationCostIncrease

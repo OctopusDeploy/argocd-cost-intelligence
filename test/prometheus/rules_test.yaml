@@ -9,31 +9,31 @@ tests:
   # The recording rule adds up an Application's resources, and keeps same-named Applications apart.
   - interval: 1m
     input_series:
-      - series: 'argocd_cost_intelligence_application_hourly_cost{namespace="team-a",name="web",resource="cpu"}'
+      - series: 'cost_intelligence_application_hourly_cost{namespace="team-a",name="web",resource="cpu"}'
         values: '0.04x10'
-      - series: 'argocd_cost_intelligence_application_hourly_cost{namespace="team-a",name="web",resource="memory"}'
+      - series: 'cost_intelligence_application_hourly_cost{namespace="team-a",name="web",resource="memory"}'
         values: '0.01x10'
-      - series: 'argocd_cost_intelligence_application_hourly_cost{namespace="team-b",name="web",resource="cpu"}'
+      - series: 'cost_intelligence_application_hourly_cost{namespace="team-b",name="web",resource="cpu"}'
         values: '0.5x10'
     promql_expr_test:
-      - expr: namespace_name:argocd_cost_intelligence_application_hourly_cost:sum
+      - expr: namespace_name:cost_intelligence_application_hourly_cost:sum
         eval_time: 5m
         exp_samples:
-          - labels: 'namespace_name:argocd_cost_intelligence_application_hourly_cost:sum{namespace="team-a",name="web"}'
+          - labels: 'namespace_name:cost_intelligence_application_hourly_cost:sum{namespace="team-a",name="web"}'
             value: 0.05
-          - labels: 'namespace_name:argocd_cost_intelligence_application_hourly_cost:sum{namespace="team-b",name="web"}'
+          - labels: 'namespace_name:cost_intelligence_application_hourly_cost:sum{namespace="team-b",name="web"}'
             value: 0.5
 
   # The exporter refreshes until minute 10, then stops.
   - interval: 1m
     input_series:
-      - series: 'argocd_cost_intelligence_exporter_last_refresh_timestamp_seconds{job="exporter"}'
+      - series: 'cost_intelligence_exporter_last_refresh_timestamp_seconds{job="exporter"}'
         values: '0+60x10 600x40'
     alert_rule_test:
-      - alertname: ArgoCDCostIntelligenceExporterStale
+      - alertname: CostIntelligenceExporterStale
         eval_time: 20m
         exp_alerts: []
-      - alertname: ArgoCDCostIntelligenceExporterStale
+      - alertname: CostIntelligenceExporterStale
         eval_time: 35m
         exp_alerts:
           - exp_labels:
@@ -42,14 +42,14 @@ tests:
             exp_annotations:
               summary: "The Cost Intelligence for Argo CD exporter has not refreshed Application costs for 25m 0s"
               description: "Its Application cost series are empty or missing. exporter_refresh_errors_total says which step fails: applications means it cannot list Argo CD Applications."
-      - alertname: ArgoCDCostIntelligenceExporterAbsent
+      - alertname: CostIntelligenceExporterAbsent
         eval_time: 35m
         exp_alerts: []
 
   - interval: 1m
     input_series: []
     alert_rule_test:
-      - alertname: ArgoCDCostIntelligenceExporterAbsent
+      - alertname: CostIntelligenceExporterAbsent
         eval_time: 16m
         exp_alerts:
           - exp_labels:
@@ -61,12 +61,12 @@ tests:
   # OpenCost fails for some namespace on every refresh; estimates never fail.
   - interval: 1m
     input_series:
-      - series: 'argocd_cost_intelligence_exporter_refresh_errors_total{stage="opencost"}'
+      - series: 'cost_intelligence_exporter_refresh_errors_total{stage="opencost"}'
         values: '0+1x60'
-      - series: 'argocd_cost_intelligence_exporter_refresh_errors_total{stage="estimates"}'
+      - series: 'cost_intelligence_exporter_refresh_errors_total{stage="estimates"}'
         values: '0x60'
     alert_rule_test:
-      - alertname: ArgoCDCostIntelligenceExporterErrors
+      - alertname: CostIntelligenceExporterErrors
         eval_time: 45m
         exp_alerts:
           - exp_labels:
@@ -79,14 +79,14 @@ tests:
   # Three measurements in four fail, across two replicas.
   - interval: 1m
     input_series:
-      - series: 'argocd_cost_intelligence_sync_measurements_total{pod="a",result="error"}'
+      - series: 'cost_intelligence_sync_measurements_total{pod="a",result="error"}'
         values: '0+2x60'
-      - series: 'argocd_cost_intelligence_sync_measurements_total{pod="b",result="error"}'
+      - series: 'cost_intelligence_sync_measurements_total{pod="b",result="error"}'
         values: '0+1x60'
-      - series: 'argocd_cost_intelligence_sync_measurements_total{pod="a",result="success"}'
+      - series: 'cost_intelligence_sync_measurements_total{pod="a",result="success"}'
         values: '0+1x60'
     alert_rule_test:
-      - alertname: ArgoCDCostIntelligenceMeasurementsFailing
+      - alertname: CostIntelligenceMeasurementsFailing
         eval_time: 40m
         exp_alerts:
           - exp_labels:
@@ -98,14 +98,14 @@ tests:
   # Three measurements in four fail, among many that found no OpenCost data yet.
   - interval: 1m
     input_series:
-      - series: 'argocd_cost_intelligence_sync_measurements_total{result="error"}'
+      - series: 'cost_intelligence_sync_measurements_total{result="error"}'
         values: '0+3x60'
-      - series: 'argocd_cost_intelligence_sync_measurements_total{result="success"}'
+      - series: 'cost_intelligence_sync_measurements_total{result="success"}'
         values: '0+1x60'
-      - series: 'argocd_cost_intelligence_sync_measurements_total{result="no_data"}'
+      - series: 'cost_intelligence_sync_measurements_total{result="no_data"}'
         values: '0+12x60'
     alert_rule_test:
-      - alertname: ArgoCDCostIntelligenceMeasurementsFailing
+      - alertname: CostIntelligenceMeasurementsFailing
         eval_time: 40m
         exp_alerts:
           - exp_labels:
@@ -117,24 +117,24 @@ tests:
   # One measurement in four fails.
   - interval: 1m
     input_series:
-      - series: 'argocd_cost_intelligence_sync_measurements_total{result="error"}'
+      - series: 'cost_intelligence_sync_measurements_total{result="error"}'
         values: '0+1x60'
-      - series: 'argocd_cost_intelligence_sync_measurements_total{result="success"}'
+      - series: 'cost_intelligence_sync_measurements_total{result="success"}'
         values: '0+3x60'
     alert_rule_test:
-      - alertname: ArgoCDCostIntelligenceMeasurementsFailing
+      - alertname: CostIntelligenceMeasurementsFailing
         eval_time: 40m
         exp_alerts: []
 
   # Every webhook is refused.
   - interval: 1m
     input_series:
-      - series: 'argocd_cost_intelligence_sync_webhooks_total{result="unauthorized"}'
+      - series: 'cost_intelligence_sync_webhooks_total{result="unauthorized"}'
         values: '0+1x60'
-      - series: 'argocd_cost_intelligence_sync_webhooks_total{result="accepted"}'
+      - series: 'cost_intelligence_sync_webhooks_total{result="accepted"}'
         values: '0x60'
     alert_rule_test:
-      - alertname: ArgoCDCostIntelligenceWebhooksRefused
+      - alertname: CostIntelligenceWebhooksRefused
         eval_time: 40m
         exp_alerts:
           - exp_labels:
@@ -146,40 +146,40 @@ tests:
   # Some webhooks are refused (a stray client), but Argo CD's get through.
   - interval: 1m
     input_series:
-      - series: 'argocd_cost_intelligence_sync_webhooks_total{result="unauthorized"}'
+      - series: 'cost_intelligence_sync_webhooks_total{result="unauthorized"}'
         values: '0+1x60'
-      - series: 'argocd_cost_intelligence_sync_webhooks_total{result="accepted"}'
+      - series: 'cost_intelligence_sync_webhooks_total{result="accepted"}'
         values: '0+1x60'
     alert_rule_test:
-      - alertname: ArgoCDCostIntelligenceWebhooksRefused
+      - alertname: CostIntelligenceWebhooksRefused
         eval_time: 40m
         exp_alerts: []
 
   # Unknown clients are refused, and Argo CD's webhooks get through, all for applications on another cluster.
   - interval: 1m
     input_series:
-      - series: 'argocd_cost_intelligence_sync_webhooks_total{result="unauthorized"}'
+      - series: 'cost_intelligence_sync_webhooks_total{result="unauthorized"}'
         values: '0+1x60'
-      - series: 'argocd_cost_intelligence_sync_webhooks_total{result="accepted"}'
+      - series: 'cost_intelligence_sync_webhooks_total{result="accepted"}'
         values: '0x60'
-      - series: 'argocd_cost_intelligence_sync_webhooks_total{result="remote"}'
+      - series: 'cost_intelligence_sync_webhooks_total{result="remote"}'
         values: '0+1x60'
     alert_rule_test:
-      - alertname: ArgoCDCostIntelligenceWebhooksRefused
+      - alertname: CostIntelligenceWebhooksRefused
         eval_time: 40m
         exp_alerts: []
 
   # Three OpenCost requests in four fail, with a 5xx or no answer.
   - interval: 1m
     input_series:
-      - series: 'argocd_cost_intelligence_opencost_request_duration_seconds_count{endpoint="/allocation",code="500"}'
+      - series: 'cost_intelligence_opencost_request_duration_seconds_count{endpoint="/allocation",code="500"}'
         values: '0+2x60'
-      - series: 'argocd_cost_intelligence_opencost_request_duration_seconds_count{endpoint="/allocation",code="error"}'
+      - series: 'cost_intelligence_opencost_request_duration_seconds_count{endpoint="/allocation",code="error"}'
         values: '0+1x60'
-      - series: 'argocd_cost_intelligence_opencost_request_duration_seconds_count{endpoint="/allocation",code="200"}'
+      - series: 'cost_intelligence_opencost_request_duration_seconds_count{endpoint="/allocation",code="200"}'
         values: '0+1x60'
     alert_rule_test:
-      - alertname: ArgoCDCostIntelligenceOpenCostErrors
+      - alertname: CostIntelligenceOpenCostErrors
         eval_time: 40m
         exp_alerts:
           - exp_labels:
@@ -191,15 +191,15 @@ tests:
   # Replica b last recorded at minute 1; replica a has not finished a run and reports 0.
   - interval: 1m
     input_series:
-      - series: 'argocd_cost_intelligence_history_last_run_timestamp_seconds{pod="a"}'
+      - series: 'cost_intelligence_history_last_run_timestamp_seconds{pod="a"}'
         values: '0x300'
-      - series: 'argocd_cost_intelligence_history_last_run_timestamp_seconds{pod="b"}'
+      - series: 'cost_intelligence_history_last_run_timestamp_seconds{pod="b"}'
         values: '60x300'
     alert_rule_test:
-      - alertname: ArgoCDCostIntelligenceHistoryStale
+      - alertname: CostIntelligenceHistoryStale
         eval_time: 150m
         exp_alerts: []
-      - alertname: ArgoCDCostIntelligenceHistoryStale
+      - alertname: CostIntelligenceHistoryStale
         eval_time: 200m
         exp_alerts:
           - exp_labels:
@@ -211,22 +211,22 @@ tests:
   # No replica has finished a run (or history is off): nothing to call stale.
   - interval: 1m
     input_series:
-      - series: 'argocd_cost_intelligence_history_last_run_timestamp_seconds{pod="a"}'
+      - series: 'cost_intelligence_history_last_run_timestamp_seconds{pod="a"}'
         values: '0x300'
     alert_rule_test:
-      - alertname: ArgoCDCostIntelligenceHistoryStale
+      - alertname: CostIntelligenceHistoryStale
         eval_time: 200m
         exp_alerts: []
 
   # Every hourly run fails.
   - interval: 1m
     input_series:
-      - series: 'argocd_cost_intelligence_history_runs_total{result="error"}'
+      - series: 'cost_intelligence_history_runs_total{result="error"}'
         values: '0+0.0167x240'
-      - series: 'argocd_cost_intelligence_history_runs_total{result="success"}'
+      - series: 'cost_intelligence_history_runs_total{result="success"}'
         values: '0x240'
     alert_rule_test:
-      - alertname: ArgoCDCostIntelligenceHistoryFailing
+      - alertname: CostIntelligenceHistoryFailing
         eval_time: 200m
         exp_alerts:
           - exp_labels:
@@ -238,11 +238,11 @@ tests:
   # One run in three succeeds.
   - interval: 1m
     input_series:
-      - series: 'argocd_cost_intelligence_history_runs_total{result="error"}'
+      - series: 'cost_intelligence_history_runs_total{result="error"}'
         values: '0+0.0167x240'
-      - series: 'argocd_cost_intelligence_history_runs_total{result="success"}'
+      - series: 'cost_intelligence_history_runs_total{result="success"}'
         values: '0x120 1x120'
     alert_rule_test:
-      - alertname: ArgoCDCostIntelligenceHistoryFailing
+      - alertname: CostIntelligenceHistoryFailing
         eval_time: 200m
         exp_alerts: []

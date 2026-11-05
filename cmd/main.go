@@ -16,22 +16,22 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/backfill"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/clusterscope"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/config"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/exporter"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/history"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/hook"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/models"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/opencost"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/rightsizing"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/server"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/storage"
-	"github.com/OctopusDeploy/argocd-cost-intelligence/pkg/telemetry"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/backfill"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/clusterscope"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/config"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/exporter"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/history"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/hook"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/models"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/opencost"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/rightsizing"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/server"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/storage"
+	"github.com/OctopusDeploy/cost-intelligence-argocd/pkg/telemetry"
 )
 
 func main() {
-	logger := log.New(os.Stdout, "[argocd-cost-intel] ", log.LstdFlags|log.Lshortfile)
+	logger := log.New(os.Stdout, "[cost-intelligence] ", log.LstdFlags|log.Lshortfile)
 
 	// Load configuration
 	cfg, err := config.LoadConfig()

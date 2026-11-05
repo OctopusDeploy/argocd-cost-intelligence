@@ -17,7 +17,7 @@ Requires Argo CD 3.4, 3.5 or 3.6 on a Kubernetes version it supports, OpenCost 1
 ```bash
 helm install cost-intelligence-argocd \
   oci://ghcr.io/octopusdeploy/charts/cost-intelligence-argocd \
-  --version 0.1.0 \
+  --version 0.2.0 \
   --namespace cost-intelligence --create-namespace \
   --set namespace.create=false \
   --set postgres.auth.password=<your-secure-password> \

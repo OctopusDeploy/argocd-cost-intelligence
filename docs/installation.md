@@ -61,7 +61,7 @@ The chart's NetworkPolicies only limit incoming traffic. The backend accepts `ar
 
 ### Images
 
-The images are public on GHCR, so you don't need a pull secret: `ghcr.io/octopusdeploy/cost-intelligence-argocd:v0.1.0` and `ghcr.io/octopusdeploy/cost-intelligence-argocd-ui:v0.1.0`. The hook Job (`postInstallHook.image`, `alpine/k8s`) and the `argocd-server` init container (`postInstallHook.extensionInitImage`, `busybox:1.37.0`) pull images too. Mirror those if your cluster can't reach public registries. A replacement for the hook image needs `kubectl`, `jq` and `yq` (mikefarah/yq v4); one for the init container needs `sh` and `wget`.
+The images are public on GHCR, so you don't need a pull secret: `ghcr.io/octopusdeploy/cost-intelligence-argocd:v0.2.0` and `ghcr.io/octopusdeploy/cost-intelligence-argocd-ui:v0.2.0`. The hook Job (`postInstallHook.image`, `alpine/k8s`) and the `argocd-server` init container (`postInstallHook.extensionInitImage`, `busybox:1.37.0`) pull images too. Mirror those if your cluster can't reach public registries. A replacement for the hook image needs `kubectl`, `jq` and `yq` (mikefarah/yq v4); one for the init container needs `sh` and `wget`.
 
 ## Install
 
